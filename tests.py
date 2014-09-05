@@ -6,7 +6,6 @@ import multiprocessing as mp
 import pickle
 
 def test_loop_basic():
-# 2nd change
     """
     run function f in loop
     
