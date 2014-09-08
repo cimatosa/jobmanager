@@ -1,9 +1,11 @@
 import jobmanager
 import os
+import sys
 import time
 import signal
 import multiprocessing as mp
 import pickle
+from numpy.random import rand
 
 def test_loop_basic():
     """
@@ -12,88 +14,89 @@ def test_loop_basic():
     check if it is alive after calling start()
     check if it is NOT alive after calling stop()
     """
-    f = lambda: print("I'm process {}".format(os.getpid()))
-    loop = jobmanager.Loop(func=f, interval=0.8, verbose=2)
+    f = lambda: print("        I'm process {}".format(os.getpid()))
+    loop = jobmanager.Loop(func=f, interval=0.8, verbose=0)
     loop.start()
     pid = loop.getpid()    
-    time.sleep(2)
+    time.sleep(1)
     assert loop.is_alive()
+    print("[+] loop started")
+    time.sleep(1)
     loop.stop()
     assert not loop.is_alive()
+    print("[+] loop stopped")
+    
     
 def test_loop_signals():
-    f = lambda: print("I'm process {}".format(os.getpid()))
-    loop = jobmanager.Loop(func=f, interval=0.8, verbose=2, sigint='stop', sigterm='stop')
+    f = lambda: print("        I'm process {}".format(os.getpid()))
+    loop = jobmanager.Loop(func=f, interval=0.8, verbose=0, sigint='stop', sigterm='stop')
     
-    print("TEST: stop on SIGINT\n")
+    print("## stop on SIGINT ##")
     loop.start()
     time.sleep(1)
     pid = loop.getpid()
-    print("send SIGINT")
+    print("    send SIGINT")
     os.kill(pid, signal.SIGINT)
     time.sleep(1)
     assert not loop.is_alive()
-    print("loop stopped running")
-    print("-"*40)
+    print("[+] loop stopped running")
 
-    print("\nTEST: stop on SIGTERM\n")    
+    print("## stop on SIGTERM ##")    
     loop.start()
     time.sleep(1)
     pid = loop.getpid()
-    print("send SIGTERM")
+    print("    send SIGTERM")
     os.kill(pid, signal.SIGTERM)
     time.sleep(1)
     assert not loop.is_alive()
-    print("loop stopped running")
-    print("-"*40)
+    print("[+] loop stopped running")
     
-    print("\nTEST: ignore SIGINT\n")
-    loop = jobmanager.Loop(func=f, interval=0.8, verbose=2, sigint='ign', sigterm='ign')
+    print("## ignore SIGINT ##")
+    loop = jobmanager.Loop(func=f, interval=0.8, verbose=0, sigint='ign', sigterm='ign')
 
     loop.start()
     time.sleep(1)
     pid = loop.getpid()
     os.kill(pid, signal.SIGINT)
-    print("send SIGINT")
+    print("    send SIGINT")
     time.sleep(1)
     assert loop.is_alive()
-    print("loop still running")
-    print("send SIGKILL")
+    print("[+] loop still running")
+    print("    send SIGKILL")
     os.kill(pid, signal.SIGKILL)
     time.sleep(1)
     assert not loop.is_alive()
-    print("loop stopped running")
-    print("-"*40)
+    print("[+] loop stopped running")
     
-    print("\nTEST: ignore SIGTERM\n")
+    print("## ignore SIGTERM ##")
     loop.start()
     time.sleep(1)
     pid = loop.getpid()
-    print("send SIGTERM")
+    print("    send SIGTERM")
     os.kill(pid, signal.SIGTERM)
     time.sleep(1)
     assert loop.is_alive()
-    print("loop still running")
-    print("send SIGKILL")    
+    print("[+] loop still running")
+    print("    send SIGKILL")    
     os.kill(pid, signal.SIGKILL)
     time.sleep(1)
     assert not loop.is_alive()
-    print("loop stopped running")
-    print("-"*40)    
+    print("[+] loop stopped running")
     
 def start_server(verbose, n=30):
-    print("\nSTART SERVER")
+    print("START SERVER")
     args = range(1,n)
     authkey = 'testing'
     jm_server = jobmanager.JobManager_Server(authkey=authkey,
                                              fname_for_final_result_dump='final_result.dump',
                                              verbose=verbose, 
-                                             fname_for_job_q_dump='job_q.dump')
+                                             fname_for_job_q_dump='job_q.dump',
+                                             fname_for_fail_q_dump='fail_q.dump')
     jm_server.args_from_list(args)
     jm_server.start()
     
 def start_client(verbose):
-    print("\nSTART CLIENT")
+    print("START CLIENT")
     jm_client = jobmanager.JobManager_Client(ip='localhost', authkey='testing', port=42524, nproc=0, verbose=verbose)
     jm_client.start()    
 
@@ -101,63 +104,78 @@ def test_jobmanager_basic():
     """
     start server, start client, process trivial jobs, quit
     """
-    p_server = mp.Process(target=start_server, args=(2,))
+    n = 10
+    p_server = mp.Process(target=start_server, args=(0,n))
     p_server.start()
     
     time.sleep(1)
     
-    p_client = mp.Process(target=start_client, args=(2,))
+    p_client = mp.Process(target=start_client, args=(0,))
     p_client.start()
     
     p_client.join(30)
     p_server.join(30)
+
+    assert not p_client.is_alive(), "the client did not terminate on time!"
+    assert not p_server.is_alive(), "the server did not terminate on time!"
+    print("[+] client and server terminated")
     
-    assert not p_client.is_alive()
-    assert not p_server.is_alive()
+    fname = 'final_result.dump'
+    with open(fname, 'rb') as f:
+        final_res = pickle.load(f)
+    
+    final_res_args_set = {a[0] for a in final_res}
+        
+    set_ref = set(range(1,n))
+    
+    intersect = set_ref - final_res_args_set
+    
+    assert len(intersect) == 0, "final result does not contain all arguments!"
+    print("[+] all arguments found in final_results")
+    
+    
     
 def test_jobmanager_server_signals():
-    print("\nTEST SIGTERM\n")
-    p_server = mp.Process(target=start_server, args=(2,))
+    print("## TEST SIGTERM ##")
+    p_server = mp.Process(target=start_server, args=(0,))
     p_server.start()
     time.sleep(1)
-    print("SEND SIGTERM")
+    print("    send SIGTERM")
     os.kill(p_server.pid, signal.SIGTERM)
     assert p_server.is_alive()
-    print("STILL ALIVE (assume shut down takes some time)")
+    print("[+] still alive (assume shut down takes some time)")
     p_server.join(15)
-    assert not p_server.is_alive()
-    print("NOW TERMINATED (timeout of 15s not reached)")
+    assert not p_server.is_alive(), "timeout for server shutdown reached"
+    print("[+] now terminated (timeout of 15s not reached)")
     
     fname = 'job_q.dump'
     with open(fname, 'rb') as f:
         args = pickle.load(f)
     
-    print("check job_q.dump ... ", end='', flush=True)    
     for i,a in enumerate(range(1,30)):
-        assert a == args[i]
-    print("done!")
+        assert a == args[i], "checking the job_q.dump failed"
+    print("[+] job_q.dump contains all arguments")
     
 
-    print("\nTEST SIGINT\n")    
-    p_server = mp.Process(target=start_server, args=(2,))
+    print("## TEST SIGINT ##")    
+    p_server = mp.Process(target=start_server, args=(0,))
     p_server.start()
     time.sleep(1)
-    print("SEND SIGINT")
+    print("    send SIGINT")
     os.kill(p_server.pid, signal.SIGINT)
     assert p_server.is_alive()
-    print("STILL ALIVE (assume shut down takes some time)")
+    print("[+] still alive (assume shut down takes some time)")
     p_server.join(15)
-    assert not p_server.is_alive()
-    print("NOW TERMINATED (timeout of 15s not reached)")
+    assert not p_server.is_alive(), "timeout for server shutdown reached"
+    print("[+] now terminated (timeout of 15s not reached)")
     
     fname = 'job_q.dump'
     with open(fname, 'rb') as f:
         args = pickle.load(f)
     
-    print("check job_q.dump ... ", end='', flush=True)    
     for i,a in enumerate(range(1,30)):
-        assert a == args[i]    
-    print("done!")    
+        assert a == args[i], "checking the job_q.dump failed"
+    print("[+] job_q.dump contains all arguments")   
     
 def test_shutdown_server_while_client_running():
     """
@@ -171,12 +189,12 @@ def test_shutdown_server_while_client_running():
     check if the final_result and the job_q dump end up to include
     all arguments given 
     """
-    p_server = mp.Process(target=start_server, args=(2,1000))
+    p_server = mp.Process(target=start_server, args=(0,1000))
     p_server.start()
     
     time.sleep(1)
     
-    p_client = mp.Process(target=start_client, args=(2,))
+    p_client = mp.Process(target=start_client, args=(0,))
     p_client.start()
     
     time.sleep(2)
@@ -204,24 +222,205 @@ def test_shutdown_server_while_client_running():
     set_recover = set(args) | set(final_res_args)
     
     intersec_set = set_ref-set_recover
-    print(len(intersec_set))
-    print(intersec_set)
 
-    assert(len(intersec_set) == 0)
+    if len(intersec_set) == 0:
+        print("[+] no arguments lost!")
+
+    assert len(intersec_set) == 0, "job_q.dump and final_result_dump do NOT contain all arguments -> some must have been lost!"
+
+def test_shutdown_client():
+    shutdown_client(signal.SIGTERM)
+    shutdown_client(signal.SIGINT)
+
+def shutdown_client(sig):
+    """
+    start server with 100 elements in queue
+    
+    start client
+    
+    stop client -> client should catch exception, interrupts the running worker function,
+        reinsert arguments, client terminates
+        
+    start client again, continues to work on the queue
+    
+    if server does not terminate on time, something must be wrong with args_set
+    check if the final_result contain all arguments given 
+    """
+    
+    n = 100
+    
+    print("## terminate client with {} ##".format(jobmanager.signal_dict[sig]))
+    
+    p_server = mp.Process(target=start_server, args=(0,n))
+    p_server.start()
+    
+    time.sleep(0.5)
+    
+    p_client = mp.Process(target=start_client, args=(0,))
+    p_client.start()
+    
+    time.sleep(1)
+    
+    print("    send {}".format(jobmanager.signal_dict[sig]))
+    os.kill(p_client.pid, sig)
+    assert p_client.is_alive()
+    print("[+] still alive (assume shut down takes some time)")
+    p_client.join(5)
+    assert not p_client.is_alive(), "timeout for client shutdown reached"
+    print("[+] now terminated (timeout of 5s not reached)")
+    
+    time.sleep(0.5)
+     
+    p_client = mp.Process(target=start_client, args=(0,))
+    p_client.start()
+    
+    p_client.join(30)
+    p_server.join(30)
+    
+    print("[+] client and server terminated")
+    
+    fname = 'final_result.dump'
+    with open(fname, 'rb') as f:
+        final_res = pickle.load(f)
+    
+    final_res_args_set = {a[0] for a in final_res}
+        
+    set_ref = set(range(1,n))
+    
+    intersect = set_ref - final_res_args_set
+    
+    assert len(intersect) == 0, "final result does not contain all arguments!"
+    print("[+] all arguments found in final_results")
+
+def test_Signal_to_SIG_IGN():
+    def f():
+        jobmanager.Signal_to_SIG_IGN()
+        time.sleep(10)
+        
+    p = mp.Process(target=f)
+    p.start()
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+
+    print("    send SIGINT")
+    os.kill(p.pid, signal.SIGINT)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGTERM")
+    os.kill(p.pid, signal.SIGTERM)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGKILL")
+    os.kill(p.pid, signal.SIGKILL)
+    time.sleep(0.2)
+    assert not p.is_alive()
+    print("[+] terminated")
+    
+def test_Signal_to_sys_exit():
+    def f():
+        jobmanager.Signal_to_sys_exit()
+        while True:
+            try:
+                time.sleep(10)
+            except SystemExit:
+                print("[+] caught SystemExit, keep running")
+            else:
+                return
+        
+    p = mp.Process(target=f)
+    p.start()
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+
+    print("    send SIGINT")
+    os.kill(p.pid, signal.SIGINT)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGTERM")
+    os.kill(p.pid, signal.SIGTERM)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGKILL")
+    os.kill(p.pid, signal.SIGKILL)
+    time.sleep(0.2)
+    assert not p.is_alive()
+    print("[+] terminated")
+    
+def test_Signal_to_terminate_process_list():
+    def child_proc():
+        jobmanager.Signal_to_sys_exit()
+        try:
+            time.sleep(10)
+        except:
+            err, val, trb = sys.exc_info()
+            print("PID {}: caught Exception {}".format(os.getpid(), err))
+            
+    def mother_proc():
+        n = 3
+        p = []
+        for i in range(n):
+            p.append(mp.Process(target=child_proc))
+            p[-1].start()
+            
+        jobmanager.Signal_to_terminate_process_list(p)
+        print("spawned {} processes".format(n))        
+        for i in range(n):
+            p[i].join()
+        print("all joined, mother ends gracefully")
+            
+    p_mother = mp.Process(target=mother_proc)
+    p_mother.start()
+    time.sleep(0.5)
+    print("send SIGINT")
+    os.kill(p_mother.pid, signal.SIGINT)
+    
+def test_check_fail_q():
+    class Client_Random_Error(jobmanager.JobManager_Client):
+        def func(self, args, const_args):
+            time.sleep(0.1)
+            x = rand()
+            if x < 0.1:
+                assert False
+            return os.getpid()
+
+    
+    n = 100
+    verbose=2
+    p_server = mp.Process(target=start_server, args=(0,n))
+    p_server.start()
+    
+    time.sleep(1)
+    
+    jm_client = Client_Random_Error(ip='localhost', authkey='testing', port=42524, nproc=1, verbose=verbose)
+    
+    p_client = mp.Process(target=jm_client.start)
+    p_client.start()
 
 if __name__ == "__main__":
+#     test_Signal_to_SIG_IGN()
+#     test_Signal_to_sys_exit()
+#     test_Signal_to_terminate_process_list()
 #     test_loop_basic()
 #     test_loop_signals()
-    test_jobmanager_basic()
-    test_jobmanager_server_signals()
-    test_shutdown_server_while_client_running()
+#     test_jobmanager_basic()
+#     test_jobmanager_server_signals()
+#     test_shutdown_server_while_client_running()
+#     test_shutdown_client()
+    test_check_fail_q()
+
     
 """
 MEMO:
-    client shuts down early -> reinsert argument
-    
-    client catches exception -> save trace back, report to fail_q, process next argument
-    
     everything from the fail_q is also considered process
         - remove from args_set
         - keep track for summary at the end 

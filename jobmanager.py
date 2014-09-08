@@ -111,10 +111,11 @@ class SIG_handler_Loop(object):
     of this boolean object before each repetition, the loop will stop when
     a signal was receives.
     """
-    def __init__(self, shared_mem_run, sigint, sigterm):
+    def __init__(self, shared_mem_run, sigint, sigterm, verbose=0):
         self.shared_mem_run = shared_mem_run
         self.set_signal(signal.SIGINT, sigint)
         self.set_signal(signal.SIGTERM, sigterm)
+        self.verbose=verbose
     def set_signal(self, sig, handler_str):
         if handler_str == 'ign':
             signal.signal(sig, self._ignore_signal)
@@ -126,7 +127,8 @@ class SIG_handler_Loop(object):
     def _ignore_signal(self, signal, frame):
         pass
     def _stop_on_signal(self, signal, frame):
-        print("\nPID {}: received sig {} -> set run false".format(os.getpid(), signal_dict[signal]))
+        if self.verbose > 0:
+            print("\nPID {}: received sig {} -> set run false".format(os.getpid(), signal_dict[signal]))
         self.shared_mem_run.value = False
 
 
@@ -184,7 +186,7 @@ class Loop(object):
         """to be executed as a seperate process (that's why this functions is declared static)
         """
         # implement the process specific signal handler
-        SIG_handler_Loop(shared_mem_run, sigint, sigterm)
+        SIG_handler_Loop(shared_mem_run, sigint, sigterm, verbose)
         
         while shared_mem_run.value:
             try:
@@ -423,9 +425,9 @@ class StatusBar(Loop):
             print(s1+s2+s3, end='', flush=True)
             return count_value >= max_count_value
 
-
 def setup_SIG_handler_manager():
-    """When a process calls this functions, it's signal handler
+    """
+    When a process calls this functions, it's signal handler
     will be set to ignore the signals given by the list signals.
     
     This functions is passed to the SyncManager start routine (used
@@ -441,23 +443,41 @@ def setup_SIG_handler_manager():
     we have to prevent this default signal handling by passing this functions
     to the SyncManager start routine.
     """
-    signals = [signal.SIGINT, signal.SIGTERM]
-    for s in signals:
-        signal.signal(s, signal.SIG_IGN)
-        
-def SIGNAL_to_sysExit_handler(signal, frame):
-    print("signal", signal_dict[signal])
-    sys.exit('trigger system exit due to {}'.format(signal_dict[signal]))
+    Signal_to_SIG_IGN(signals=[signal.SIGINT, signal.SIGTERM], verbose=0)
+
+class Signal_to_SIG_IGN(object):
+    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM], verbose=0):
+        self.verbose = verbose
+        for s in signals:
+            signal.signal(s, self._handler)
+    def _handler(self, signal, frame):
+        if self.verbose > 0:
+            print("PID {}: received signal {} -> will be ignored".format(os.getpid(), signal_dict[signal]))
     
-def SIGTERM_to_sys_exit():
-    signal.signal(signal.SIGTERM, SIGNAL_to_sysExit_handler)
+class Signal_to_sys_exit(object):
+    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM], verbose=0):
+        self.verbose = verbose
+        for s in signals:
+            signal.signal(s, self._handler)
+    def _handler(self, signal, frame):
+        if self.verbose > 0:
+            print("PID {}: received signal {} -> call sys.exit -> raise SystemExit".format(os.getpid(), signal_dict[signal]))
+        sys.exit('exit due to signal {}'.format(signal_dict[signal]))
         
-# def ALL_SIGNALS_to_sys_exit():
-#     all_num_sig = signal_dict.keys()
-#     for s in all_num_sig: 
-#         if (s != signal.SIGKILL) and (s != signal.SIGSTOP):
-#             signal.signal(s, SIGNAL_to_sysExit_handler)
-    
+class Signal_to_terminate_process_list(object):
+    """
+    SIGINT and SIGTERM will call terminate for process given in process_list
+    """
+    def __init__(self, process_list, signals = [signal.SIGINT, signal.SIGTERM], verbose=0):
+        self.process_list = process_list
+        self.verbose = verbose
+        for s in signals:
+            signal.signal(s, self._handler)
+    def _handler(self, signal, frame):
+        if self.verbose > 0:
+            print("PID {}: received sig {} -> terminate all given subprocesses".format(os.getpid(), signal_dict[signal]))
+        for p in self.process_list:
+            p.terminate()
 
 class JobManager_Server(object):
     """general usage:
@@ -510,7 +530,8 @@ class JobManager_Server(object):
                  port=42524, 
                  verbose=1, 
                  msg_interval=1,
-                 fname_for_job_q_dump='auto'):
+                 fname_for_job_q_dump='auto',
+                 fname_for_fail_q_dump='auto'):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -587,6 +608,7 @@ class JobManager_Server(object):
         # final result as list, other types can be achieved by subclassing 
         self.final_result = []
 
+        self.stat = None
         if self.verbose > 0:
             self.stat = StatusBar(count = self.numresults, max_count = self.numjobs, 
                                   interval=msg_interval, speed_calc_cycles=10,
@@ -655,7 +677,7 @@ class JobManager_Server(object):
         
         When finished, or on exception call stop() afterwards to shout down gracefully.
         """
-        SIGTERM_to_sys_exit()
+        Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
         
         if self.verbose > 1:
@@ -680,9 +702,10 @@ class JobManager_Server(object):
                 err, val, trb = sys.exc_info()
                 print("\nPID {}: JobManager_Server caught exception {} -> prepare for graceful shutdown".format(os.getpid(), err))
 
-                # KeyboardInterrupt and SystemExit are considered non erroneous
-                # halts, print traceback will be omitted
-                if (err != KeyboardInterrupt) and (err != SystemExit):
+                # KeyboardInterrupt via SIGINT will be mapped to SystemExit  
+                # SystemExit is considered non erroneous
+                # halt, printing traceback will be omitted
+                if err != SystemExit:
                     print("PID {}: JobManager_Server prints it's traceback")
                     traceback.print_exception(err, val, trb)
         else:    
@@ -701,7 +724,8 @@ class JobManager_Server(object):
         
         pid = os.getpid()
         
-        self.stat.stop()
+        if self.stat != None:
+            self.stat.stop()
         
         manager_pid = self.manager._process.pid
 
@@ -722,12 +746,12 @@ class JobManager_Server(object):
             if self.verbose > 1:
                 print("PID {}: SyncManager shutdown (can't tell about the success)".format(manager_pid))
         
-        if self.verbose > 1:    
+        if self.verbose > 0:    
             print("PID {}: process final result ... ".format(pid), end='', flush=True) 
         
         self.process_final_result()
         
-        if self.verbose > 1:
+        if self.verbose > 0:
             print("done!")
         
         if not self.job_q.empty():
@@ -737,31 +761,43 @@ class JobManager_Server(object):
                 fname = self.fname_for_job_q_dump
             
             if self.verbose > 0:
-                print("PID {}: args_set not empty -> dump to file {}".format(pid, fname))
+                print("PID {}: args_set not empty -> dump to file {} ... ".format(pid, fname), end='', flush=True)
 
             args = list(self.args_set)
 
-            if self.verbose > 1:    
-                print("done!")
-                print("        pickle to file ... ", end='', flush=True)
-                
             with open(fname, 'wb') as f:
                 pickle.dump(args, f, protocol=pickle.HIGHEST_PROTOCOL)
             
-            if self.verbose > 1:                
+            if self.verbose > 0:                
                 print("done!")
+
+        if not self.fail_q.empty():
+            if self.fname_for_fail_q_dump == 'auto':
+                fname = "jobmanager_server_fail_queue_dump_{}".format(getDateForFileName(includePID=False))
+            else:
+                fname = self.fname_for_fail_q_dump
             
+            if self.verbose > 0:
+                print("PID {}: there are reported failures -> dump to file {} ... ".format(pid, fname), end='', flush=True)
+            
+            fail_list = []
+            while not self.fail_q.empty():
+                new_args, err, hostname, fname_tb = self.fail_q.get()
+                fail_list.append((new_args, err, hostname, fname_tb))
+                
+            with open(fname, 'rb') as f:
+                pickle.dump(fail_list, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            if self.verbose > 0:                
+                print("done!")
+                
+            if self.verbose > 1:
+                for f in fail_list:
+                    print(new_args, err, hostname, fname_tb)
+                
         if self.verbose > 0:
             print("PID {}: JobManager_Server was successfully shout down".format(pid))
 
-class SIG_handler_worker_func(object):
-    def __init__(self):
-        signals = [signal.SIGINT, signal.SIGTERM]
-        for s in signals:
-            signal.signal(s, self)
-    def __call__(self, signal, frame):
-        print("PID {}: received sig {} -> call sys.exit -> raise SystemExit".format(os.getpid(), signal_dict[signal]))
-        sys.exit('exit due to signal')        
 
 class JobManager_Client(object):
     """
@@ -786,6 +822,7 @@ class JobManager_Client(object):
     
     Then the process will terminate.
     """
+    
     def __init__(self, ip, authkey, port = 42524, nproc = 0, nice=19, no_warings=True, verbose=1):
         """
         ip [string] - ip address or hostname where the JobManager_Server is running
@@ -810,6 +847,7 @@ class JobManager_Client(object):
         verbose [int] - 0: quiet, 1: status only, 2: debug messages
         """
         
+       
         self.verbose = verbose
         self._pid = os.getpid()
         if self.verbose > 1:
@@ -832,17 +870,13 @@ class JobManager_Client(object):
         
         class ServerQueueManager(SyncManager):
             pass
-
+        
         ServerQueueManager.register('get_job_q')
         ServerQueueManager.register('get_result_q')
         ServerQueueManager.register('get_fail_q')
         ServerQueueManager.register('get_const_args')
     
         self.manager = ServerQueueManager(address=(self.ip, self.port), authkey=self.authkey)
-#         self.manager.start(setup_SIG_handler_manager)
-
-#         if self.verbose > 1:
-#             print("PID {}: SyncManager started {}:{} authkey '{}'".format(self.manager._process.pid, self._pid, self.ip, self.port, str(authkey, encoding='utf8')))        
 
         if self.verbose > 0:
             print('PIC {}: SyncManager connecting to {}:{} ... '.format(self._pid, self.ip, self.port), end='', flush=True)
@@ -869,17 +903,15 @@ class JobManager_Client(object):
         Subclass and overwrite this function to implement your own function.  
         """
         time.sleep(0.1)
-#         x = rand()
-#         if x < 0.01:
-#             assert False
         return os.getpid()
+
 
     @staticmethod
     def __worker_func(func, const_args, job_q, result_q, nice, fail_q, verbose):
         """
         the wrapper spawned nproc trimes calling and handling self.func
         """
-        SIG_handler_worker_func()
+        Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
         
         n = os.nice(0)
         n = os.nice(nice - n)
@@ -892,40 +924,65 @@ class JobManager_Client(object):
                 res = func(new_args, const_args)
                 result_q.put((new_args, res))
                 c += 1
+                
+            # regular case, just stop woring when empty job_q was found
             except queue.Empty:
                 if verbose > 1:
                     print("\nPID {}: finds empty job queue, processed {} jobs".format(os.getpid(), c))
                 return
+            
+            # in this context usually raised if the communication to the server fails
             except EOFError:
                 if verbose > 0:
                     print("\nPID {}: EOFError, I guess the server went down, can't do anything, terminate now!".format(os.getpid()))
                 return
+            
+            # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
+            # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
+            # default signal handlers
             except SystemExit:
                 if verbose > 0:
                     print("\nPID {}: SystemExit, quit processing, reinsert current argument".format(os.getpid()))
                 try:
+                    if verbose > 1:
+                        print("\PID {}: put argument back to job_q ... ".format(os.getpid()), end='', flush=True)
                     job_q.put(new_args, timeout=10)
                 except queue.Full:
                     if verbose > 0:
                         print("\nPID {}: failed to reinsert argument, Server down? I quit!".format(os.getpid()))
+                else:
+                    if verbose > 1:
+                        print("done!")
                 return
-            else:
+            
+            # some unexpected Exception
+            # write argument to fail_q, save traceback
+            # continue wirkung 
+            except:
                 err, val, trb = sys.exc_info()
+                
                 if verbose > 0:
-                    print("\nPID {}: caught exception {}, report current argument has faild,".format(os.getpid(), err))
-                    print("        write traceback to file, continue processing next argument")
+                    print("\nPID {}: caught exception {}, report failure of current argument to server ... ".format(os.getpid(), err), end='', flush=True)
                 
                 hostname = socket.gethostname()
-                fail_q.put((new_args, err, hostname))
-                
                 fname = 'traceback_args_{}_err_{}_{}.trb'.format(new_args, err, getDateForFileName(includePID=True))
+#                 print(fail_q.qsize())
+                
+#                 fail_q.put(new_args, timeout=10)
+                
+                if verbose > 0:
+                    print("done")
+                    print("        write exception to file {} ... ".format(fname), end='', flush=True)
+
                 with open(fname, 'w') as f:
-                    traceback.print_tb(tb=trb, file=f)                
+                    traceback.print_exception(etype=err, value=val, tb=trb, file=f)
+                                    
+                if verbose > 0:
+                    print("done")
+                print("        continue processing next argument.")
                 
         if verbose > 1:
             print("PID {}: JobManager_Client.__worker_func terminates".format(os.getpid()))
-
-
         
 
     def start(self):
@@ -941,6 +998,10 @@ class JobManager_Client(object):
                                                             self.verbose))
             self.procs.append(p)
             p.start()
+        
+        Signal_to_terminate_process_list(process_list = self.procs, verbose=self.verbose)
     
         for p in self.procs:
             p.join()
+                       
+        
