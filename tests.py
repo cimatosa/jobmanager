@@ -90,8 +90,8 @@ def start_server(verbose, n=30):
     jm_server = jobmanager.JobManager_Server(authkey=authkey,
                                              fname_for_final_result_dump='final_result.dump',
                                              verbose=verbose, 
-                                             fname_for_job_q_dump='job_q.dump',
-                                             fname_for_fail_q_dump='fail_q.dump')
+                                             fname_for_args_dump='args.dump',
+                                             fname_for_fail_dump='fail.dump')
     jm_server.args_from_list(args)
     jm_server.start()
     
@@ -148,13 +148,13 @@ def test_jobmanager_server_signals():
     assert not p_server.is_alive(), "timeout for server shutdown reached"
     print("[+] now terminated (timeout of 15s not reached)")
     
-    fname = 'job_q.dump'
+    fname = 'args.dump'
     with open(fname, 'rb') as f:
         args = pickle.load(f)
     
     for i,a in enumerate(range(1,30)):
-        assert a == args[i], "checking the job_q.dump failed"
-    print("[+] job_q.dump contains all arguments")
+        assert a == args[i], "checking the args.dump failed"
+    print("[+] args.dump contains all arguments")
     
 
     print("## TEST SIGINT ##")    
@@ -169,13 +169,13 @@ def test_jobmanager_server_signals():
     assert not p_server.is_alive(), "timeout for server shutdown reached"
     print("[+] now terminated (timeout of 15s not reached)")
     
-    fname = 'job_q.dump'
+    fname = 'args.dump'
     with open(fname, 'rb') as f:
         args = pickle.load(f)
     
     for i,a in enumerate(range(1,30)):
-        assert a == args[i], "checking the job_q.dump failed"
-    print("[+] job_q.dump contains all arguments")   
+        assert a == args[i], "checking the args.dump failed"
+    print("[+] args.dump contains all arguments")   
     
 def test_shutdown_server_while_client_running():
     """
@@ -184,9 +184,9 @@ def test_shutdown_server_while_client_running():
     start client
     
     stop server -> client should catch exception, but can't do anything, 
-        writing to fail_q won't work, because server went down
+        writing to fail won't work, because server went down
     
-    check if the final_result and the job_q dump end up to include
+    check if the final_result and the args dump end up to include
     all arguments given 
     """
     p_server = mp.Process(target=start_server, args=(0,1000))
@@ -207,7 +207,7 @@ def test_shutdown_server_while_client_running():
     assert not p_server.is_alive()
     assert not p_client.is_alive()
 
-    fname = 'job_q.dump'
+    fname = 'args.dump'
     with open(fname, 'rb') as f:
         args = pickle.load(f)
         
@@ -226,7 +226,7 @@ def test_shutdown_server_while_client_running():
     if len(intersec_set) == 0:
         print("[+] no arguments lost!")
 
-    assert len(intersec_set) == 0, "job_q.dump and final_result_dump do NOT contain all arguments -> some must have been lost!"
+    assert len(intersec_set) == 0, "args.dump and final_result_dump do NOT contain all arguments -> some must have been lost!"
 
 def test_shutdown_client():
     shutdown_client(signal.SIGTERM)
@@ -292,10 +292,72 @@ def shutdown_client(sig):
     assert len(intersect) == 0, "final result does not contain all arguments!"
     print("[+] all arguments found in final_results")
 
+def test_check_fail():
+    class Client_Random_Error(jobmanager.JobManager_Client):
+        def func(self, args, const_args):
+            fail_on = [3,23,45,67,89]
+            time.sleep(0.1)
+            if args in fail_on:
+                raise RuntimeError("fail_on Error")
+            return os.getpid()
+
+    
+    n = 100
+    verbose=0
+    p_server = mp.Process(target=start_server, args=(0,n))
+    p_server.start()
+    
+    time.sleep(1)
+    
+    print("START CLIENT")
+    jm_client = Client_Random_Error(ip='localhost', 
+                                    authkey='testing',
+                                    port=42524, 
+                                    nproc=0, 
+                                    verbose=verbose)
+    
+    p_client = mp.Process(target=jm_client.start)
+    p_client.start()
+    
+    assert p_server.is_alive()
+    assert p_client.is_alive()
+    
+    print("[+] server and client running")
+    
+    p_server.join(60)
+    p_client.join(60)
+    
+    assert not p_server.is_alive()
+    assert not p_client.is_alive()
+    
+    print("[+] server and client stopped")
+    
+    fname = 'final_result.dump'
+    with open(fname, 'rb') as f:
+        final_res = pickle.load(f)
+    
+    final_res_args_set = {a[0] for a in final_res}
+    
+    fname = 'fail.dump'
+    with open(fname, 'rb') as f:
+        fail = pickle.load(f)
+    
+    fail_set = {a[0] for a in fail}
+        
+    set_ref = set(range(1,n))
+    
+    all_set = final_res_args_set | fail_set
+    assert len(set_ref - all_set) == 0, "final result union with reported failure do not correspond to all args!" 
+    print("[+] all arguments found in final_results | reported failure")
+
 def test_Signal_to_SIG_IGN():
     def f():
         jobmanager.Signal_to_SIG_IGN()
-        time.sleep(10)
+        print("before sleep")
+        while True:
+            time.sleep(1)
+        print("after sleep")
+
         
     p = mp.Process(target=f)
     p.start()
@@ -383,47 +445,18 @@ def test_Signal_to_terminate_process_list():
     time.sleep(0.5)
     print("send SIGINT")
     os.kill(p_mother.pid, signal.SIGINT)
-    
-def test_check_fail_q():
-    class Client_Random_Error(jobmanager.JobManager_Client):
-        def func(self, args, const_args):
-            time.sleep(0.1)
-            x = rand()
-            if x < 0.1:
-                assert False
-            return os.getpid()
 
-    
-    n = 100
-    verbose=2
-    p_server = mp.Process(target=start_server, args=(0,n))
-    p_server.start()
-    
-    time.sleep(1)
-    
-    jm_client = Client_Random_Error(ip='localhost', authkey='testing', port=42524, nproc=1, verbose=verbose)
-    
-    p_client = mp.Process(target=jm_client.start)
-    p_client.start()
 
 if __name__ == "__main__":
-#     test_Signal_to_SIG_IGN()
-#     test_Signal_to_sys_exit()
-#     test_Signal_to_terminate_process_list()
-#     test_loop_basic()
-#     test_loop_signals()
-#     test_jobmanager_basic()
-#     test_jobmanager_server_signals()
-#     test_shutdown_server_while_client_running()
-#     test_shutdown_client()
-    test_check_fail_q()
-
+    test_Signal_to_SIG_IGN()
+    test_Signal_to_sys_exit()
+    test_Signal_to_terminate_process_list()
+    test_loop_basic()
+    test_loop_signals()
+    test_jobmanager_basic()
+    test_jobmanager_server_signals()
+    test_shutdown_server_while_client_running()
+    test_shutdown_client()
+    test_check_fail()
+    pass
     
-"""
-MEMO:
-    everything from the fail_q is also considered process
-        - remove from args_set
-        - keep track for summary at the end 
-
-"""
-
