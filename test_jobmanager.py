@@ -6,6 +6,7 @@ import signal
 import multiprocessing as mp
 import pickle
 from numpy.random import rand
+import psutil
 
 def test_Signal_to_SIG_IGN():
     def f():
@@ -121,40 +122,7 @@ def test_loop_basic():
     loop.stop()
     assert not loop.is_alive()
     print("[+] loop stopped")
-    
-def non_stopping_loop():
-    while True:
-        time.sleep(1)
-    
-def test_loop_kill():
-    with jobmanager.Loop(func=non_stopping_loop, 
-                         verbose=2,
-                         name='loop') as loop:
-        loop.start()
-        time.sleep(2)
-        loop.stop()
-    
-    
-def test_statusbar():
-    count = jobmanager.UnsignedIntValue()
-    max_count = jobmanager.UnsignedIntValue(100)
-    sb = jobmanager.StatusBar(count, max_count, verbose=0, run=False)
-    assert sb._proc == None
-    
-    sb.start()
-    time.sleep(0.2)
-    pid = sb._proc.pid
-    
-    sb.start()
-    time.sleep(0.2)
-    assert pid == sb._proc.pid
-    
-    sb.stop()
-    assert sb._proc == None
-    
-    time.sleep(0.2)
-    sb.stop()
-    
+
 def test_loop_signals():
     f = lambda: print("        I'm process {}".format(os.getpid()))
     loop = jobmanager.Loop(func=f, interval=0.8, verbose=0, sigint='stop', sigterm='stop')
@@ -210,17 +178,169 @@ def test_loop_signals():
     time.sleep(1)
     assert not loop.is_alive()
     print("[+] loop stopped running")
+
+
+def non_stopping_function():
+    print("        I'm pid", os.getpid())
+    print("        I'm NOT going to stop")
     
+    while True:         # sleep will be interrupted by signal
+        time.sleep(1)   # while True just calls sleep again
+                        # only SIGKILL helps
+                        
+
+def normal_function():
+    print("        I'm pid", os.getpid())
+    
+def long_sleep_function():
+    print("        I'm pid", os.getpid())
+    print("        I will sleep for seven years")
+    time.sleep(60*60*12*356*7)
+    
+def test_loop_normal_stop():
+    with jobmanager.Loop(func=normal_function, 
+                         verbose=2,
+                         name='loop') as loop:
+        loop.start()
+        time.sleep(0.1)
+        assert loop.is_alive()
+        print("[+] normal loop running")
+        
+    assert not loop.is_alive()
+    print("[+] normal loop stopped")
+    
+def test_loop_need_sigterm_to_stop():
+    with jobmanager.Loop(func=long_sleep_function, 
+                         verbose=2,
+                         name='loop') as loop:
+        loop.start()
+        time.sleep(0.1)
+        assert loop.is_alive()
+        print("[+] sleepy loop running")
+        
+    assert not loop.is_alive()
+    print("[+] sleepy loop stopped")
+    
+def test_loop_need_sigkill_to_stop():
+    with jobmanager.Loop(func=non_stopping_function, 
+                         verbose=2,
+                         name='loop',
+                         auto_kill_on_last_resort=True) as loop:
+        loop.start()
+        time.sleep(0.1)
+        assert loop.is_alive()
+        print("[+] NON stopping loop running")
+
+    assert not loop.is_alive()
+    print("[+] NON stopping loop stopped")
+        
+def test_why_with_statement():
+    class ErrorLoop(jobmanager.Loop):
+        def raise_error(self):
+            raise RuntimeError("on purpose error")
+    v=2
+    
+    def t(shared_mem_pid):
+        l = ErrorLoop(func=normal_function, verbose=v)
+        l.start()
+        time.sleep(0.2)
+        shared_mem_pid.value = l.getpid()
+        l.raise_error()
+        l.stop()
+        
+    def t_with():
+        with ErrorLoop(func=normal_function, verbose=v) as l:
+            l.start()
+            time.sleep(0.2)
+            l.raise_error()
+            l.stop()
+        
+    print("## start without with statement ...")
+    subproc_pid = jobmanager.UnsignedIntValue()
+    
+    p = mp.Process(target=t, args=(subproc_pid, ))
+    p.start()
+    time.sleep(0.3)
+    print("## now an exception gets raised ... but you don't see it!")
+    time.sleep(3)
+    print("## ... and the loop is still running so we have to kill the process")
+    p.terminate()
+    print("## ... done!")
+    p_sub = psutil.Process(subproc_pid.value)
+    if p_sub.is_running():
+        print("## terminate loop process from extern ...")
+        p_sub.terminate()
+        
+    p_sub.wait(1)
+    assert not p_sub.is_running()
+    print("## process with PID {} terminated!".format(subproc_pid.value))
+    
+    time.sleep(3)
+    
+    print("\n##\n## now to the same with the with statement ...")
+    p = mp.Process(target=t_with)
+    p.start()
+    
+    time.sleep(3)
+    print("## no special care must be taken ... cool eh!")
+    
+    print("## ALL DONE! (and now comes some exception, strange!)")
+    
+    
+def test_statusbar():
+    """
+    deprecated
+    """
+    count = jobmanager.UnsignedIntValue()
+    max_count = jobmanager.UnsignedIntValue(100)
+    sb = jobmanager.StatusBar(count, max_count, verbose=2)
+    assert not sb.is_alive()
+    
+    sb.start()
+    time.sleep(0.2)
+    assert sb.is_alive()
+    pid = sb.getpid()
+    
+    sb.start()
+    time.sleep(0.2)
+    assert pid == sb.getpid()
+    
+    sb.stop()
+    assert not sb.is_alive()
+    
+    time.sleep(0.2)
+    sb.stop()
+    
+def test_statusbar_with_statement():
+    count = jobmanager.UnsignedIntValue()
+    max_count = jobmanager.UnsignedIntValue(100)
+    with jobmanager.StatusBar(count, max_count, verbose=2) as sb:
+        assert not sb.is_alive()
+    
+        sb.start()
+        time.sleep(0.2)
+        assert sb.is_alive()
+        pid = sb.getpid()
+    
+        sb.start()
+        time.sleep(0.2)
+        assert pid == sb.getpid()
+    
+    assert not sb.is_alive()
+    
+    time.sleep(0.2)
+    sb.stop()
+ 
 def start_server(verbose, n=30):
     print("START SERVER")
     args = range(1,n)
     authkey = 'testing'
     jm_server = jobmanager.JobManager_Server(authkey=authkey,
-                                             fname_for_final_result_dump='final_result.dump',
-                                             verbose=verbose, 
+                                             verbose=verbose,
+                                             msg_interval=1,
+                                             fname_for_final_result_dump='final_result.dump', 
                                              fname_for_args_dump='args.dump',
-                                             fname_for_fail_dump='fail.dump',
-                                             no_status_bar=False)
+                                             fname_for_fail_dump='fail.dump')
     jm_server.args_from_list(args)
     jm_server.start()
     
@@ -487,21 +607,27 @@ def test_check_fail():
 
 
 if __name__ == "__main__":
+    
 #     test_Signal_to_SIG_IGN()
 #     test_Signal_to_sys_exit()
 #     test_Signal_to_terminate_process_list()
-#      
+#       
 #     test_loop_basic()
 #     test_loop_signals()
-    test_loop_kill()
+#     test_loop_normal_stop()
+#     test_loop_need_sigterm_to_stop()
+#     test_loop_need_sigkill_to_stop()
+#     
+#     test_why_with_statement()
      
 #     test_statusbar()
-#     
-#     test_jobmanager_basic()
-#     test_jobmanager_server_signals()
-#     test_shutdown_server_while_client_running()
-#     test_shutdown_client()
-#     test_check_fail()
+#     test_statusbar_with_statement()
+     
+    test_jobmanager_basic()
+    test_jobmanager_server_signals()
+    test_shutdown_server_while_client_running()
+    test_shutdown_client()
+    test_check_fail()
 
     pass
     

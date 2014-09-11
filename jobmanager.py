@@ -118,6 +118,9 @@ class SIG_handler_Loop(object):
         self.set_signal(signal.SIGTERM, sigterm)
         self.verbose=verbose
         self.identifier = identifier
+        if self.verbose > 1:
+            print("{}setup signal handler for loop (SIGINT:{}, SIGTERM:{})".format(self.identifier, sigint, sigterm))
+
     def set_signal(self, sig, handler_str):
         if handler_str == 'ign':
             signal.signal(sig, self._ignore_signal)
@@ -128,11 +131,20 @@ class SIG_handler_Loop(object):
     
     def _ignore_signal(self, signal, frame):
         pass
+
     def _stop_on_signal(self, signal, frame):
         if self.verbose > 0:
             print("\n{}received sig {} -> set run false".format(self.identifier, signal_dict[signal]))
         self.shared_mem_run.value = False
 
+def get_identifier(name=None, pid=None):
+    if name != None:
+        return name+': '
+    elif pid != None:
+        return "PID {}: ".format(pid)
+    else:
+        return "PID {}: ".format(os.getpid())
+    
 
 class Loop(object):
     """
@@ -146,12 +158,20 @@ class Loop(object):
     also determines if the function if executed another time. If set to False
     the execution stops.
     
-    In order to catch any Errors it is advisable to instantiate this class
-    using with statement as follows:
+    For safe cleanup (and in order to catch any Errors)
+    it is advisable to instantiate this class
+    using 'with' statement as follows:
         
         with Loop(**kwargs) as my_loop:
             my_loop.start()
             ...
+    
+    this will guarantee you that the spawned loop process is
+    down when exiting the 'with' scope.
+    
+    The only circumstance where the process is still running is
+    when you set auto_kill_on_last_resort to False and answer the
+    question to send SIGKILL with no.
     """
     def __init__(self, 
                   func, 
@@ -204,27 +224,45 @@ class Loop(object):
         return self
     
     def __exit__(self, *exc_args):
-
         # normal exit        
-        if not self._proc.is_alive():
+        if not self.is_alive():
             if self.verbose > 1:
-                print("{}loop has stopped".format(self._proc.pid, self._name, t))
+                print("{}loop has stopped on context exit".format(self._identifier))
             return
         
-        
-        # loop still runs on context exit -> call stop() -> see what happens
-        if self.verbose > 0:
-            print("{}loop is still running on context exit".format(self._identifier))
-            
-        self.stop()
+        # loop still runs on context exit -> _cleanup
         if self.verbose > 1:
-            print("{}give running loop {}s to finish ... ".format(self._identifier, 2*self.interval), end='', flush=True)
+            print("{}loop is still running on context exit".format(self._identifier))
+        self._cleanup()
+        
+
+    def _cleanup(self):
+        """
+        Wait at most twice as long as the given repetition interval
+        for the _wrapper_function to terminate.
+        
+        If after that time the _wrapper_function has not terminated,
+        send SIGTERM to and the process.
+        
+        Wait at most five times as long as the given repetition interval
+        for the _wrapper_function to terminate.
+        
+        If the process still running send SIGKILL automatically if
+        auto_kill_on_last_resort was set True or ask the
+        user to confirm sending SIGKILL
+        """
+        # set run to False and wait some time -> see what happens            
+        self.run = False
+        
+        if self.verbose > 1:
+            print("{}give running loop at most {}s to finish ... ".format(self._identifier, 2*self.interval), end='', flush=True)
         
         self._proc.join(2*self.interval)
         
-        if not self._proc.is_alive():
+        if not self.is_alive():
             if self.verbose > 1:
                 print("done")
+            self._proc = None
             return
 
         # loop still runs -> send SIGTERM -> see what happens
@@ -236,10 +274,11 @@ class Loop(object):
         self._proc.terminate()
         self._proc.join(5*self.interval)
         
-        if not self._proc.is_alive():
+        if not self.is_alive():
             if self.verbose > 0:
                 print("done!")
-                return
+            self._proc = None
+            return
             
         if self.verbose > 0:
             print("failed!")
@@ -248,13 +287,13 @@ class Loop(object):
         while not answer in 'yn':
             print("Do you want to send SIGKILL to '{}'? [y/n]: ".format(self._identifier), end='', flush=True)
             answer = sys.stdin.readline()[:-1]
+            
         if answer == 'n':
             print("{}keeps running".format(self._identifier))
         else:
             print("{}send SIGKILL".format(self._identifier))
-            os.kill(self._proc.pid, signal.SIGKILL)
-
-                        
+            os.kill(self.getpid(), signal.SIGKILL)
+            self._proc = None
 
     @staticmethod
     def _wrapper_func(func, args, shared_mem_run, interval, verbose, sigint, sigterm, name):
@@ -265,20 +304,16 @@ class Loop(object):
             identifier = name+': '
         else:
             identifier = "PID {}: ".format(os.getpid())
-        
-        SIG_handler_Loop(shared_mem_run, sigint, sigterm, verbose)
 
-        
-        
-        p = psutil.Process() # current process
-        
+        SIG_handler_Loop(shared_mem_run, sigint, sigterm, identifier, verbose)
+
         while shared_mem_run.value:
             try:
                 quit_loop = func(*args)
             except:
                 err, val, trb = sys.exc_info()
                 if verbose > 0:
-                    print("\nPID {}({}): error {} occurred in Loop class calling 'func(*args)'".format(p.pid, p.name, err))
+                    print("\n{}error {} occurred in Loop class calling 'func(*args)'".format(identifier, err))
                 if verbose > 0:
                     traceback.print_tb(trb)
                 return
@@ -288,7 +323,7 @@ class Loop(object):
             time.sleep(interval)
             
         if verbose > 1:
-            print("PID {}({}): _wrapper_func terminates gracefully".format(p.pid, p.name))
+            print("{}_wrapper_func terminates gracefully".format(identifier))
 
     def start(self):
         """
@@ -306,11 +341,7 @@ class Loop(object):
                                         self.verbose, self._sigint, self._sigterm, self._name),
                                 name=self._name)
         self._proc.start()
-        if self._name != None:
-            self._identifier = self._name+': '
-        else:
-            self._identifier = "PID {}: ".format(self._proc.pid)
-        
+        self._identifier = get_identifier(self._name, self.getpid())
         if self.verbose > 1:
             print("{}I'm a new loop process".format(self._identifier))
         
@@ -318,19 +349,24 @@ class Loop(object):
         """
         stops the process triggered by start
         
-        After setting the shared memory boolean run to false, which should prevent
-        the loop from repeating, wait at most twice as long as the given
-        repetition interval for the _wrapper_function to terminate.
-        
-        If after that time the _wrapper_function has not terminated, send SIGTERM
-        to and the process. Inform the user wether or not the process is yet running.
+        Setting the shared memory boolean run to false, which should prevent
+        the loop from repeating. Call _cleanup to make sure the process
+        stopped. After that we could trigger start() again.
         """
         self.run = False
-        if self._proc == None:
+        if not self.is_alive():
             if self.verbose > 0:
                 print("PID None: there is no running loop to stop")
             return
         
+        self._cleanup()
+        
+    def join(self, timeout):
+        """
+        calls join for the spawned process with given timeout
+        """
+        if self.is_alive():
+            self._proc.join(timeout)
 
             
     def getpid(self):
@@ -383,7 +419,6 @@ class StatusBar(Loop):
                  interval=1, 
                  speed_calc_cycles=10, 
                  width='auto',
-                 run=False, 
                  verbose=0,
                  sigint='stop', 
                  sigterm='stop',
@@ -421,14 +456,27 @@ class StatusBar(Loop):
         self.max_count = max_count  # multiprocessing value type
         self.count = count          # multiprocessing value type
         self.interval = interval
-        self.__set_width(width)     # iw
+        self.verbose = verbose
+        self.name = name
+        self.__set_width(width)
+        
         
         # setup loop class
         super().__init__(func=StatusBar.show_stat, 
-                         args=(self.count, self.start_time, self.max_count, 
-                               self.width, self.speed_calc_cycles, self.q), 
-                         interval=interval, run=run, verbose=verbose, 
-                         sigint=sigint, sigterm=sigterm, name=name)
+                         args=(self.count, 
+                               self.start_time, 
+                               self.max_count, 
+                               self.width, 
+                               self.speed_calc_cycles, 
+                               self.q), 
+                         interval=interval, 
+                         verbose=verbose, 
+                         sigint=sigint, 
+                         sigterm=sigterm, 
+                         name=name,
+                         auto_kill_on_last_resort=True)
+
+ 
         
     def __set_width(self, width):
         """
@@ -442,7 +490,9 @@ class StatusBar(Loop):
             try:
                 hw = struct.unpack('hh', fcntl.ioctl(sys.stdin, termios.TIOCGWINSZ, '1234'))
                 self.width = hw[1]
-            except IOError:
+            except:
+                if self.verbose > 0:
+                    print("{}failed to determine the width of the terminal".format(get_identifier(name=self.name)))
                 self.width = 80
         else:
             self.width = width
@@ -615,8 +665,7 @@ class JobManager_Server(object):
                   msg_interval=1,
                   fname_for_final_result_dump='auto',
                   fname_for_args_dump='auto',
-                  fname_for_fail_dump='auto',
-                  no_status_bar = False):
+                  fname_for_fail_dump='auto'):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -706,9 +755,7 @@ class JobManager_Server(object):
         # final result as list, other types can be achieved by subclassing 
         self.final_result = []
 
-        self.stat = None
-        self.no_status_bar = no_status_bar
-        
+       
         self.err_log = []
 #         self.p_reinsert_failure = Loop(func=JobManager_Server.reinsert_failures,
 #                                            args=(self.fail_q, self.job_q), 
@@ -753,12 +800,6 @@ class JobManager_Server(object):
         if self.numjobs.value != len(self.args_set):
             raise RuntimeError("use JobManager_Server.put_arg to put arguments to the job_q")
         
-        if (self.verbose > 0) and not self.no_status_bar:
-            self.stat = StatusBar(count = self.numresults, max_count = self.numjobs, 
-                                  interval=self.msg_interval, speed_calc_cycles=10,
-                                  verbose = self.verbose, sigint='ign', sigterm='ign',
-                                  run=True)        
-        
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
         
@@ -766,19 +807,21 @@ class JobManager_Server(object):
             print("PID {}: JobManager_Server starts processing incoming results".format(pid))
         
         try:   
-            if (self.verbose > 0) and not self.no_status_bar:
-                self.stat.start()
+            with StatusBar(count = self.numresults, max_count = self.numjobs, 
+                           interval=self.msg_interval, speed_calc_cycles=10,
+                           verbose = self.verbose, sigint='ign', sigterm='ign') as stat:
+                stat.start() 
                 if self.verbose > 1:
-                    print("PID {}: StatusBar started".format(self.stat.getpid()))
+                    print("PID {}: StatusBar started".format(stat.getpid()))
             
-            while (len(self.args_set) - self.fail_q.qsize()) > 0:
-                try:
-                    arg, result = self.result_q.get(timeout=1)       #blocks until an item is available
-                    self.args_set.remove(arg)
-                    self.process_new_result(arg, result)
-                    self.numresults.value = self.numjobs.value - (len(self.args_set) - self.fail_q.qsize()) 
-                except queue.Empty:
-                    pass
+                while (len(self.args_set) - self.fail_q.qsize()) > 0:
+                    try:
+                        arg, result = self.result_q.get(timeout=1)       #blocks until an item is available
+                        self.args_set.remove(arg)
+                        self.process_new_result(arg, result)
+                        self.numresults.value = self.numjobs.value - (len(self.args_set) - self.fail_q.qsize()) 
+                    except queue.Empty:
+                        pass
 
         except:
             if self.verbose > 0:
@@ -789,7 +832,7 @@ class JobManager_Server(object):
                 # SystemExit is considered non erroneous
                 # halt, printing traceback will be omitted
                 if err != SystemExit:
-                    print("PID {}: JobManager_Server prints it's traceback")
+                    print("PID {}: JobManager_Server prints it's traceback",format(os.getpid()))
                     traceback.print_exception(err, val, trb)
         else:    
             if self.verbose > 1:
@@ -810,10 +853,6 @@ class JobManager_Server(object):
         # start also makes sure that it was not started as subprocess
         # so at default behavior this assertion will allays be True
         assert self._pid == os.getpid()
-        
-        # stop statusbar 
-        if self.stat != None:
-            self.stat.stop()
         
         manager_pid = self.manager._process.pid
         
