@@ -246,7 +246,7 @@ class Loop(object):
 
         answer = 'y' if self._auto_kill_on_last_resort else '_'
         while not answer in 'yn':
-            print("Do you want to send SIGKILL to {}? [y/n]: ".format(self._identifier), end='', flush=True)
+            print("Do you want to send SIGKILL to '{}'? [y/n]: ".format(self._identifier), end='', flush=True)
             answer = sys.stdin.readline()[:-1]
         if answer == 'n':
             print("{}keeps running".format(self._identifier))
