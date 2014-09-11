@@ -7,6 +7,102 @@ import multiprocessing as mp
 import pickle
 from numpy.random import rand
 
+def test_Signal_to_SIG_IGN():
+    def f():
+        jobmanager.Signal_to_SIG_IGN()
+        print("before sleep")
+        while True:
+            time.sleep(1)
+        print("after sleep")
+
+        
+    p = mp.Process(target=f)
+    p.start()
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+
+    print("    send SIGINT")
+    os.kill(p.pid, signal.SIGINT)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGTERM")
+    os.kill(p.pid, signal.SIGTERM)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGKILL")
+    os.kill(p.pid, signal.SIGKILL)
+    time.sleep(0.2)
+    assert not p.is_alive()
+    print("[+] terminated")
+    
+def test_Signal_to_sys_exit():
+    def f():
+        jobmanager.Signal_to_sys_exit()
+        while True:
+            try:
+                time.sleep(10)
+            except SystemExit:
+                print("[+] caught SystemExit, keep running")
+            else:
+                return
+        
+    p = mp.Process(target=f)
+    p.start()
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+
+    print("    send SIGINT")
+    os.kill(p.pid, signal.SIGINT)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGTERM")
+    os.kill(p.pid, signal.SIGTERM)
+    time.sleep(0.2)
+    assert p.is_alive()
+    print("[+] is alive")
+    
+    print("    send SIGKILL")
+    os.kill(p.pid, signal.SIGKILL)
+    time.sleep(0.2)
+    assert not p.is_alive()
+    print("[+] terminated")
+    
+def test_Signal_to_terminate_process_list():
+    def child_proc():
+        jobmanager.Signal_to_sys_exit()
+        try:
+            time.sleep(10)
+        except:
+            err, val, trb = sys.exc_info()
+            print("PID {}: caught Exception {}".format(os.getpid(), err))
+            
+    def mother_proc():
+        n = 3
+        p = []
+        for i in range(n):
+            p.append(mp.Process(target=child_proc))
+            p[-1].start()
+            
+        jobmanager.Signal_to_terminate_process_list(p)
+        print("spawned {} processes".format(n))        
+        for i in range(n):
+            p[i].join()
+        print("all joined, mother ends gracefully")
+            
+    p_mother = mp.Process(target=mother_proc)
+    p_mother.start()
+    time.sleep(0.5)
+    print("send SIGINT")
+    os.kill(p_mother.pid, signal.SIGINT)
+    
 def test_loop_basic():
     """
     run function f in loop
@@ -26,6 +122,25 @@ def test_loop_basic():
     assert not loop.is_alive()
     print("[+] loop stopped")
     
+def test_statusbar():
+    count = jobmanager.UnsignedIntValue()
+    max_count = jobmanager.UnsignedIntValue(100)
+    sb = jobmanager.StatusBar(count, max_count, verbose=0, run=False)
+    assert sb._proc == None
+    
+    sb.start()
+    time.sleep(0.2)
+    pid = sb._proc.pid
+    
+    sb.start()
+    time.sleep(0.2)
+    assert pid == sb._proc.pid
+    
+    sb.stop()
+    assert sb._proc == None
+    
+    time.sleep(0.2)
+    sb.stop()
     
 def test_loop_signals():
     f = lambda: print("        I'm process {}".format(os.getpid()))
@@ -110,27 +225,27 @@ def test_jobmanager_basic():
     p_server.start()
     
     time.sleep(1)
-    
+     
     p_client = mp.Process(target=start_client, args=(0,))
     p_client.start()
-    
+     
     p_client.join(30)
     p_server.join(30)
-
+ 
     assert not p_client.is_alive(), "the client did not terminate on time!"
     assert not p_server.is_alive(), "the server did not terminate on time!"
     print("[+] client and server terminated")
-    
+     
     fname = 'final_result.dump'
     with open(fname, 'rb') as f:
         final_res = pickle.load(f)
-    
+     
     final_res_args_set = {a[0] for a in final_res}
-        
+         
     set_ref = set(range(1,n))
-    
+     
     intersect = set_ref - final_res_args_set
-    
+     
     assert len(intersect) == 0, "final result does not contain all arguments!"
     print("[+] all arguments found in final_results")
     
@@ -354,121 +469,7 @@ def test_check_fail():
     assert len(set_ref - all_set) == 0, "final result union with reported failure do not correspond to all args!" 
     print("[+] all arguments found in final_results | reported failure")
 
-def test_Signal_to_SIG_IGN():
-    def f():
-        jobmanager.Signal_to_SIG_IGN()
-        print("before sleep")
-        while True:
-            time.sleep(1)
-        print("after sleep")
 
-        
-    p = mp.Process(target=f)
-    p.start()
-    time.sleep(0.2)
-    assert p.is_alive()
-    print("[+] is alive")
-
-    print("    send SIGINT")
-    os.kill(p.pid, signal.SIGINT)
-    time.sleep(0.2)
-    assert p.is_alive()
-    print("[+] is alive")
-    
-    print("    send SIGTERM")
-    os.kill(p.pid, signal.SIGTERM)
-    time.sleep(0.2)
-    assert p.is_alive()
-    print("[+] is alive")
-    
-    print("    send SIGKILL")
-    os.kill(p.pid, signal.SIGKILL)
-    time.sleep(0.2)
-    assert not p.is_alive()
-    print("[+] terminated")
-    
-def test_Signal_to_sys_exit():
-    def f():
-        jobmanager.Signal_to_sys_exit()
-        while True:
-            try:
-                time.sleep(10)
-            except SystemExit:
-                print("[+] caught SystemExit, keep running")
-            else:
-                return
-        
-    p = mp.Process(target=f)
-    p.start()
-    time.sleep(0.2)
-    assert p.is_alive()
-    print("[+] is alive")
-
-    print("    send SIGINT")
-    os.kill(p.pid, signal.SIGINT)
-    time.sleep(0.2)
-    assert p.is_alive()
-    print("[+] is alive")
-    
-    print("    send SIGTERM")
-    os.kill(p.pid, signal.SIGTERM)
-    time.sleep(0.2)
-    assert p.is_alive()
-    print("[+] is alive")
-    
-    print("    send SIGKILL")
-    os.kill(p.pid, signal.SIGKILL)
-    time.sleep(0.2)
-    assert not p.is_alive()
-    print("[+] terminated")
-    
-def test_Signal_to_terminate_process_list():
-    def child_proc():
-        jobmanager.Signal_to_sys_exit()
-        try:
-            time.sleep(10)
-        except:
-            err, val, trb = sys.exc_info()
-            print("PID {}: caught Exception {}".format(os.getpid(), err))
-            
-    def mother_proc():
-        n = 3
-        p = []
-        for i in range(n):
-            p.append(mp.Process(target=child_proc))
-            p[-1].start()
-            
-        jobmanager.Signal_to_terminate_process_list(p)
-        print("spawned {} processes".format(n))        
-        for i in range(n):
-            p[i].join()
-        print("all joined, mother ends gracefully")
-            
-    p_mother = mp.Process(target=mother_proc)
-    p_mother.start()
-    time.sleep(0.5)
-    print("send SIGINT")
-    os.kill(p_mother.pid, signal.SIGINT)
-    
-def test_statusbar():
-    count = jobmanager.UnsignedIntValue()
-    max_count = jobmanager.UnsignedIntValue(100)
-    sb = jobmanager.StatusBar(count, max_count, verbose=0, run=False)
-    assert sb._proc == None
-    
-    sb.start()
-    time.sleep(0.2)
-    pid = sb._proc.pid
-    
-    sb.start()
-    time.sleep(0.2)
-    assert pid == sb._proc.pid
-    
-    sb.stop()
-    assert sb._proc == None
-    
-    time.sleep(0.2)
-    sb.stop()
     
 
 
@@ -476,13 +477,17 @@ if __name__ == "__main__":
     test_Signal_to_SIG_IGN()
     test_Signal_to_sys_exit()
     test_Signal_to_terminate_process_list()
+     
     test_loop_basic()
     test_loop_signals()
+     
+    test_statusbar()
+    
     test_jobmanager_basic()
     test_jobmanager_server_signals()
     test_shutdown_server_while_client_running()
     test_shutdown_client()
     test_check_fail()
-    test_statusbar()
-#     pass
+
+    pass
     

@@ -216,6 +216,7 @@ class Loop(object):
         """
         uses multiprocess Process to call _wrapper_func in subprocess 
         """
+
         if self.is_alive():
             if self.verbose > 0:
                 print("PID {}({}): I'm already running".format(self._proc.pid, self._proc._name))
@@ -227,6 +228,7 @@ class Loop(object):
                                         self.verbose, self._sigint, self._sigterm),
                                 name=self._name)
         self._proc.start()
+
         if self.verbose > 1:
             print("PID {}({}): I'm a new loop process".format(self._proc.pid, self._name))
         
@@ -323,7 +325,7 @@ class StatusBar(Loop):
                  interval=1, 
                  speed_calc_cycles=10, 
                  width='auto',
-                 run=True, 
+                 run=False, 
                  verbose=0,
                  sigint='stop', 
                  sigterm='stop',
@@ -696,7 +698,8 @@ class JobManager_Server(object):
         if (self.verbose > 0) and not self.no_status_bar:
             self.stat = StatusBar(count = self.numresults, max_count = self.numjobs, 
                                   interval=self.msg_interval, speed_calc_cycles=10,
-                                  verbose = self.verbose, sigint='ign', sigterm='ign')        
+                                  verbose = self.verbose, sigint='ign', sigterm='ign',
+                                  run=True)        
         
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
