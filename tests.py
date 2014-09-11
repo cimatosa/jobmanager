@@ -91,7 +91,8 @@ def start_server(verbose, n=30):
                                              fname_for_final_result_dump='final_result.dump',
                                              verbose=verbose, 
                                              fname_for_args_dump='args.dump',
-                                             fname_for_fail_dump='fail.dump')
+                                             fname_for_fail_dump='fail.dump',
+                                             no_status_bar=False)
     jm_server.args_from_list(args)
     jm_server.start()
     
@@ -105,7 +106,7 @@ def test_jobmanager_basic():
     start server, start client, process trivial jobs, quit
     """
     n = 10
-    p_server = mp.Process(target=start_server, args=(0,n))
+    p_server = mp.Process(target=start_server, args=(2,n))
     p_server.start()
     
     time.sleep(1)
@@ -230,7 +231,7 @@ def test_shutdown_server_while_client_running():
 
 def test_shutdown_client():
     shutdown_client(signal.SIGTERM)
-    shutdown_client(signal.SIGINT)
+#     shutdown_client(signal.SIGINT)
 
 def shutdown_client(sig):
     """
@@ -251,12 +252,12 @@ def shutdown_client(sig):
     
     print("## terminate client with {} ##".format(jobmanager.signal_dict[sig]))
     
-    p_server = mp.Process(target=start_server, args=(0,n))
+    p_server = mp.Process(target=start_server, args=(2,n))
     p_server.start()
     
-    time.sleep(0.5)
+    time.sleep(2)
     
-    p_client = mp.Process(target=start_client, args=(0,))
+    p_client = mp.Process(target=start_client, args=(1,))
     p_client.start()
     
     time.sleep(1)
@@ -271,11 +272,14 @@ def shutdown_client(sig):
     
     time.sleep(0.5)
      
-    p_client = mp.Process(target=start_client, args=(0,))
+    p_client = mp.Process(target=start_client, args=(1,))
     p_client.start()
     
     p_client.join(30)
     p_server.join(30)
+    
+    assert not p_client.is_alive()
+    assert not p_server.is_alive()
     
     print("[+] client and server terminated")
     
@@ -445,6 +449,27 @@ def test_Signal_to_terminate_process_list():
     time.sleep(0.5)
     print("send SIGINT")
     os.kill(p_mother.pid, signal.SIGINT)
+    
+def test_statusbar():
+    count = jobmanager.UnsignedIntValue()
+    max_count = jobmanager.UnsignedIntValue(100)
+    sb = jobmanager.StatusBar(count, max_count, verbose=0, run=False)
+    assert sb._proc == None
+    
+    sb.start()
+    time.sleep(0.2)
+    pid = sb._proc.pid
+    
+    sb.start()
+    time.sleep(0.2)
+    assert pid == sb._proc.pid
+    
+    sb.stop()
+    assert sb._proc == None
+    
+    time.sleep(0.2)
+    sb.stop()
+    
 
 
 if __name__ == "__main__":
@@ -458,5 +483,6 @@ if __name__ == "__main__":
     test_shutdown_server_while_client_running()
     test_shutdown_client()
     test_check_fail()
-    pass
+    test_statusbar()
+#     pass
     

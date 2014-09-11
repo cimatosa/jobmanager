@@ -17,6 +17,8 @@ import time
 import datetime
 import math
 
+import psutil
+
 
 
 import fcntl
@@ -189,14 +191,17 @@ class Loop(object):
         # implement the process specific signal handler
         SIG_handler_Loop(shared_mem_run, sigint, sigterm, verbose)
         
+        
+        p = psutil.Process() # current process
+        
         while shared_mem_run.value:
             try:
                 quit_loop = func(*args)
             except:
                 err, val, trb = sys.exc_info()
                 if verbose > 0:
-                    print("\nPID {}: error {} occurred in Loop class calling 'func(*args)'".format(os.getpid(), err))
-                if verbose > 1:
+                    print("\nPID {}({}): error {} occurred in Loop class calling 'func(*args)'".format(p.pid, p.name, err))
+                if verbose > 0:
                     traceback.print_tb(trb)
                 return
 
@@ -205,12 +210,17 @@ class Loop(object):
             time.sleep(interval)
             
         if verbose > 1:
-            print("PID {}: _wrapper_func terminates gracefully".format(os.getpid()))
+            print("PID {}({}): _wrapper_func terminates gracefully".format(p.pid, p.name))
 
     def start(self):
         """
         uses multiprocess Process to call _wrapper_func in subprocess 
         """
+        if self.is_alive():
+            if self.verbose > 0:
+                print("PID {}({}): I'm already running".format(self._proc.pid, self._proc._name))
+            return
+            
         self.run = True
         self._proc = mp.Process(target = Loop._wrapper_func, 
                                 args = (self.func, self.args, self._run, self.interval, 
@@ -218,7 +228,7 @@ class Loop(object):
                                 name=self._name)
         self._proc.start()
         if self.verbose > 1:
-            print("PID {}: I'm a new loop process ({})".format(self._proc.pid, self._name))
+            print("PID {}({}): I'm a new loop process".format(self._proc.pid, self._name))
         
     def stop(self):
         """
@@ -240,30 +250,29 @@ class Loop(object):
         t = 2*self.interval
         
         if self.verbose > 1:
-            print("PID {}: give running loop {}s to finish ... ".format(self._proc.pid, t), end='', flush=True)
+            print("PID {}({}): give running loop {}s to finish ... ".format(self._proc.pid, self._name, t), end='', flush=True)
         
         self._proc.join(t)
         if not self._proc.is_alive():
             if self.verbose > 1:
                 print("done")
+            self._proc = None
         else:
             if self.verbose > 1:    
                 print("failed!")
             if self.verbose > 0:
-                print("PID {}: fund running loop still alive -> terminate via SIGTERM ...".format(self._proc.pid), end='', flush=True)
+                print("PID {}({}): fund running loop still alive -> terminate via SIGTERM ...".format(self._proc.pid, self._name), end='', flush=True)
             
             self._proc.terminate()
             
             if self.verbose > 0:
                 if not self._proc.is_alive():
                     print("done!")
+                    self._proc = None
                 else:
                     print("failed!")
-                    print("PID {}: keeps running as orphan process".format(self._proc.pid), end='', flush=True)
+                    print("PID {}({}): keeps running".format(self._proc.pid, self._name), end='', flush=True)
             
-            
-        
-        
     def getpid(self):
         """
         return the process id of the spawned process
@@ -274,7 +283,10 @@ class Loop(object):
         return self._proc.pid
     
     def is_alive(self):
-        return self._proc.is_alive()
+        if self._proc == None:
+            return False
+        else:
+            return self._proc.is_alive()
         
     
     @property
@@ -289,8 +301,10 @@ class Loop(object):
     @run.setter
     def run(self, run):
         self._run.value = run
-        
 
+def UnsignedIntValue(val=0):
+    return mp.Value('I', val, lock=True)        
+       
 class StatusBar(Loop):
     """
     status bar in ascii art
@@ -428,6 +442,10 @@ class StatusBar(Loop):
             s2 = "="*a + ">" + " "*b
             print(s1+s2+s3, end='', flush=True)
             return count_value >= max_count_value
+        
+    def stop(self):
+        print()
+        super().stop()
 
 def setup_SIG_handler_manager():
     """
@@ -531,13 +549,14 @@ class JobManager_Server(object):
     """
     def __init__(self, 
                   authkey,
-                  fname_for_final_result_dump,
                   const_args=None, 
                   port=42524, 
                   verbose=1, 
                   msg_interval=1,
+                  fname_for_final_result_dump='auto',
                   fname_for_args_dump='auto',
-                  fname_for_fail_dump='auto'):
+                  fname_for_fail_dump='auto',
+                  no_status_bar = False):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -551,11 +570,20 @@ class JobManager_Server(object):
         
         msg_interval [int] - number of second for the status bar to update
         
-        fname_for_job_q_dump [string] - sets the file name used to dump the the job_q
-        to in case the job_q is not empty on exit
+        fname_for_final_result_dump [string/None] - sets the file name used to dump the the
+        final_result. (None: do not dump, 'auto' choose filename 
+        'YYYY_MM_DD_hh_mm_ss_final_result.dump')
+        
+        fname_for_args_dump [string/None] - sets the file name used to dump the list
+        of unprocessed arguments, if there are any. (None: do not dump at all, 
+        'auto' choose filename 'YYYY_MM_DD_hh_mm_ss_args.dump')
+        
+        fname_for_fail_dump [string/None] - sets the file name used to dump the list 
+        of not successfully processed arguments, if there are any. 
+        (None: do not dump, 'auto' choose filename 'YYYY_MM_DD_hh_mm_ss_fail.dump')
         
         This init actually starts the SyncManager as a new process. As a next step
-        the job_q has to be filled  
+        the job_q has to be filled, see put_arg().
         """
         self.verbose = verbose        
         self._pid = os.getpid()
@@ -619,6 +647,7 @@ class JobManager_Server(object):
         self.final_result = []
 
         self.stat = None
+        self.no_status_bar = no_status_bar
         
         self.err_log = []
 #         self.p_reinsert_failure = Loop(func=JobManager_Server.reinsert_failures,
@@ -649,32 +678,8 @@ class JobManager_Server(object):
         self.final_result.append((arg, result))
     
     def process_final_result(self):
-        """default behavior will dump final_resault to given file name
-        given by fname_for_final_result_dump. To change this behavior
-        overwrite this function in subclass.
-        
-        Will be called on stop.
-            a) when all jobs have finished, which will be considered
-            the case, when there have been numjobs (overall number of jobs)
-            results obtained.
-            
-            b) when an exception occurs 
-    
-
-        """
-        with open(self.fname_for_final_result_dump, 'wb') as f:
-            pickle.dump(self.final_result, f)
-        
-    @staticmethod
-    def reinsert_failures(fail_q, job_q):
-        try:
-            while True:
-                arg = fail_q.get_nowait()
-                print("reinsert arg {}".format(arg))
-                job_q.put(arg)
-        except queue.Empty:
-            return
-
+        """to implement user defined final processing"""
+        pass
 
     def start(self):
         """
@@ -688,7 +693,7 @@ class JobManager_Server(object):
         if self.numjobs.value != len(self.args_set):
             raise RuntimeError("use JobManager_Server.put_arg to put arguments to the job_q")
         
-        if self.verbose > 0:
+        if (self.verbose > 0) and not self.no_status_bar:
             self.stat = StatusBar(count = self.numresults, max_count = self.numjobs, 
                                   interval=self.msg_interval, speed_calc_cycles=10,
                                   verbose = self.verbose, sigint='ign', sigterm='ign')        
@@ -696,13 +701,11 @@ class JobManager_Server(object):
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
         
-#         if self.verbose > 1:
-#             print("PID {}: JobManager_Server starts processing incoming results".format(pid))
-#             if self._pid != pid:
-#                 print("        NOTE: this routine was triggered as a subprocess which is NOT preferable!")
+        if self.verbose > 1:
+            print("PID {}: JobManager_Server starts processing incoming results".format(pid))
         
         try:   
-            if self.verbose > 0:
+            if (self.verbose > 0) and not self.no_status_bar:
                 self.stat.start()
                 if self.verbose > 1:
                     print("PID {}: StatusBar started".format(self.stat.getpid()))
@@ -741,45 +744,62 @@ class JobManager_Server(object):
         - if job_q is not empty dump remaining job_q
         """
         
-        pid = os.getpid()
+        # will only be False when _shutdown was started in subprocess
         
+        # start also makes sure that it was not started as subprocess
+        # so at default behavior this assertion will allays be True
+        assert self._pid == os.getpid()
+        
+        # stop statusbar 
         if self.stat != None:
             self.stat.stop()
         
         manager_pid = self.manager._process.pid
-
+        
+        # stop SyncManager
         self.manager.shutdown()
-        if self._pid == pid:
-            
-            if self.verbose > 1:
-                print("PID {}: SyncManager shutdown ... ".format(manager_pid), end='', flush=True)
-                
-            self.manager._process.join(2)
-            
-            if self.verbose > 1:
-                if self.manager._process.is_alive():
-                    print("failed!")
-                else:        
-                    print("done!")
-        else:
-            if self.verbose > 1:
-                print("PID {}: SyncManager shutdown (can't tell about the success)".format(manager_pid))
         
-        if self.verbose > 0:    
-            print("PID {}: process final result ... ".format(pid), end='', flush=True) 
+        if self.verbose > 1:
+            print("PID {}: SyncManager shutdown ... ".format(manager_pid), end='', flush=True)
+
+        manager_time_out = 2
+        # wait at most manager_time_out seconds for the SyncManager subprocess to finish
+                    
+        self.manager._process.join(manager_time_out)
         
+        if self.verbose > 1:
+            if self.manager._process.is_alive():
+                print("failed (timeout {}s)!".format(manager_time_out))
+            else:        
+                print("done!")
+
+        # do user defines final processing
         self.process_final_result()
         
-        if self.verbose > 0:
-            print("done!")
+        # dump final_result
+        if self.fname_for_final_result_dump != None:
+            if self.verbose > 0:    
+                print("PID {}: dump final_result ... ".format(self._pid), end='', flush=True)
+            
+            if self.fname_for_final_result_dump == 'auto':
+                fname = "{}_final_result.dump".format(getDateForFileName(includePID=False))
+            else:
+                fname = self.fname_for_final_result_dump
+
+            with open(fname, 'wb') as f:
+                pickle.dump(self.final_result, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            if self.verbose > 0:
+                print("done!")
         
-        if len(self.args_set) > 0:
+        # dump not successful or not at all processed arguments as python list 
+        if (len(self.args_set) > 0) and (self.fname_for_args_dump != None):
             if self.fname_for_args_dump == 'auto':
-                fname = "jobmanager_server_args_{}.dump".format(getDateForFileName(includePID=False))
+                fname = "{}_args.dump".format(getDateForFileName(includePID=False))
             else:
                 fname = self.fname_for_args_dump
             
-            print("PID {}: args_set not empty -> dump to file '{}' ... ".format(pid, fname), end='', flush=True)
+            print("PID {}: args_set not empty -> dump to file '{}' ... ".format(self._pid, fname), end='', flush=True)
 
             args = list(self.args_set)
 
@@ -788,13 +808,15 @@ class JobManager_Server(object):
             
             print("done!")
 
+        # dump not successful processed arguments as list with tuple
+        # elements of the kind (argument, error name, host name) 
         if not self.fail_q.empty():
             if self.fname_for_fail_dump == 'auto':
-                fname = "jobmanager_server_fail_{}.dump".format(getDateForFileName(includePID=False))
+                fname = "{}_fail.dump".format(getDateForFileName(includePID=False))
             else:
                 fname = self.fname_for_fail_dump
             
-            print("PID {}: there are reported failures -> dump to file '{}' ... ".format(pid, fname), end='', flush=True)
+            print("PID {}: there are reported failures -> dump to file '{}' ... ".format(self._pid, fname), end='', flush=True)
             
             fail_list = []
             while not self.fail_q.empty():
@@ -808,7 +830,7 @@ class JobManager_Server(object):
             
             print("done!")
                 
-        print("PID {}: JobManager_Server was successfully shout down".format(pid))
+        print("PID {}: JobManager_Server was successfully shout down".format(self._pid))
 
 
 class JobManager_Client(object):
@@ -835,7 +857,7 @@ class JobManager_Client(object):
     Then the process will terminate.
     """
     
-    def __init__(self, ip, authkey, port = 42524, nproc = 0, nice=19, no_warings=True, verbose=1):
+    def __init__(self, ip, authkey, port = 42524, nproc = 0, nice=19, no_warings=False, verbose=1):
         """
         ip [string] - ip address or hostname where the JobManager_Server is running
         
@@ -899,9 +921,22 @@ class JobManager_Client(object):
 
         if verbose > 0:
             print('PIC {}: connecting to {}:{} ... '.format(os.getpid(), ip, port), end='', flush=True)
-        manager.connect()
-        if verbose > 0:    
-            print('done!')
+        try:
+            manager.connect()
+        except:
+            if verbose > 0:    
+                print('failed!')
+            
+            err, val, trb = sys.exc_info()
+            print("caught exception {}: {}".format(err.__name__, val))
+            
+            if verbose > 1:
+                traceback.print_exception(err, val, trb)
+            return None
+        else:
+            if verbose > 0:    
+                print('done!')
+            
         
         job_q = manager.get_job_q()
         result_q = manager.get_result_q()
@@ -932,7 +967,13 @@ class JobManager_Client(object):
         """
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
         
-        job_q, result_q, fail_q, const_args = JobManager_Client._get_manager_object(ip, port, authkey, verbose)
+        res = JobManager_Client._get_manager_object(ip, port, authkey, verbose)
+        if res == None:
+            if verbose > 1:
+                print("PID {}: no shared object recieved, terminate!".format(os.getpid()))
+            sys.exit(1)
+        else:
+            job_q, result_q, fail_q, const_args = res 
         
         n = os.nice(0)
         n = os.nice(nice - n)
