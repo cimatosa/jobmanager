@@ -112,11 +112,12 @@ class SIG_handler_Loop(object):
     of this boolean object before each repetition, the loop will stop when
     a signal was receives.
     """
-    def __init__(self, shared_mem_run, sigint, sigterm, verbose=0):
+    def __init__(self, shared_mem_run, sigint, sigterm, identifier, verbose=0):
         self.shared_mem_run = shared_mem_run
         self.set_signal(signal.SIGINT, sigint)
         self.set_signal(signal.SIGTERM, sigterm)
         self.verbose=verbose
+        self.identifier = identifier
     def set_signal(self, sig, handler_str):
         if handler_str == 'ign':
             signal.signal(sig, self._ignore_signal)
@@ -129,27 +130,38 @@ class SIG_handler_Loop(object):
         pass
     def _stop_on_signal(self, signal, frame):
         if self.verbose > 0:
-            print("\nPID {}: received sig {} -> set run false".format(os.getpid(), signal_dict[signal]))
+            print("\n{}received sig {} -> set run false".format(self.identifier, signal_dict[signal]))
         self.shared_mem_run.value = False
 
 
 class Loop(object):
     """
-    class to run a function periodically
+    class to run a function periodically an seperate process.
     
     In case the called function returns True, the loop will stop.
     Otherwise a time interval given by interval will be slept before
     another execution is triggered.
+    
+    The shared memory variable _run (accessible via the class property run)  
+    also determines if the function if executed another time. If set to False
+    the execution stops.
+    
+    In order to catch any Errors it is advisable to instantiate this class
+    using with statement as follows:
+        
+        with Loop(**kwargs) as my_loop:
+            my_loop.start()
+            ...
     """
     def __init__(self, 
-                 func, 
-                 args=(), 
-                 interval = 1, 
-                 run=False, 
-                 verbose=0, 
-                 sigint='stop', 
-                 sigterm='stop',
-                 name=None):
+                  func, 
+                  args=(), 
+                  interval = 1, 
+                  verbose=0, 
+                  sigint='stop', 
+                  sigterm='stop',
+                  name=None,
+                  auto_kill_on_last_resort=False):
         """
         func [callable] - function to be called periodically
         
@@ -157,14 +169,18 @@ class Loop(object):
         
         intervall [pos number] - time to "sleep" between each call
         
-        run [bool] - whether or not the init should trigger start mechanism
-        
         verbose [pos integer] - specifies the level of verbosity
           [0--silent, 1--important information, 2--some debug info]
           
         sigint [string] - signal handler string to set SIGINT behavior (see below)
         
         sigterm [string] - signal handler string to set SIGTERM behavior (see below)
+        
+        name [string] - use this name in messages instead of the PID 
+        
+        auto_kill_on_last_resort [bool] - If set False (default), ask user to send SIGKILL 
+        to loop process in case normal stop and SIGTERM failed. If set True, send SIDKILL
+        without asking.
         
         the signal handler string may be one of the following
             ing: ignore the incoming signal
@@ -175,21 +191,83 @@ class Loop(object):
         self.func = func
         self.args = args
         self.interval = interval
-        self._run = mp.Value('b', run)
+        self._run = mp.Value('b', False)
         self.verbose = verbose
         self._proc = None
         self._sigint = sigint
         self._sigterm = sigterm
         self._name = name
-        if run:
-            self.start() 
+        self._auto_kill_on_last_resort = auto_kill_on_last_resort
+        self._identifier = None
+ 
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *exc_args):
+
+        # normal exit        
+        if not self._proc.is_alive():
+            if self.verbose > 1:
+                print("{}loop has stopped".format(self._proc.pid, self._name, t))
+            return
+        
+        
+        # loop still runs on context exit -> call stop() -> see what happens
+        if self.verbose > 0:
+            print("{}loop is still running on context exit".format(self._identifier))
+            
+        self.stop()
+        if self.verbose > 1:
+            print("{}give running loop {}s to finish ... ".format(self._identifier, 2*self.interval), end='', flush=True)
+        
+        self._proc.join(2*self.interval)
+        
+        if not self._proc.is_alive():
+            if self.verbose > 1:
+                print("done")
+            return
+
+        # loop still runs -> send SIGTERM -> see what happens
+        if self.verbose > 1:    
+            print("failed!")
+        if self.verbose > 0:
+            print("{}found running loop still alive -> terminate via SIGTERM ...".format(self._identifier), end='', flush=True)
+        
+        self._proc.terminate()
+        self._proc.join(5*self.interval)
+        
+        if not self._proc.is_alive():
+            if self.verbose > 0:
+                print("done!")
+                return
+            
+        if self.verbose > 0:
+            print("failed!")
+
+        answer = 'y' if self._auto_kill_on_last_resort else '_'
+        while not answer in 'yn':
+            print("Do you want to send SIGKILL to {}? [y/n]: ".format(self._identifier), end='', flush=True)
+            answer = sys.stdin.readline()[:-1]
+        if answer == 'n':
+            print("{}keeps running".format(self._identifier))
+        else:
+            print("{}send SIGKILL".format(self._identifier))
+            os.kill(self._proc.pid, signal.SIGKILL)
+
+                        
 
     @staticmethod
-    def _wrapper_func(func, args, shared_mem_run, interval, verbose, sigint, sigterm):
+    def _wrapper_func(func, args, shared_mem_run, interval, verbose, sigint, sigterm, name):
         """to be executed as a seperate process (that's why this functions is declared static)
         """
         # implement the process specific signal handler
+        if name != None:
+            identifier = name+': '
+        else:
+            identifier = "PID {}: ".format(os.getpid())
+        
         SIG_handler_Loop(shared_mem_run, sigint, sigterm, verbose)
+
         
         
         p = psutil.Process() # current process
@@ -219,18 +297,22 @@ class Loop(object):
 
         if self.is_alive():
             if self.verbose > 0:
-                print("PID {}({}): I'm already running".format(self._proc.pid, self._proc._name))
+                print("{}I'm already running".format(self._identifier))
             return
             
         self.run = True
         self._proc = mp.Process(target = Loop._wrapper_func, 
                                 args = (self.func, self.args, self._run, self.interval, 
-                                        self.verbose, self._sigint, self._sigterm),
+                                        self.verbose, self._sigint, self._sigterm, self._name),
                                 name=self._name)
         self._proc.start()
-
+        if self._name != None:
+            self._identifier = self._name+': '
+        else:
+            self._identifier = "PID {}: ".format(self._proc.pid)
+        
         if self.verbose > 1:
-            print("PID {}({}): I'm a new loop process".format(self._proc.pid, self._name))
+            print("{}I'm a new loop process".format(self._identifier))
         
     def stop(self):
         """
@@ -249,31 +331,7 @@ class Loop(object):
                 print("PID None: there is no running loop to stop")
             return
         
-        t = 2*self.interval
-        
-        if self.verbose > 1:
-            print("PID {}({}): give running loop {}s to finish ... ".format(self._proc.pid, self._name, t), end='', flush=True)
-        
-        self._proc.join(t)
-        if not self._proc.is_alive():
-            if self.verbose > 1:
-                print("done")
-            self._proc = None
-        else:
-            if self.verbose > 1:    
-                print("failed!")
-            if self.verbose > 0:
-                print("PID {}({}): fund running loop still alive -> terminate via SIGTERM ...".format(self._proc.pid, self._name), end='', flush=True)
-            
-            self._proc.terminate()
-            
-            if self.verbose > 0:
-                if not self._proc.is_alive():
-                    print("done!")
-                    self._proc = None
-                else:
-                    print("failed!")
-                    print("PID {}({}): keeps running".format(self._proc.pid, self._name), end='', flush=True)
+
             
     def getpid(self):
         """

@@ -122,6 +122,19 @@ def test_loop_basic():
     assert not loop.is_alive()
     print("[+] loop stopped")
     
+def non_stopping_loop():
+    while True:
+        time.sleep(1)
+    
+def test_loop_kill():
+    with jobmanager.Loop(func=non_stopping_loop, 
+                         verbose=2,
+                         name='loop') as loop:
+        loop.start()
+        time.sleep(2)
+        loop.stop()
+    
+    
 def test_statusbar():
     count = jobmanager.UnsignedIntValue()
     max_count = jobmanager.UnsignedIntValue(100)
@@ -467,27 +480,28 @@ def test_check_fail():
     
     all_set = final_res_args_set | fail_set
     assert len(set_ref - all_set) == 0, "final result union with reported failure do not correspond to all args!" 
-    print("[+] all arguments found in final_results | reported failure")
+    print("[+] all argumsents found in final_results | reported failure")
 
 
     
 
 
 if __name__ == "__main__":
-    test_Signal_to_SIG_IGN()
-    test_Signal_to_sys_exit()
-    test_Signal_to_terminate_process_list()
+#     test_Signal_to_SIG_IGN()
+#     test_Signal_to_sys_exit()
+#     test_Signal_to_terminate_process_list()
+#      
+#     test_loop_basic()
+#     test_loop_signals()
+    test_loop_kill()
      
-    test_loop_basic()
-    test_loop_signals()
-     
-    test_statusbar()
-    
-    test_jobmanager_basic()
-    test_jobmanager_server_signals()
-    test_shutdown_server_while_client_running()
-    test_shutdown_client()
-    test_check_fail()
+#     test_statusbar()
+#     
+#     test_jobmanager_basic()
+#     test_jobmanager_server_signals()
+#     test_shutdown_server_while_client_running()
+#     test_shutdown_client()
+#     test_check_fail()
 
     pass
     
