@@ -112,7 +112,7 @@ def test_loop_basic():
     check if it is NOT alive after calling stop()
     """
     f = lambda: print("        I'm process {}".format(os.getpid()))
-    loop = jobmanager.Loop(func=f, interval=0.8, verbose=0)
+    loop = jobmanager.Loop(func=f, interval=0.8, verbose=2)
     loop.start()
     pid = loop.getpid()    
     time.sleep(1)
@@ -125,11 +125,13 @@ def test_loop_basic():
 
 def test_loop_signals():
     f = lambda: print("        I'm process {}".format(os.getpid()))
-    loop = jobmanager.Loop(func=f, interval=0.8, verbose=0, sigint='stop', sigterm='stop')
+    loop = jobmanager.Loop(func=f, interval=0.8, verbose=2, sigint='stop', sigterm='stop')
     
     print("## stop on SIGINT ##")
     loop.start()
     time.sleep(1)
+    loop.is_alive()
+    
     pid = loop.getpid()
     print("    send SIGINT")
     os.kill(pid, signal.SIGINT)
@@ -331,35 +333,38 @@ def test_statusbar_with_statement():
     time.sleep(0.2)
     sb.stop()
  
-def start_server(verbose, n=30):
+def start_server(n):
     print("START SERVER")
     args = range(1,n)
     authkey = 'testing'
-    jm_server = jobmanager.JobManager_Server(authkey=authkey,
-                                             verbose=verbose,
-                                             msg_interval=1,
-                                             fname_for_final_result_dump='final_result.dump', 
-                                             fname_for_args_dump='args.dump',
-                                             fname_for_fail_dump='fail.dump')
-    jm_server.args_from_list(args)
-    jm_server.start()
+    with jobmanager.JobManager_Server(authkey=authkey,
+                                      verbose=2,
+                                      msg_interval=1,
+                                      fname_dump='jobmanager.dump') as jm_server:
+        jm_server.args_from_list(args)
+        jm_server.start()
     
-def start_client(verbose):
+def start_client():
     print("START CLIENT")
-    jm_client = jobmanager.JobManager_Client(ip='localhost', authkey='testing', port=42524, nproc=0, verbose=verbose)
+    jm_client = jobmanager.JobManager_Client(ip='localhost', 
+                                             authkey='testing', 
+                                             port=42524, 
+                                             nproc=0, verbose=2)
     jm_client.start()    
 
 def test_jobmanager_basic():
     """
     start server, start client, process trivial jobs, quit
+    
+    check if all arguments are found in final_result of dump
     """
     n = 10
-    p_server = mp.Process(target=start_server, args=(2,n))
+    p_server = mp.Process(target=start_server, args=(n,))
     p_server.start()
     
     time.sleep(1)
      
-    p_client = mp.Process(target=start_client, args=(0,))
+    p_client = mp.Process(target=start_client)
     p_client.start()
      
     p_client.join(30)
@@ -369,11 +374,11 @@ def test_jobmanager_basic():
     assert not p_server.is_alive(), "the server did not terminate on time!"
     print("[+] client and server terminated")
      
-    fname = 'final_result.dump'
+    fname = 'jobmanager.dump'
     with open(fname, 'rb') as f:
-        final_res = pickle.load(f)
-     
-    final_res_args_set = {a[0] for a in final_res}
+        data = jobmanager.JobManager_Server.static_load(f)
+    
+    final_res_args_set = {a[0] for a in data['final_result']}
          
     set_ref = set(range(1,n))
      
@@ -386,7 +391,7 @@ def test_jobmanager_basic():
     
 def test_jobmanager_server_signals():
     print("## TEST SIGTERM ##")
-    p_server = mp.Process(target=start_server, args=(0,))
+    p_server = mp.Process(target=start_server, args=(30,))
     p_server.start()
     time.sleep(1)
     print("    send SIGTERM")
@@ -397,17 +402,20 @@ def test_jobmanager_server_signals():
     assert not p_server.is_alive(), "timeout for server shutdown reached"
     print("[+] now terminated (timeout of 15s not reached)")
     
-    fname = 'args.dump'
+    fname = 'jobmanager.dump'
     with open(fname, 'rb') as f:
-        args = pickle.load(f)
+        data = jobmanager.JobManager_Server.static_load(f)    
     
-    for i,a in enumerate(range(1,30)):
-        assert a == args[i], "checking the args.dump failed"
-    print("[+] args.dump contains all arguments")
+    args_set = data['args_set']
+    ref_set = set(range(1,30))
+    
+    assert len(args_set) == len(ref_set)
+    assert len(ref_set - args_set) == 0
+    print("[+] args_set from dump contains all arguments")
     
 
     print("## TEST SIGINT ##")    
-    p_server = mp.Process(target=start_server, args=(0,))
+    p_server = mp.Process(target=start_server, args=(30,))
     p_server.start()
     time.sleep(1)
     print("    send SIGINT")
@@ -418,13 +426,17 @@ def test_jobmanager_server_signals():
     assert not p_server.is_alive(), "timeout for server shutdown reached"
     print("[+] now terminated (timeout of 15s not reached)")
     
-    fname = 'args.dump'
+    fname = 'jobmanager.dump'
     with open(fname, 'rb') as f:
-        args = pickle.load(f)
+        data = jobmanager.JobManager_Server.static_load(f)    
     
-    for i,a in enumerate(range(1,30)):
-        assert a == args[i], "checking the args.dump failed"
-    print("[+] args.dump contains all arguments")   
+    args_set = data['args_set']
+    
+    ref_set = set(range(1,30))
+    assert len(args_set) == len(ref_set)
+    assert len(ref_set - args_set) == 0
+    print("[+] args_set from dump contains all arguments")
+ 
     
 def test_shutdown_server_while_client_running():
     """
@@ -438,12 +450,15 @@ def test_shutdown_server_while_client_running():
     check if the final_result and the args dump end up to include
     all arguments given 
     """
-    p_server = mp.Process(target=start_server, args=(0,1000))
+    
+    n = 1000
+    
+    p_server = mp.Process(target=start_server, args=(n,))
     p_server.start()
     
     time.sleep(1)
     
-    p_client = mp.Process(target=start_client, args=(0,))
+    p_client = mp.Process(target=start_client)
     p_client.start()
     
     time.sleep(2)
@@ -455,31 +470,30 @@ def test_shutdown_server_while_client_running():
     
     assert not p_server.is_alive()
     assert not p_client.is_alive()
+    
+    fname = 'jobmanager.dump'
+    with open(fname, 'rb') as f:
+        data = jobmanager.JobManager_Server.static_load(f)    
 
-    fname = 'args.dump'
-    with open(fname, 'rb') as f:
-        args = pickle.load(f)
+    args_set = data['args_set']
+    final_result = data['final_result']
+
+    final_res_args = {a[0] for a in final_result}
         
-    fname = 'final_result.dump'
-    with open(fname, 'rb') as f:
-        final_res = pickle.load(f)
+    set_ref = set(range(1,n))
     
-    final_res_args = [a[0] for a in final_res]
-        
-    set_ref = set(range(1,1000))
-    
-    set_recover = set(args) | set(final_res_args)
+    set_recover = set(args_set) | set(final_res_args)
     
     intersec_set = set_ref-set_recover
 
     if len(intersec_set) == 0:
         print("[+] no arguments lost!")
 
-    assert len(intersec_set) == 0, "args.dump and final_result_dump do NOT contain all arguments -> some must have been lost!"
+    assert len(intersec_set) == 0, "NOT all arguments found in dump!"
 
 def test_shutdown_client():
     shutdown_client(signal.SIGTERM)
-#     shutdown_client(signal.SIGINT)
+    shutdown_client(signal.SIGINT)
 
 def shutdown_client(sig):
     """
@@ -500,12 +514,12 @@ def shutdown_client(sig):
     
     print("## terminate client with {} ##".format(jobmanager.signal_dict[sig]))
     
-    p_server = mp.Process(target=start_server, args=(2,n))
+    p_server = mp.Process(target=start_server, args=(n, ))
     p_server.start()
     
     time.sleep(2)
     
-    p_client = mp.Process(target=start_client, args=(1,))
+    p_client = mp.Process(target=start_client)
     p_client.start()
     
     time.sleep(1)
@@ -520,7 +534,7 @@ def shutdown_client(sig):
     
     time.sleep(0.5)
      
-    p_client = mp.Process(target=start_client, args=(1,))
+    p_client = mp.Process(target=start_client)
     p_client.start()
     
     p_client.join(30)
@@ -531,16 +545,19 @@ def shutdown_client(sig):
     
     print("[+] client and server terminated")
     
-    fname = 'final_result.dump'
+    fname = 'jobmanager.dump'
     with open(fname, 'rb') as f:
-        final_res = pickle.load(f)
+        data = jobmanager.JobManager_Server.static_load(f)    
     
-    final_res_args_set = {a[0] for a in final_res}
-        
+    assert len(data['args_set']) == 0
+    print("[+] args_set is empty -> all args processed & none failed")
+    
+    final_res_args_set = {a[0] for a in data['final_result']}
+         
     set_ref = set(range(1,n))
-    
+     
     intersect = set_ref - final_res_args_set
-    
+     
     assert len(intersect) == 0, "final result does not contain all arguments!"
     print("[+] all arguments found in final_results")
 
@@ -555,8 +572,8 @@ def test_check_fail():
 
     
     n = 100
-    verbose=0
-    p_server = mp.Process(target=start_server, args=(0,n))
+    verbose=2
+    p_server = mp.Process(target=start_server, args=(n,))
     p_server.start()
     
     time.sleep(1)
@@ -584,15 +601,11 @@ def test_check_fail():
     
     print("[+] server and client stopped")
     
-    fname = 'final_result.dump'
+    fname = 'jobmanager.dump'
     with open(fname, 'rb') as f:
-        final_res = pickle.load(f)
+        data = jobmanager.JobManager_Server.static_load(f)    
+
     
-    final_res_args_set = {a[0] for a in final_res}
-    
-    fname = 'fail.dump'
-    with open(fname, 'rb') as f:
-        fail = pickle.load(f)
     
     fail_set = {a[0] for a in fail}
         
@@ -623,10 +636,10 @@ if __name__ == "__main__":
 #     test_statusbar()
 #     test_statusbar_with_statement()
      
-    test_jobmanager_basic()
-    test_jobmanager_server_signals()
-    test_shutdown_server_while_client_running()
-    test_shutdown_client()
+#     test_jobmanager_basic()
+#     test_jobmanager_server_signals()
+#     test_shutdown_server_while_client_running()
+#     test_shutdown_client()
     test_check_fail()
 
     pass
