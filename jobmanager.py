@@ -110,16 +110,15 @@ class hashDict(dict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
     
-class hashNumpyArray(np.ndarray):
-    def __init__(self):
-        pass
-    
-    def __new__(subtype, other):
-        obj = np.array(other, subok=True)
-        return obj
+class hashWrapperNumpyArray(np.ndarray):
+    def __new__(self, other):
+        return np.ndarray.__new__(self, shape=other.shape, dtype=other.dtype)
+
+    def __init__(self, other):
+        self[:] = other[:]
     
     def __hash__(self):
-        return hash(tuple(self.flat))
+        return hash(self.shape + tuple(self.flat))
 
 
 
@@ -956,17 +955,13 @@ class JobManager_Server(object):
     def put_arg(self, a):
         """add argument a to the job_q
         """
-        print(a.__hash__)
-        
         if (not hasattr(a, '__hash__')) or (a.__hash__ == None):
-            print(type(a))
             # try to add hashability
             if isinstance(a, dict):
                 a = hashDict(a)
             else:
                 raise AttributeError("'{}' is not hashable".format(type(a)))
         
-        print(type(a))
         self.args_set.add(copy.copy(a))
         self.job_q.put(copy.copy(a))
         
