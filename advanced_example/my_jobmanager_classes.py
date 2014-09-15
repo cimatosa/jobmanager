@@ -1,56 +1,22 @@
+import os, sys
+sys.path.append(os.path.abspath("../"))
+
 import jobmanager as jm
-import numpy as np
-from scipy.special import gamma as scipy_gamma_func
+from calculations import diff, alpha_func
 from scipy.optimize import minimize
-import time
+import numpy as np
+
 import matplotlib.pyplot as plt
-
-def alpha_func(tau, eta, Gamma, s):
-    return eta * (Gamma / (1 + 1j*tau))**(s+1) * scipy_gamma_func(s)
-
-def x_to_g_w(x):
-    n = len(x) // 3
-    g_re = x[0*n:1*n]
-    g_im = x[1*n:2*n]
-    w    = x[2*n:3*n]
-    return g_re + 1j*g_im, w, n
-
-def alpha_apprx(tau, g, w):
-    """
-        alpha = sum_i   g_i * exp(-w_i * tau)
-    """
-    n_tau = len(tau)
-    tau = tau.reshape((n_tau,1))
-    
-    res = np.sum(g * np.exp(-w * tau), axis=1)
-    return res
-
-def alpha_apprx_x(tau, x):
-    g, w, n = x_to_g_w(x)
-    g = g.reshape((1,n))
-    w = w.reshape((1,n))
-    return alpha_apprx(tau, g, w)
-    
-
-
-def diff(x, tau, alpha_true, p):
-    alpha = alpha_apprx_x(tau, x)
-    rel_diff = np.abs(alpha_true - alpha)/np.abs(alpha_true)
-    max_diff = np.max(rel_diff)
-    mean_rel_diff = np.mean(rel_diff)
-    return p*mean_rel_diff + (1-p)*max_diff
-    
 
 class FitFunc_Client(jm.JobManager_Client):
     def __init__(self):
-        super(FitFunc_Client, self).__init__(ip="localhost", 
+        super(FitFunc_Client, self).__init__(ip="tqo07", 
                                              authkey='fit function example', 
                                              port = 42524, 
                                              nproc = 0, 
                                              nice=19, 
                                              no_warings=True, 
                                              verbose=1)
-        
     @staticmethod
     def func(args, const_args):
         eta, Gamma, s, p, tau_max, tau_n = const_args
@@ -71,23 +37,19 @@ class FitFunc_Server(jm.JobManager_Server):
         
         # setup init parameters for the ancestor class
         authkey = 'fit function example'
-        fname_for_final_result_dump = 'FitFunc_final_result'
+        fname_dump = None
         const_args = const_args
         port = 42524 
-        verbose = 2
+        verbose = 1
         msg_interval = 1
-        fname_for_args_dump = 'auto'
-        fname_for_fail_dump = 'auto'
         
         # init ancestor class
         super(FitFunc_Server, self).__init__(authkey=authkey,
-                                       fname_for_final_result_dump=fname_for_final_result_dump,
-                                       const_args = const_args,
-                                       port = port,
-                                       verbose = verbose,
-                                       msg_interval = msg_interval,
-                                       fname_for_args_dump = fname_for_args_dump,
-                                       fname_for_fail_dump = fname_for_fail_dump)
+                                             const_arg = const_args,
+                                             port = port,
+                                             verbose = verbose,
+                                             msg_interval = msg_interval,
+                                             fname_dump = fname_dump)
 
         self.final_result = None
         for i in range(num_samples):
@@ -104,12 +66,14 @@ class FitFunc_Server(jm.JobManager_Server):
         g, w, n = x_to_g_w(x)
         if ((self.final_result == None) or
             (self.final_result[0] > fun)):
+            print("\nnew result {}".format(fun))
             
             self.final_result = (fun, g, w)
             
     def process_final_result(self):
+        print("final Res")
         if self.final_result != None:
-            eta, Gamma, s, p, tau_max, tau_n = self.const_args
+            eta, Gamma, s, p, tau_max, tau_n = self.const_arg
             (fun, g, w) = self.final_result
             
             tau = np.linspace(0, tau_max, tau_n)
@@ -125,36 +89,47 @@ class FitFunc_Server(jm.JobManager_Server):
             plt.grid()
             plt.show()
         
+args = {}
+
+args['eta'] = 1
+args['Gamma'] = 1
+args['s'] = 0.7
+args['p'] = 0.99
+args['tau_max'] = 2 
+args['tau_n'] = 500
+args['num_samples'] = 300
+args['n'] = 5
+args['g_max'] = 10 
+args['w_max'] = 5
+
+const_args = (args['eta'], 
+              args['Gamma'], 
+              args['s'], 
+              args['p'], 
+              args['tau_max'], 
+              args['tau_n'])
+
+def FitFunc_Server_from_args():
+    return  FitFunc_Server(const_args = const_args,
+                           num_samples = args['num_samples'],
+                           n = args['n'],
+                           g_max = args['g_max'], 
+                           w_max = args['w_max'])
 
 if __name__ == "__main__":
-    debug = False
-
-    eta = 1
-    Gamma = 1
-    s = 0.7
-    p = 0.5
-    tau_max = 2 
-    tau_n = 500
-    fitfunc_server = FitFunc_Server(const_args=(eta, Gamma, s, p, tau_max, tau_n),
-                                    num_samples=500, 
-                                    n=5,
-                                    g_max=100, 
-                                    w_max=10)  
+    fitfunc_server = FitFunc_Server_from_args()
    
-    if debug:
-        # for debug reasons only
-        # note the server does not get started, but as the init
-        # function of the subclass generates the arguments
-        # we can check if they can be process by the 
-        # clinet's static function func
-    
-        arg0 = fitfunc_server.job_q.get()
-        x, fun = FitFunc_Client.func(arg0, const_args=(eta, Gamma, s, p))
-        print("arg0 :", arg0)
-        print("x    :", x)
-        print("fmin :", fun)
-    else:
-        fitfunc_server.start()
+    # note the server does not get started, but as the init
+    # function of the subclass generates the arguments
+    # we can check if they can be process by the 
+    # clinet's static function func
+
+    arg0 = fitfunc_server.job_q.get()
+    x, fun = FitFunc_Client.func(arg0, const_args=const_args)
+    print("arg0 :", arg0)
+    print("x    :", x)
+    print("fmin :", fun)
+
     
 
     
