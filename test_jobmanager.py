@@ -333,7 +333,7 @@ def test_statusbar_with_statement():
     time.sleep(0.2)
     sb.stop()
  
-def start_server(n):
+def start_server(n, read_old_state=False):
     print("START SERVER")
     args = range(1,n)
     authkey = 'testing'
@@ -341,7 +341,10 @@ def start_server(n):
                                       verbose=2,
                                       msg_interval=1,
                                       fname_dump='jobmanager.dump') as jm_server:
-        jm_server.args_from_list(args)
+        if not read_old_state:
+            jm_server.args_from_list(args)
+        else:
+            jm_server.read_old_state()
         jm_server.start()
     
 def start_client():
@@ -606,16 +609,72 @@ def test_check_fail():
         data = jobmanager.JobManager_Server.static_load(f)    
 
     
-    
-    fail_set = {a[0] for a in fail}
-        
     set_ref = set(range(1,n))
     
-    all_set = final_res_args_set | fail_set
+    assert data['args_set'] == data['fail_set']
+    
+    final_result_args_set = {a[0] for a in data['final_result']}
+    
+    all_set = final_result_args_set | data['fail_set']
+    
     assert len(set_ref - all_set) == 0, "final result union with reported failure do not correspond to all args!" 
     print("[+] all argumsents found in final_results | reported failure")
 
+def test_jobmanager_read_old_stat():
+    """
+    start server, start client, start process trivial jobs,
+    interrupt in between, restore state from dump, finish.
+    
+    check if all arguments are found in final_result of dump
+    """
+    n = 100
+    p_server = mp.Process(target=start_server, args=(n,))
+    p_server.start()
+    
+    time.sleep(1)
+     
+    p_client = mp.Process(target=start_client)
+    p_client.start()
+    
+    time.sleep(3)
+    
+    p_server.terminate()
+     
+    p_client.join(10)
+    p_server.join(10)
+ 
+    assert not p_client.is_alive(), "the client did not terminate on time!"
+    assert not p_server.is_alive(), "the server did not terminate on time!"
+    print("[+] client and server terminated")
+    
+    p_server = mp.Process(target=start_server, args=(n,True))
+    p_server.start()
+    
+    time.sleep(2)
+     
+    p_client = mp.Process(target=start_client)
+    p_client.start()
 
+    p_client.join(30)
+    p_server.join(30)
+ 
+    assert not p_client.is_alive(), "the client did not terminate on time!"
+    assert not p_server.is_alive(), "the server did not terminate on time!"
+    print("[+] client and server terminated")    
+     
+    fname = 'jobmanager.dump'
+    with open(fname, 'rb') as f:
+        data = jobmanager.JobManager_Server.static_load(f)
+    
+    final_res_args_set = {a[0] for a in data['final_result']}
+         
+    set_ref = set(range(1,n))
+     
+    intersect = set_ref - final_res_args_set
+     
+    assert len(intersect) == 0, "final result does not contain all arguments!"
+    print("[+] all arguments found in final_results")    
+    
     
 
 
@@ -640,7 +699,8 @@ if __name__ == "__main__":
 #     test_jobmanager_server_signals()
 #     test_shutdown_server_while_client_running()
 #     test_shutdown_client()
-    test_check_fail()
+#     test_check_fail()
+    test_jobmanager_read_old_stat()
 
     pass
     
