@@ -15,6 +15,8 @@ import psutil
 import fcntl
 import termios
 import struct
+import collections
+import numpy as np
 
 
 """jobmanager module
@@ -104,7 +106,22 @@ def copyQueueToList(q):
 
     return res_q, res_list
         
-            
+class hashDict(dict):
+    def __hash__(self):
+        return hash(tuple(sorted(self.items())))
+    
+class hashNumpyArray(np.ndarray):
+    def __init__(self):
+        pass
+    
+    def __new__(subtype, other):
+        obj = np.array(other, subok=True)
+        return obj
+    
+    def __hash__(self):
+        return hash(tuple(self.flat))
+
+
 
 class SIG_handler_Loop(object):
     """class to setup signal handling for the Loop class
@@ -864,7 +881,7 @@ class JobManager_Server(object):
                 print("{}: dump current state ... ".format(self._identifier), end='', flush=True)
                 
             if self.fname_dump == 'auto':
-                fname = "{}_{}.dump".format(self.authkey, etDateForFileName(includePID=False))
+                fname = "{}_{}.dump".format(self.authkey, getDateForFileName(includePID=False))
             else:
                 fname = self.fname_dump
     
@@ -939,9 +956,20 @@ class JobManager_Server(object):
     def put_arg(self, a):
         """add argument a to the job_q
         """
-        self.args_set.add(a)
+        print(a.__hash__)
+        
+        if (not hasattr(a, '__hash__')) or (a.__hash__ == None):
+            print(type(a))
+            # try to add hashability
+            if isinstance(a, dict):
+                a = hashDict(a)
+            else:
+                raise AttributeError("'{}' is not hashable".format(type(a)))
+        
+        print(type(a))
+        self.args_set.add(copy.copy(a))
         self.job_q.put(copy.copy(a))
-
+        
         with self._numjobs.get_lock():
             self._numjobs.value += 1
         
@@ -973,7 +1001,10 @@ class JobManager_Server(object):
             raise RuntimeError("do not run JobManager_Server.start() in a subprocess")
 
         if (self.numjobs - self.numresults) != len(self.args_set):
-            raise RuntimeError("use JobManager_Server.put_arg to put arguments to the job_q")
+            raise RuntimeError("inconsistency detected! use JobManager_Server.put_arg to put arguments to the job_q")
+        
+        if self.numjobs == 0:
+            raise RuntimeError("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
         
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
@@ -1024,9 +1055,16 @@ class JobManager_Client(object):
     Then the process will terminate.
     """
     
-    def __init__(self, ip, authkey, port = 42524, nproc = 0, nice=19, no_warings=False, verbose=1):
+    def __init__(self, 
+                  server, 
+                  authkey, 
+                  port = 42524, 
+                  nproc = 0, 
+                  nice=19, 
+                  no_warings=False, 
+                  verbose=1):
         """
-        ip [string] - ip address or hostname where the JobManager_Server is running
+        server [string] - ip address or hostname where the JobManager_Server is running
         
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -1060,7 +1098,7 @@ class JobManager_Client(object):
             warnings.filterwarnings("ignore")
             if self.verbose > 1:
                 print("{}: ignore all warnings".format(self._identifier))
-        self.ip = ip
+        self.server = server
         self.authkey = bytearray(authkey, encoding='utf8')
         self.port = port
         self.nice = nice
@@ -1074,7 +1112,7 @@ class JobManager_Client(object):
         
        
     @staticmethod
-    def _get_manager_object(ip, port, authkey, identifier, verbose=0):
+    def _get_manager_object(server, port, authkey, identifier, verbose=0):
         """
         connects to the server and get registered shared objects such as
         job_q, result_q, fail_q, const_arg
@@ -1087,10 +1125,10 @@ class JobManager_Client(object):
         ServerQueueManager.register('get_fail_q')
         ServerQueueManager.register('get_const_arg', exposed="__iter__")
     
-        manager = ServerQueueManager(address=(ip, port), authkey=authkey)
+        manager = ServerQueueManager(address=(server, port), authkey=authkey)
 
         if verbose > 0:
-            print('{}: connecting to {}:{} ... '.format(identifier, ip, port), end='', flush=True)
+            print('{}: connecting to {}:{} ... '.format(identifier, server, port), end='', flush=True)
         try:
             manager.connect()
         except:
@@ -1137,14 +1175,14 @@ class JobManager_Client(object):
 
 
     @staticmethod
-    def __worker_func(func, nice, verbose, ip, port, authkey, i):
+    def __worker_func(func, nice, verbose, server, port, authkey, i):
         """
         the wrapper spawned nproc trimes calling and handling self.func
         """
         identifier = get_identifier(name='worker{}'.format(i+1))
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
         
-        res = JobManager_Client._get_manager_object(ip, port, authkey, identifier, verbose)
+        res = JobManager_Client._get_manager_object(server, port, authkey, identifier, verbose)
         if res == None:
             if verbose > 1:
                 print("{}: no shared object recieved, terminate!".format(identifier))
@@ -1235,7 +1273,7 @@ class JobManager_Client(object):
             p = mp.Process(target=self.__worker_func, args=(self.func, 
                                                             self.nice, 
                                                             self.verbose, 
-                                                            self.ip, 
+                                                            self.server, 
                                                             self.port,
                                                             self.authkey,
                                                             i))
@@ -1247,5 +1285,3 @@ class JobManager_Client(object):
     
         for p in self.procs:
             p.join()
-                       
-        
