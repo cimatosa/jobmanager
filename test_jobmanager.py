@@ -1,4 +1,3 @@
-import jobmanager
 import os
 import sys
 import time
@@ -6,7 +5,13 @@ import signal
 import multiprocessing as mp
 import pickle
 from numpy.random import rand
+import numpy as np
 import psutil
+
+path = os.path.dirname(__file__)
+sys.path.append(path)
+
+import jobmanager
 
 def test_Signal_to_SIG_IGN():
     def f():
@@ -349,7 +354,7 @@ def start_server(n, read_old_state=False):
     
 def start_client():
     print("START CLIENT")
-    jm_client = jobmanager.JobManager_Client(ip='localhost', 
+    jm_client = jobmanager.JobManager_Client(server='localhost', 
                                              authkey='testing', 
                                              port=42524, 
                                              nproc=0, verbose=2)
@@ -582,7 +587,7 @@ def test_check_fail():
     time.sleep(1)
     
     print("START CLIENT")
-    jm_client = Client_Random_Error(ip='localhost', 
+    jm_client = Client_Random_Error(server='localhost', 
                                     authkey='testing',
                                     port=42524, 
                                     nproc=0, 
@@ -675,32 +680,94 @@ def test_jobmanager_read_old_stat():
     assert len(intersect) == 0, "final result does not contain all arguments!"
     print("[+] all arguments found in final_results")    
     
+def test_hashDict():
+    s = set()
+    
+    d1 = jobmanager.hashDict()
+    d1['a'] = 1
+    d1['b'] = 2
+    s.add(d1)
+    
+    d2 = jobmanager.hashDict()
+    d2['a'] = 2
+    d2['b'] = 1
+    s.add(d2)
+    
+    d3 = jobmanager.hashDict()
+    d3['a'] = 1
+    d3['b'] = 2
+    
+    assert d3 in s
+    
+    d3['c'] = 0
+    assert not d3 in s
+    
+def test_hashedViewOnNumpyArray():
+    s = set()
+    
+    a = np.ones(4)
+    ah = jobmanager.hashableCopyOfNumpyArray(a)
+    
+    s.add(ah)
+    
+    b = np.ones(4, dtype=np.int32)
+    bh = jobmanager.hashableCopyOfNumpyArray(b)
+
+    # hash function independent of dtype    
+    assert hash(ah) == hash(bh)
+    # overwritten equal operator ...
+    assert ah == bh
+    # ... makes such statements possible!
+    assert bh in s
+     
+    # check if it is truly a copy, not just a view
+    b[0] = 2
+    assert bh[0] == 1
+    
+    c = np.ones(5)
+    ch = jobmanager.hashableCopyOfNumpyArray(c)
+    # different array
+    assert not ch in s
+    
+    # check if shape is included in hash calculation
+    bh2 = bh.reshape((2,2))
+    assert bh2 not in s
+    
+    # just some redundant back conversion an checking  
+    bh2 = bh2.reshape((4,))
+    assert bh2 in s
+    
+    
+    
+
+    
     
 
 
 if __name__ == "__main__":
     
-#     test_Signal_to_SIG_IGN()
-#     test_Signal_to_sys_exit()
-#     test_Signal_to_terminate_process_list()
-#       
-#     test_loop_basic()
-#     test_loop_signals()
-#     test_loop_normal_stop()
-#     test_loop_need_sigterm_to_stop()
-#     test_loop_need_sigkill_to_stop()
-#     
-#     test_why_with_statement()
+    test_Signal_to_SIG_IGN()
+    test_Signal_to_sys_exit()
+    test_Signal_to_terminate_process_list()
+       
+    test_loop_basic()
+    test_loop_signals()
+    test_loop_normal_stop()
+    test_loop_need_sigterm_to_stop()
+    test_loop_need_sigkill_to_stop()
      
-#     test_statusbar()
-#     test_statusbar_with_statement()
-     
-#     test_jobmanager_basic()
-#     test_jobmanager_server_signals()
-#     test_shutdown_server_while_client_running()
-#     test_shutdown_client()
-#     test_check_fail()
+    test_why_with_statement()
+      
+    test_statusbar()
+    test_statusbar_with_statement()
+      
+    test_jobmanager_basic()
+    test_jobmanager_server_signals()
+    test_shutdown_server_while_client_running()
+    test_shutdown_client()
+    test_check_fail()
     test_jobmanager_read_old_stat()
-
+    test_hashDict()
+    test_hashedViewOnNumpyArray()
     pass
     

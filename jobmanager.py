@@ -110,7 +110,7 @@ class hashDict(dict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
     
-class hashWrapperNumpyArray(np.ndarray):
+class hashableCopyOfNumpyArray(np.ndarray):
     def __new__(self, other):
         return np.ndarray.__new__(self, shape=other.shape, dtype=other.dtype)
 
@@ -120,6 +120,8 @@ class hashWrapperNumpyArray(np.ndarray):
     def __hash__(self):
         return hash(self.shape + tuple(self.flat))
 
+    def __eq__(self, other):
+        return np.all(np.equal(self, other))
 
 
 class SIG_handler_Loop(object):
@@ -710,7 +712,8 @@ class JobManager_Server(object):
                   port=42524, 
                   verbose=1, 
                   msg_interval=1,
-                  fname_dump='auto'):
+                  fname_dump='auto',
+                  speed_calc_cycles=50):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -753,6 +756,7 @@ class JobManager_Server(object):
         self.const_arg = copy.copy(const_arg)
         self.fname_dump = fname_dump        
         self.msg_interval = msg_interval
+        self.speed_calc_cycles = speed_calc_cycles
 
         # to do some redundant checking, might be removed
         # the args_set holds all arguments to be processed
@@ -880,7 +884,7 @@ class JobManager_Server(object):
                 print("{}: dump current state ... ".format(self._identifier), end='', flush=True)
                 
             if self.fname_dump == 'auto':
-                fname = "{}_{}.dump".format(self.authkey, getDateForFileName(includePID=False))
+                fname = "{}_{}.dump".format(self.authkey.decode('utf8'), getDateForFileName(includePID=False))
             else:
                 fname = self.fname_dump
     
@@ -1009,13 +1013,13 @@ class JobManager_Server(object):
         
   
         with StatusBar(count = self._numresults, max_count = self._numjobs, 
-                       interval=self.msg_interval, speed_calc_cycles=10,
+                       interval=self.msg_interval, speed_calc_cycles=self.speed_calc_cycles,
                        verbose = self.verbose, sigint='ign', sigterm='ign') as stat:
             stat.start() 
         
             while (len(self.args_set) - self.fail_q.qsize()) > 0:
                 try:
-                    arg, result = self.result_q.get(timeout=1)       #blocks until an item is available
+                    arg, result = self.result_q.get(timeout=1)
                     self.args_set.remove(arg)
                     self.process_new_result(arg, result)
                     self.numresults = self.numjobs - (len(self.args_set) - self.fail_q.qsize()) 
@@ -1190,24 +1194,35 @@ class JobManager_Client(object):
         c = 0
         if verbose > 1:
             print("{}: now alive, niceness {}".format(identifier, n))
+        
+        time_queue = 0
+        time_calc = 0
+        
         while True:
             try:
+                t0 = time.clock()
                 arg = job_q.get(block = True, timeout = 0.1)
+                t1 = time.clock()
                 res = func(arg, const_arg)
+                t2 = time.clock()
                 result_q.put((arg, res))
+                t3 = time.clock()
                 c += 1
+                
+                time_queue += (t1-t0 + t3-t2)
+                time_calc += (t2-t1)
                 
             # regular case, just stop woring when empty job_q was found
             except queue.Empty:
                 if verbose > 0:
                     print("{}: finds empty job queue, processed {} jobs".format(identifier, c))
-                return
+                break
             
             # in this context usually raised if the communication to the server fails
             except EOFError:
                 if verbose > 0:
                     print("{}: EOFError, I guess the server went down, can't do anything, terminate now!".format(identifier))
-                return
+                break
             
             # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
             # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
@@ -1225,7 +1240,7 @@ class JobManager_Client(object):
                 else:
                     if verbose > 1:
                         print("done!")
-                return
+                break
             
             # some unexpected Exception
             # write argument, exception name and hostname to fail_q, save traceback
@@ -1250,6 +1265,9 @@ class JobManager_Client(object):
                     print("done")
                     print("        continue processing next argument.")
                 
+        if verbose > 0:
+            print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
+            
         if verbose > 1:
             print("{}: JobManager_Client.__worker_func terminates".format(identifier))
         
