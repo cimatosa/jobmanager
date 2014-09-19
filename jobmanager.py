@@ -1127,7 +1127,7 @@ class JobManager_Client(object):
         manager = ServerQueueManager(address=(server, port), authkey=authkey)
 
         if verbose > 0:
-            print('{}: connecting to {}:{} ... '.format(identifier, server, port), end='', flush=True)
+            print('{}: connecting to {}:{} authkey {}... '.format(identifier, server, port, authkey.decode('utf8')), end='', flush=True)
         try:
             manager.connect()
         except:
