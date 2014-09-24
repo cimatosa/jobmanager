@@ -2,7 +2,7 @@ import os, sys
 sys.path.append(os.path.abspath("../"))
 
 import jobmanager as jm
-from calculations import diff, alpha_func
+from calculations import *
 from scipy.optimize import minimize
 import numpy as np
 
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 class FitFunc_Client(jm.JobManager_Client):
     def __init__(self):
-        super(FitFunc_Client, self).__init__(ip="tqo07", 
+        super(FitFunc_Client, self).__init__(server="tqo07", 
                                              authkey='fit function example', 
                                              port = 42524, 
                                              nproc = 0, 

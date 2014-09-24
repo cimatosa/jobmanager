@@ -1,12 +1,15 @@
-import jobmanager as jm
 import numpy as np
 import multiprocessing as mp
 import time
 
+import sys
+sys.path.append('../')
+import jobmanager as jm
+
 class Example_Client(jm.JobManager_Client):
     def __init__(self):
         # start quiet client (verbopse=0)
-        super().__init__(ip="localhost", 
+        super().__init__(server="localhost", 
                          authkey='simple example', 
                          verbose=0)
         
