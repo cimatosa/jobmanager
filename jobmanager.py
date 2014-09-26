@@ -1109,9 +1109,18 @@ class JobManager_Client(object):
 
         self.procs = []
         
+        self.manager_objects = self.get_manager_objects() 
+        
+       
+    def get_manager_objects(self):
+        return JobManager_Client._get_manager_objects(self.server, 
+                                                      self.port, 
+                                                      self.authkey, 
+                                                      self._identifier,
+                                                      self.verbose)
        
     @staticmethod
-    def _get_manager_object(server, port, authkey, identifier, verbose=0):
+    def _get_manager_objects(server, port, authkey, identifier, verbose=0):
         """
         connects to the server and get registered shared objects such as
         job_q, result_q, fail_q, const_arg
@@ -1174,20 +1183,21 @@ class JobManager_Client(object):
 
 
     @staticmethod
-    def __worker_func(func, nice, verbose, server, port, authkey, i):
+    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects=None):
         """
         the wrapper spawned nproc trimes calling and handling self.func
         """
         identifier = get_identifier(name='worker{}'.format(i+1))
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
-        
-        res = JobManager_Client._get_manager_object(server, port, authkey, identifier, verbose)
-        if res == None:
-            if verbose > 1:
-                print("{}: no shared object recieved, terminate!".format(identifier))
-            sys.exit(1)
-        else:
-            job_q, result_q, fail_q, const_arg = res 
+
+        if manager_objects is None:        
+            manager_objects = JobManager_Client._get_manager_object(server, port, authkey, identifier, verbose)
+            if res == None:
+                if verbose > 1:
+                    print("{}: no shared object recieved, terminate!".format(identifier))
+                sys.exit(1)
+
+        job_q, result_q, fail_q, const_arg = manager_objects 
         
         n = os.nice(0)
         n = os.nice(nice - n)
@@ -1266,8 +1276,10 @@ class JobManager_Client(object):
                     print("        continue processing next argument.")
                 
         if verbose > 0:
-            print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
-            
+            try:
+                print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
+            except:
+                pass
         if verbose > 1:
             print("{}: JobManager_Client.__worker_func terminates".format(identifier))
         
@@ -1289,7 +1301,8 @@ class JobManager_Client(object):
                                                             self.server, 
                                                             self.port,
                                                             self.authkey,
-                                                            i))
+                                                            i,
+                                                            self.manager_objects))
             self.procs.append(p)
             p.start()
             time.sleep(0.3)

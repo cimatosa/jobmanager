@@ -518,7 +518,7 @@ def shutdown_client(sig):
     check if the final_result contain all arguments given 
     """
     
-    n = 100
+    n = 300
     
     print("## terminate client with {} ##".format(jobmanager.signal_dict[sig]))
     
@@ -530,7 +530,7 @@ def shutdown_client(sig):
     p_client = mp.Process(target=start_client)
     p_client.start()
     
-    time.sleep(1)
+    time.sleep(5)
     
     print("    send {}".format(jobmanager.signal_dict[sig]))
     os.kill(p_client.pid, sig)
@@ -746,28 +746,28 @@ def test_hashedViewOnNumpyArray():
 
 if __name__ == "__main__":
     
-    test_Signal_to_SIG_IGN()
-    test_Signal_to_sys_exit()
-    test_Signal_to_terminate_process_list()
-       
-    test_loop_basic()
-    test_loop_signals()
-    test_loop_normal_stop()
-    test_loop_need_sigterm_to_stop()
-    test_loop_need_sigkill_to_stop()
-     
-    test_why_with_statement()
+#     test_Signal_to_SIG_IGN()
+#     test_Signal_to_sys_exit()
+#     test_Signal_to_terminate_process_list()
+#        
+#     test_loop_basic()
+#     test_loop_signals()
+#     test_loop_normal_stop()
+#     test_loop_need_sigterm_to_stop()
+#     test_loop_need_sigkill_to_stop()
+#      
+#     test_why_with_statement()
+#       
+#     test_statusbar()
+#     test_statusbar_with_statement()
       
-    test_statusbar()
-    test_statusbar_with_statement()
-      
-    test_jobmanager_basic()
-    test_jobmanager_server_signals()
-    test_shutdown_server_while_client_running()
+#     test_jobmanager_basic()
+#     test_jobmanager_server_signals()
+#     test_shutdown_server_while_client_running()
     test_shutdown_client()
-    test_check_fail()
-    test_jobmanager_read_old_stat()
-    test_hashDict()
-    test_hashedViewOnNumpyArray()
+#     test_check_fail()
+#     test_jobmanager_read_old_stat()
+#     test_hashDict()
+#     test_hashedViewOnNumpyArray()
     pass
     
