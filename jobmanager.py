@@ -397,7 +397,6 @@ class Loop(object):
         the loop from repeating. Call __cleanup to make sure the process
         stopped. After that we could trigger start() again.
         """
-        print("stop loop")
         self.run = False
         if not self.is_alive():
             if self.verbose > 0:
@@ -526,7 +525,7 @@ class StatusBar(Loop):
 
     def __exit__(self, *exc_args):
         super().__exit__(*exc_args)
-        StatusBar.show_stat(count=self.max_count,
+        StatusBar.show_stat(count=self.count,
                             start_time=self.start_time, 
                             max_count=self.max_count, 
                             width=self.width, 
@@ -580,7 +579,9 @@ class StatusBar(Loop):
         max_count_value = max_count.value
         if count_value == 0:
             start_time.value = time.time()
-            print("\rwait for first count ...", end='', flush=True)
+            s = "\r{}wait for first count ...".format(prepend)
+            s += " "* (width - len(s))
+            print(s, end='', flush=True)
             return False
         else:
             current_time = time.time()
@@ -685,7 +686,23 @@ class StatusBarMulti(StatusBar):
         for i in range(n):
             StatusBar.show_stat(count[i], start_time, max_count[i], width, speed_calc_cycles, q[i], prepend[i])
             print()
-        print("\033[{}A".format(n+1))
+        print("\033[{}A".format(n), end='')
+        #print("test")
+        
+    def __exit__(self, *exc_args):
+        Loop.__exit__(self, *exc_args)
+        self.show_stat_multi(self.count, 
+                             self.start_time, 
+                             self.max_count, 
+                             self.width, 
+                             self.speed_calc_cycles, 
+                             self.q, 
+                             self.prepend)        
+        print("\n"*self.num_sb)
+        
+    def stop(self):
+        print("\n"*self.num_sb)
+        Loop.stop(self)
         
     def _reset(self, i):
         self.count[i].value=0
@@ -695,7 +712,7 @@ class StatusBarMulti(StatusBar):
     def reset(self, i):
         Loop.stop(self)
         self._reset(i)
-        Loop.stop(self)
+        Loop.start(self)
         
     def reset_all(self):
         Loop.stop(self)

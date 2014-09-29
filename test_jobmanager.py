@@ -749,35 +749,30 @@ def test_sb_multi():
     for i in range(n):
         count.append(jobmanager.UnsignedIntValue(0))
         max_count.append(jobmanager.UnsignedIntValue(max_count_value))
-        prepend.append('{}: '.format(i))
+        prepend.append('_{}_: '.format(i))
     
+    with jobmanager.StatusBarMulti(count=count,
+                                   max_count=max_count,
+                                   interval=0.2,
+                                   speed_calc_cycles=10,
+                                   width='auto',
+                                   verbose=0,
+                                   sigint='stop',
+                                   sigterm='stop',
+                                   name='sb multi',
+                                   prepend=prepend) as sbm:
     
-    
-    sbm = jobmanager.StatusBarMulti(count=count,
-                                    max_count=max_count,
-                                    interval=0.2,
-                                    speed_calc_cycles=10,
-                                    width='auto',
-                                    verbose=1,
-                                    sigint='stop',
-                                    sigterm='stop',
-                                    name='sb multi',
-                                    prepend=prepend)
-    
-    sbm.start()
-    
-    while True:
-        i = np.random.randint(low=0, high=n)
-        with count[i].get_lock():
-            count[i].value += 1
-            
-        if count[i].value > 100:
-            sbm.reset(i)
-            print(count[i].value)
-            
-            sys.exit()
-            
-        time.sleep(0.002)
+        sbm.start()
+        
+        for x in range(500):
+            i = np.random.randint(low=0, high=n)
+            with count[i].get_lock():
+                count[i].value += 1
+                
+            if count[i].value > 100:
+                sbm.reset(i)
+                
+            time.sleep(0.02)
         
     
 def test_sb():
@@ -786,28 +781,29 @@ def test_sb():
     max_count = jobmanager.UnsignedIntValue(max_count_value)
     prepend = '{}: '.format(0)
     
-    sbm = jobmanager.StatusBar(count=count,
-                                    max_count=max_count,
-                                    interval=0.2,
-                                    speed_calc_cycles=10,
-                                    width='auto',
-                                    verbose=2,
-                                    sigint='stop',
-                                    sigterm='stop',
-                                    name='sb',
-                                    prepend=prepend)
+    with jobmanager.StatusBar(count=count,
+                              max_count=max_count,
+                              interval=0.2,
+                              speed_calc_cycles=10,
+                              width='auto',
+                              verbose=0,
+                              sigint='stop',
+                              sigterm='stop',
+                              name='sb',
+                              prepend=prepend) as sb:
     
-    sbm.start()
-    
-    while True:
-        with count.get_lock():
-            count.value += 1
-            
-        if count.value > 50:
-            sbm.reset()
-            sys.exit()
-           
-        time.sleep(0.02)
+        sb.start()
+        
+        while True:
+            with count.get_lock():
+                count.value += 1
+                
+            if count.value > 50:
+                sb.reset()
+                time.sleep(1)
+                break
+               
+            time.sleep(0.02)
 
 
 if __name__ == "__main__":
