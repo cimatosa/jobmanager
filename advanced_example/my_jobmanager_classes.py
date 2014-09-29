@@ -10,13 +10,13 @@ import matplotlib.pyplot as plt
 
 class FitFunc_Client(jm.JobManager_Client):
     def __init__(self):
-        super(FitFunc_Client, self).__init__(server="tqo07", 
+        super(FitFunc_Client, self).__init__(server="localhost", 
                                              authkey='fit function example', 
                                              port = 42524, 
                                              nproc = 0, 
                                              nice=19, 
                                              no_warings=True, 
-                                             verbose=1)
+                                             verbose=2)
     @staticmethod
     def func(args, const_args):
         eta, Gamma, s, p, tau_max, tau_n = const_args
