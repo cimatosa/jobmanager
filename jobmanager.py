@@ -397,6 +397,7 @@ class Loop(object):
         the loop from repeating. Call __cleanup to make sure the process
         stopped. After that we could trigger start() again.
         """
+        print("stop loop")
         self.run = False
         if not self.is_alive():
             if self.verbose > 0:
@@ -455,15 +456,16 @@ class StatusBar(Loop):
     function show_stat.
     """
     def __init__(self, 
-                 count, 
-                 max_count, 
-                 interval=1, 
-                 speed_calc_cycles=10, 
-                 width='auto',
-                 verbose=0,
-                 sigint='stop', 
-                 sigterm='stop',
-                 name='statusbar'):
+                  count, 
+                  max_count, 
+                  interval=1, 
+                  speed_calc_cycles=10, 
+                  width='auto',
+                  verbose=0,
+                  sigint='stop', 
+                  sigterm='stop',
+                  name='statusbar',
+                  prepend=None):
         """
         The init will also start to display the status bar if run was set True.
         Otherwise use the inherited method start() to start the show_stat loop.
@@ -482,7 +484,7 @@ class StatusBar(Loop):
         s = count - old_count / (time - old_time)
         
         width [int/'auto'] - the number of characters used to show the status bar,
-        use 'auto' to determine width from terminal information -> see __set_width 
+        use 'auto' to determine width from terminal information -> see _set_width 
         
         verbose, sigint, sigterm -> see loop class  
         """
@@ -499,7 +501,11 @@ class StatusBar(Loop):
         self.interval = interval
         self.verbose = verbose
         self.name = name
-        self.__set_width(width)
+        if prepend is None:
+            self.prepend = ''
+        else:
+            self.prepend = prepend
+        self._set_width(width)
         
         
         # setup loop class
@@ -509,7 +515,8 @@ class StatusBar(Loop):
                                self.max_count, 
                                self.width, 
                                self.speed_calc_cycles, 
-                               self.q), 
+                               self.q,
+                               self.prepend), 
                          interval=interval, 
                          verbose=verbose, 
                          sigint=sigint, 
@@ -524,10 +531,11 @@ class StatusBar(Loop):
                             max_count=self.max_count, 
                             width=self.width, 
                             speed_calc_cycles=self.speed_calc_cycles,
-                            q=self.q)
+                            q=self.q,
+                            prepend=self.prepend)
         print()
         
-    def __set_width(self, width):
+    def _set_width(self, width):
         """
         set the number of characters to be used to disply the status bar
         
@@ -546,7 +554,7 @@ class StatusBar(Loop):
         else:
             self.width = width
         
-    def set_args(self, interval=1, speed_calc_cycles=10, width='auto'):
+    def set_args(self, interval=1, speed_calc_cycles=10, width='auto', prepend='', start=False):
         """
         change some of the init arguments
         
@@ -555,14 +563,16 @@ class StatusBar(Loop):
         self.stop()
         self.interval = interval
         self.speed_calc_cycles = speed_calc_cycles
-        self.__set_width(width)
+        self._set_width(width)
+        self.prepend = prepend
         
         self.args = (self.count, self.start_time, self.max_count, 
-                     self.width, self.speed_calc_cycles, self.q)
-        self.start()
+                     self.width, self.speed_calc_cycles, self.q, self.prepend)
+        if start:
+            self.start()
 
     @staticmethod        
-    def show_stat(count, start_time, max_count, width, speed_calc_cycles, q):
+    def show_stat(count, start_time, max_count, width, speed_calc_cycles, q, prepend):
         """
         the actual routine to bring the status to the screen
         """
@@ -591,7 +601,7 @@ class StatusBar(Loop):
                 s3 = "] ETA {}".format(humanize_time(eta))
 
             
-            s1 = "\r{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
+            s1 = "\r{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
             
             l = len(s1) + len(s3)
             l2 = width - l - 1
@@ -605,6 +615,94 @@ class StatusBar(Loop):
     def stop(self):
         print()
         super().stop()
+        
+    def reset(self):
+        super().stop()
+        self.count.value=0
+        while not self.q.empty():
+            self.q.get()
+        super().start()
+        
+class StatusBarMulti(StatusBar):
+    def __init__(self, 
+                  count, 
+                  max_count, 
+                  interval=1, 
+                  speed_calc_cycles=10, 
+                  width='auto',
+                  verbose=0,
+                  sigint='stop', 
+                  sigterm='stop',
+                  name='statusbarmulti',
+                  prepend=None):
+        
+        self.num_sb = len(count) 
+        assert self.num_sb == len(max_count)
+        for c in count:
+            assert isinstance(c, mp.sharedctypes.Synchronized)
+        for m in max_count:
+            assert isinstance(m, mp.sharedctypes.Synchronized)
+        
+        self.start_time = mp.Value('d', time.time())
+        self.speed_calc_cycles = speed_calc_cycles
+        
+        self.q = []
+        for i in range(self.num_sb):
+            self.q.append(mp.Queue()) # queue to save the last speed_calc_cycles
+                                      # (time, count) information to calculate speed
+        self.max_count = max_count  # multiprocessing value type
+        self.count = count          # multiprocessing value type
+        self.interval = interval
+        self.verbose = verbose
+        self.name = name
+        if prepend is None:
+            self.prepend = [''] * self.num_sb
+        else:
+            assert self.num_sb == len(prepend)
+            self.prepend = prepend
+        self._set_width(width)
+        
+        # setup loop class
+        Loop.__init__(self,
+                      func=StatusBarMulti.show_stat_multi, 
+                      args=(self.count, 
+                            self.start_time, 
+                            self.max_count, 
+                            self.width, 
+                            self.speed_calc_cycles, 
+                            self.q,
+                            self.prepend), 
+                      interval=interval, 
+                      verbose=verbose, 
+                      sigint=sigint, 
+                      sigterm=sigterm, 
+                      name=name,
+                      auto_kill_on_last_resort=True)
+        
+    @staticmethod
+    def show_stat_multi(count, start_time, max_count, width, speed_calc_cycles, q, prepend):
+        n = len(count)
+        for i in range(n):
+            StatusBar.show_stat(count[i], start_time, max_count[i], width, speed_calc_cycles, q[i], prepend[i])
+            print()
+        print("\033[{}A".format(n+1))
+        
+    def _reset(self, i):
+        self.count[i].value=0
+        while not self.q[i].empty():
+            self.q[i].get()
+                
+    def reset(self, i):
+        Loop.stop(self)
+        self._reset(i)
+        Loop.stop(self)
+        
+    def reset_all(self):
+        Loop.stop(self)
+        for i in range(self.num_sb):
+            self._reset(i)
+        Loop.start(self)
+        
 
 def setup_SIG_handler_manager():
     """
