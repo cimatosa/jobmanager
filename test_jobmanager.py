@@ -751,16 +751,16 @@ def test_sb_multi():
         max_count.append(jobmanager.UnsignedIntValue(max_count_value))
         prepend.append('_{}_: '.format(i))
     
-    with jobmanager.StatusBarMulti(count=count,
-                                   max_count=max_count,
-                                   interval=0.2,
-                                   speed_calc_cycles=10,
-                                   width='auto',
-                                   verbose=0,
-                                   sigint='stop',
-                                   sigterm='stop',
-                                   name='sb multi',
-                                   prepend=prepend) as sbm:
+    with jobmanager.StatusBar(count=count,
+                              max_count=max_count,
+                              interval=0.2,
+                              speed_calc_cycles=10,
+                              width='auto',
+                              verbose=0,
+                              sigint='stop',
+                              sigterm='stop',
+                              name='sb multi',
+                              prepend=prepend) as sbm:
     
         sbm.start()
         
@@ -804,6 +804,48 @@ def test_sb():
                 break
                
             time.sleep(0.02)
+            
+def test_status_counter():
+    c = jobmanager.UnsignedIntValue(val=0)
+    m = jobmanager.UnsignedIntValue(val=100)
+    
+    with jobmanager.StatusCounter(count=c,
+                                  max_count=m,
+                                  interval=0.2,
+                                  speed_calc_cycles=100,
+                                  verbose=2,
+                                  sigint='ign',
+                                  sigterm='ign',
+                                  name='sc',
+                                  prepend='') as sc:
+
+        sc.start()
+        while True:
+            with c.get_lock():
+                c.value += 1
+                
+            if c.value == 1000:
+                break
+            
+            time.sleep(0.01)
+            
+def test_status_counter_multi():
+    c1 = jobmanager.UnsignedIntValue(val=0)
+    c2 = jobmanager.UnsignedIntValue(val=0)
+    
+    c = [c1, c2]
+    prepend = ['c1: ', 'c2: ']
+    with jobmanager.StatusCounter(count=c, prepend=prepend, verbose=2) as sc:
+        sc.start()
+        while True:
+            i = np.random.randint(0,2)
+            with c[i].get_lock():
+                c[i].value += 1
+                
+            if c[0].value == 1000:
+                break
+            
+            time.sleep(0.01)
 
 
 if __name__ == "__main__":
@@ -832,6 +874,8 @@ if __name__ == "__main__":
 #     test_hashDict()
 #     test_hashedViewOnNumpyArray()
 #     test_sb_multi()
-    test_sb()
+#     test_sb()
+    test_status_counter()
+#     test_status_counter_multi()
     pass
     

@@ -359,10 +359,10 @@ class Loop(object):
                 if verbose > 0:
                     print("{}: error {} occurred in Loop class calling 'func(*args)'".format(identifier, err))
                 if verbose > 0:
-                    traceback.print_tb(trb)
+                    traceback.print_exc()
                 return
 
-            if quit_loop:
+            if quit_loop is True:
                 return
             time.sleep(interval)
             
@@ -440,40 +440,86 @@ class Loop(object):
         self._run.value = run
 
 def UnsignedIntValue(val=0):
-    return mp.Value('I', val, lock=True)        
+    return mp.Value('I', val, lock=True)
+
+class Status(Loop):
+    """
+    Abstract Status Loop
+    
+    Uses Loop class to implement a repeating function to display the progress
+    of multiples processes.
+    
+    In the simplest case, given only a list of shared memory values 'count' (NOTE: 
+    a single value will be automatically mapped to a one element list),
+    the total elapses time (TET) and a speed estimation are calculated for
+    each process and passed to the display function show_stat.
+    
+    This functions needs to be implemented in a subclass. It is intended to show
+    the progress of ONE process in one line. So don't mess with the end-of-line.
+    Just leave the normal EOL of the print statement when reimplementing show_stat.
+    
+    When max_count is given (in general as list of shared memory values, a single
+    shared memory value will be mapped to a one element list) the estimates time 
+    of arrival ETA will also be calculated and passed tow show_stat.
+    
+    Information about the terminal width will be retrieved when setting width='auto'.
+    If supported by the terminal emulator the width in characters of the terminal
+    emulator will be stored in width and also passed to show_stat. 
+    Otherwise, a default width of 80 characters will be chosen.
+    
+    Also you can specify a fixed width by setting width to the desired number.
+    
+    NOTE: in order to achieve multiline progress special escape sequences are used
+    which may not be supported by all terminal emulators.
+    
+    example:
        
-class StatusBar(Loop):
-    """
-    status bar in ascii art
+        c1 = UnsignedIntValue(val=0)
+        c2 = UnsignedIntValue(val=0)
     
-    Uses Loop class to implement repeating function which shows the process
-    based of the two shared memory values max_count and count. max_count is
-    assumed to be the final state, whereas count represents the current state.
+        c = [c1, c2]
+        prepend = ['c1: ', 'c2: ']
+        with StatusCounter(count=c, prepend=prepend) as sc:
+            sc.start()
+            while True:
+                i = np.random.randint(0,2)
+                with c[i].get_lock():
+                    c[i].value += 1
+                    
+                if c[0].value == 1000:
+                    break
+                
+                time.sleep(0.01)
     
-    The estimates time of arrival (ETA) will be calculated from a speed measurement
-    given by the average over the last spee_calc_cycles calls of the looping
-    function show_stat.
-    """
+    using start() within the 'with' statement ensures that the subprocess
+    which is started by start() in order to show the progress repeatedly
+    will be terminated on context exit. Otherwise one has to make sure
+    that at some point the stop() routine is called. When dealing with 
+    signal handling and exception this might become tricky, so that the  
+    use of the 'with' statement is highly encouraged. 
+    """    
     def __init__(self, 
                   count, 
-                  max_count, 
-                  interval=1, 
-                  speed_calc_cycles=10, 
+                  max_count=None,
                   width='auto',
+                  prepend=None,
+                  speed_calc_cycles=10, 
+                  interval=1, 
                   verbose=0,
                   sigint='stop', 
                   sigterm='stop',
-                  name='statusbar',
-                  prepend=None):
-        """
-        The init will also start to display the status bar if run was set True.
-        Otherwise use the inherited method start() to start the show_stat loop.
-        stop() will stop to show the status bar.
+                  name='statusbar'):
+        """       
+        count [mp.Value] - shared memory to hold the current state, (list or single value)
         
-        count [mp.Value] - shared memory to hold the current state
+        max_count [mp.Value] - shared memory holding the final state, (None, list or single value),
+        may be changed by external process without having to explicitly tell this class
         
-        max_count [mp.Value] - shared memory holding the final state, may change
-        by external process without having to explicitly tell this class
+        width [int/'auto'] - the number of characters used to show the status bar,
+        use 'auto' to determine width from terminal information -> see _set_width
+        
+        prepend [string] - string to put in front of the progress output, (None, single string
+        or of list of strings)
         
         interval [int] - seconds to wait between progress print
         
@@ -482,40 +528,74 @@ class StatusBar(Loop):
         speed_calc_cycles calls before to calculate the speed as follows:
         s = count - old_count / (time - old_time)
         
-        width [int/'auto'] - the number of characters used to show the status bar,
-        use 'auto' to determine width from terminal information -> see _set_width 
-        
         verbose, sigint, sigterm -> see loop class  
         """
         
-        assert isinstance(count, mp.sharedctypes.Synchronized)
-        assert isinstance(max_count, mp.sharedctypes.Synchronized)
+        try:
+            for c in count:
+                assert isinstance(c, mp.sharedctypes.Synchronized), "each element of 'count' must be if the type multiprocessing.sharedctypes.Synchronized"
+            self.is_multi = True
+        except TypeError:
+            assert isinstance(count, mp.sharedctypes.Synchronized), "'count' must be if the type multiprocessing.sharedctypes.Synchronized"
+            self.is_multi = False
+            count = [count]
         
-        self.start_time = mp.Value('d', time.time())
+        self.len = len(count)
+            
+        if max_count is not None:
+            if self.is_multi:
+                try:
+                    for m in max_count:
+                        assert isinstance(m, mp.sharedctypes.Synchronized), "each element of 'max_count' must be if the type multiprocessing.sharedctypes.Synchronized"
+                except TypeError:
+                    raise TypeError("'max_count' must be iterable")
+            else:
+                assert isinstance(max_count, mp.sharedctypes.Synchronized), "'max_count' must be if the type multiprocessing.sharedctypes.Synchronized"
+                max_count = [max_count]
+        else:
+            max_count = [None] * self.len
+            
+        
+        self.start_time = time.time()
         self.speed_calc_cycles = speed_calc_cycles
-        self.q = mp.Queue()         # queue to save the last speed_calc_cycles
-                                    # (time, count) information to calculate speed
-        self.max_count = max_count  # multiprocessing value type
-        self.count = count          # multiprocessing value type
+        
+        
+        
+        self.q = []
+        self.prepend = []
+        for i in range(self.len):
+            self.q.append(mp.Queue())  # queue to save the last speed_calc_cycles
+                                       # (time, count) information to calculate speed
+            if prepend is None:
+                # no prepend given
+                self.prepend.append('')
+            else:
+                try:
+                    # assume list of prepend 
+                    self.prepend.append(prepend[i])
+                except:
+                    # list fails -> assume single prepend for all 
+                    self.prepend.append(prepend)
+                                                       
+        self.max_count = max_count  # list of multiprocessing value type
+        self.count = count          # list of multiprocessing value type
         self.interval = interval
         self.verbose = verbose
         self.name = name
-        if prepend is None:
-            self.prepend = ''
-        else:
-            self.prepend = prepend
-        self._set_width(width)
         
-        
+        self._set_width(width)            
+            
         # setup loop class
-        super().__init__(func=StatusBar.show_stat, 
+        super().__init__(func=Status.show_stat_wrapper_multi, 
                          args=(self.count, 
                                self.start_time, 
                                self.max_count, 
                                self.width, 
                                self.speed_calc_cycles, 
                                self.q,
-                               self.prepend), 
+                               self.prepend,
+                               self.__class__.show_stat,
+                               self.len), 
                          interval=interval, 
                          verbose=verbose, 
                          sigint=sigint, 
@@ -524,15 +604,14 @@ class StatusBar(Loop):
                          auto_kill_on_last_resort=True)
 
     def __exit__(self, *exc_args):
+        """
+            will terminate loop process
+            
+            show a last progress -> see the full 100% on exit
+        """
         super().__exit__(*exc_args)
-        StatusBar.show_stat(count=self.count,
-                            start_time=self.start_time, 
-                            max_count=self.max_count, 
-                            width=self.width, 
-                            speed_calc_cycles=self.speed_calc_cycles,
-                            q=self.q,
-                            prepend=self.prepend)
-        print()
+        self._show_stat()
+        print('\n'*(self.len-1))
         
     def _set_width(self, width):
         """
@@ -553,173 +632,207 @@ class StatusBar(Loop):
         else:
             self.width = width
         
-    def set_args(self, interval=1, speed_calc_cycles=10, width='auto', prepend='', start=False):
+    def _show_stat(self):
         """
-        change some of the init arguments
-        
-        This will stop the loop, set changes and start the loop again.
+            convenient functions to call the static show_stat_wrapper_multi with
+            the given class members
         """
-        self.stop()
-        self.interval = interval
-        self.speed_calc_cycles = speed_calc_cycles
-        self._set_width(width)
-        self.prepend = prepend
+        Status.show_stat_wrapper_multi(self.count, 
+                                 self.start_time, 
+                                 self.max_count, 
+                                 self.width, 
+                                 self.speed_calc_cycles, 
+                                 self.q,
+                                 self.prepend,
+                                 self.__class__.show_stat,
+                                 self.len)
+    @staticmethod
+    def show_stat_wrapper_multi(count, start_time, max_count, width, speed_calc_cycles, q, prepend, show_stat_function, len):
+        """
+            call the static method show_stat_wrapper for each process
+        """
+        for i in range(len):
+             Status.show_stat_wrapper(count[i], start_time, max_count[i], width, speed_calc_cycles, q[i], prepend[i], show_stat_function)
+        print("\033[{}A".format(len), end='')
         
-        self.args = (self.count, self.start_time, self.max_count, 
-                     self.width, self.speed_calc_cycles, self.q, self.prepend)
-        if start:
-            self.start()
-
     @staticmethod        
-    def show_stat(count, start_time, max_count, width, speed_calc_cycles, q, prepend):
+    def show_stat_wrapper(count, start_time, max_count, width, speed_calc_cycles, q, prepend, show_stat_function):
         """
-        the actual routine to bring the status to the screen
+            do the pre calculations in order to get TET, speed, ETA
+            and call the actual display routine show_stat with these arguments
+            
+            NOTE: show_stat is purely abstract and need to be reimplemented to
+            achieve a specific progress display.  
         """
         count_value = count.value
-        max_count_value = max_count.value
-        if count_value == 0:
-            start_time.value = time.time()
-            s = "\r{}wait for first count ...".format(prepend)
-            s += " "* (width - len(s))
-            print(s, end='', flush=True)
-            return False
+        if max_count is None:
+            max_count_value = None
         else:
-            current_time = time.time()
-            start_time_value = start_time.value
-            q.put((count_value, current_time))
+            max_count_value = max_count.value
             
-            if q.qsize() > speed_calc_cycles:
-                old_count_value, old_time = q.get()
-            else:
-                old_count_value, old_time = 0, start_time_value
+        current_time = time.time()
+        q.put((count_value, current_time))
+        
+        if q.qsize() > speed_calc_cycles:
+            old_count_value, old_time = q.get()
+        else:
+            old_count_value, old_time = 0, start_time
 
-            tet = (current_time - start_time_value)
-            speed = (count_value - old_count_value) / (current_time - old_time)
-            if speed == 0:
-                s3 = "] ETA --"
-            else:
-                eta = math.ceil((max_count_value - count_value) / speed)
-                s3 = "] ETA {}".format(humanize_time(eta))
+        tet = (current_time - start_time)
+        speed = (count_value - old_count_value) / (current_time - old_time)
+        if (speed == 0) or (max_count_value is None):
+            eta = None
+        else:
+            eta = math.ceil((max_count_value - count_value) / speed)
 
+        return show_stat_function(count_value, max_count_value, width, prepend, speed, tet, eta)
+    
+    @staticmethod        
+    def show_stat(count_value, max_count_value, width, prepend, speed, tet, eta):
+        """
+            re implement this function in a subclass
             
-            s1 = "\r{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
+            count_value - current value of progress
             
-            l = len(s1) + len(s3)
-            l2 = width - l - 1
+            max_count_value - maximum value the progress can take
             
-            a = int(l2 * count_value / max_count_value)
-            b = l2 - a
-            s2 = "="*a + ">" + " "*b
-            print(s1+s2+s3, end='', flush=True)
-            return count_value >= max_count_value
+            width - number of characters available for the display
+            
+            prepend - some extra string to be put for example in front of the
+            progress display
+            
+            speed - estimated speed in counts per second (use for example humanize_speed
+            to get readable information in string format)
+            
+            tet - total elapsed time in seconds (use for example humanize_time
+            to get readable information in string format)
+            
+            eta - estimated time of arrival in seconds (use for example humanize_time
+            to get readable information in string format)
+        """
+        raise NotImplementedError
         
     def stop(self):
-        print()
-        super().stop()
+        """
+            trigger clean up by hand, needs to be done when not using
+            context management via 'with' statement
+        """
+        self.__exit__((None, None, None))
         
-    def reset(self):
+    def _reset_all(self):
+        """
+            reset all progress information
+        """
         super().stop()
-        self.count.value=0
-        while not self.q.empty():
-            self.q.get()
+        for i in range(self.len):
+            self.count[i].value=0
+            while not self.q[i].empty():
+                self.q[i].get()
         super().start()
-        
-class StatusBarMulti(StatusBar):
-    def __init__(self, 
-                  count, 
-                  max_count, 
-                  interval=1, 
-                  speed_calc_cycles=10, 
-                  width='auto',
-                  verbose=0,
-                  sigint='stop', 
-                  sigterm='stop',
-                  name='statusbarmulti',
-                  prepend=None):
-        
-        self.num_sb = len(count) 
-        assert self.num_sb == len(max_count)
-        for c in count:
-            assert isinstance(c, mp.sharedctypes.Synchronized)
-        for m in max_count:
-            assert isinstance(m, mp.sharedctypes.Synchronized)
-        
-        self.start_time = mp.Value('d', time.time())
-        self.speed_calc_cycles = speed_calc_cycles
-        
-        self.q = []
-        for i in range(self.num_sb):
-            self.q.append(mp.Queue()) # queue to save the last speed_calc_cycles
-                                      # (time, count) information to calculate speed
-        self.max_count = max_count  # multiprocessing value type
-        self.count = count          # multiprocessing value type
-        self.interval = interval
-        self.verbose = verbose
-        self.name = name
-        if prepend is None:
-            self.prepend = [''] * self.num_sb
-        else:
-            assert self.num_sb == len(prepend)
-            self.prepend = prepend
-        self._set_width(width)
-        
-        # setup loop class
-        Loop.__init__(self,
-                      func=StatusBarMulti.show_stat_multi, 
-                      args=(self.count, 
-                            self.start_time, 
-                            self.max_count, 
-                            self.width, 
-                            self.speed_calc_cycles, 
-                            self.q,
-                            self.prepend), 
-                      interval=interval, 
-                      verbose=verbose, 
-                      sigint=sigint, 
-                      sigterm=sigterm, 
-                      name=name,
-                      auto_kill_on_last_resort=True)
-        
-    @staticmethod
-    def show_stat_multi(count, start_time, max_count, width, speed_calc_cycles, q, prepend):
-        n = len(count)
-        for i in range(n):
-            StatusBar.show_stat(count[i], start_time, max_count[i], width, speed_calc_cycles, q[i], prepend[i])
-            print()
-        print("\033[{}A".format(n), end='')
-        #print("test")
-        
-    def __exit__(self, *exc_args):
-        Loop.__exit__(self, *exc_args)
-        self.show_stat_multi(self.count, 
-                             self.start_time, 
-                             self.max_count, 
-                             self.width, 
-                             self.speed_calc_cycles, 
-                             self.q, 
-                             self.prepend)        
-        print("\n"*self.num_sb)
-        
-    def stop(self):
-        print("\n"*self.num_sb)
-        Loop.stop(self)
-        
-    def _reset(self, i):
+            
+    def _reset_i(self, i):
+        """
+            reset i-th progress information
+        """
+        super().stop()
         self.count[i].value=0
         while not self.q[i].empty():
             self.q[i].get()
-                
-    def reset(self, i):
-        Loop.stop(self)
-        self._reset(i)
-        Loop.start(self)
+        super().start()
         
-    def reset_all(self):
-        Loop.stop(self)
-        for i in range(self.num_sb):
-            self._reset(i)
-        Loop.start(self)
+    def reset(self, i = None):
+        """
+            convenient function to reset progress information
+            
+            i [None, int] - None: reset all, int: reset process indexed by i 
+        """
+        if i is None:
+            self._reset_all()
+        else:
+            self._reset_i(i)
+       
+class StatusBar(Status):
+    """
+    Implements a status bar (progress par) similar to the one known from 'wget'
+    or 'pv'
+    """
+    def __init__(self, 
+                  count, 
+                  max_count,
+                  width='auto',
+                  prepend=None,
+                  speed_calc_cycles=10, 
+                  interval=1, 
+                  verbose=0,
+                  sigint='stop', 
+                  sigterm='stop',
+                  name='statusbar'):
         
+        super().__init__(count=count,
+                         max_count=max_count,
+                         width=width,
+                         prepend=prepend,
+                         speed_calc_cycles=speed_calc_cycles,
+                         interval=interval,
+                         verbose = verbose,
+                         sigint=sigint,
+                         sigterm=sigterm,
+                         name=name)
+            
+    @staticmethod        
+    def show_stat(count_value, max_count_value, width, prepend, speed, tet, eta):
+        if eta is None:
+            s3 = "] ETA --"
+        else:
+            s3 = "] ETA {}".format(humanize_time(eta))
+           
+        s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
+        
+        l = len(s1) + len(s3)
+        l2 = width - l - 1
+        
+        a = int(l2 * count_value / max_count_value)
+        b = l2 - a
+        s2 = "="*a + ">" + " "*b
+        print(s1+s2+s3)
+        
+class StatusCounter(Status):
+    """
+        simple status counter, not using the max_count information
+    """
+    def __init__(self, 
+                  count, 
+                  max_count=None,
+                  prepend=None,
+                  speed_calc_cycles=10, 
+                  interval=1, 
+                  verbose=0,
+                  sigint='stop', 
+                  sigterm='stop',
+                  name='statusbar'):
+        
+        super().__init__(count=count,
+                         max_count=max_count,
+                         width=None,
+                         prepend=prepend,
+                         speed_calc_cycles=speed_calc_cycles,
+                         interval=interval,
+                         verbose = verbose,
+                         sigint=sigint,
+                         sigterm=sigterm,
+                         name=name)
+        
+    @staticmethod        
+    def show_stat(count_value, max_count_value, width, prepend, speed, tet, eta):
+        if max_count_value is not None:
+            max_count_str = "/{}".format(max_count_value)
+        else:
+            max_count_value = count_value + 1 
+            max_count_str = ""
+            
+        s = "{}{} [{}{}] ({})".format(prepend, humanize_time(tet), count_value, max_count_str, humanize_speed(speed))
+        print(s)
+
 
 def setup_SIG_handler_manager():
     """
@@ -1176,7 +1289,9 @@ class JobManager_Client(object):
                   nproc = 0, 
                   nice=19, 
                   no_warings=False, 
-                  verbose=1):
+                  verbose=1,
+                  show_processed_jobs=True,
+                  show_statusbar_for_jobs=True):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -1200,8 +1315,10 @@ class JobManager_Client(object):
         verbose [int] - 0: quiet, 1: status only, 2: debug messages
         """
         
-       
-        self.verbose = verbose
+        self.show_processed_jobs = show_processed_jobs
+        self.show_statusbar_for_jobs = show_statusbar_for_jobs
+        self.verbose = verbos
+        
         self._pid = os.getpid()
         self._identifier = get_identifier(name=self.__class__.__name__, pid=self._pid) 
         if self.verbose > 1:
