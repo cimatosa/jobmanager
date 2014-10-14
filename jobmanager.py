@@ -12,9 +12,10 @@ import time
 import datetime
 import math
 import psutil
-import fcntl
-import termios
-import struct
+#import fcntl
+#import termios
+#import struct
+import subprocess
 import collections
 import numpy as np
 
@@ -501,7 +502,6 @@ class Status(Loop):
     def __init__(self, 
                   count, 
                   max_count=None,
-                  width='auto',
                   prepend=None,
                   speed_calc_cycles=10, 
                   interval=1, 
@@ -514,9 +514,6 @@ class Status(Loop):
         
         max_count [mp.Value] - shared memory holding the final state, (None, list or single value),
         may be changed by external process without having to explicitly tell this class
-        
-        width [int/'auto'] - the number of characters used to show the status bar,
-        use 'auto' to determine width from terminal information -> see _set_width
         
         prepend [string] - string to put in front of the progress output, (None, single string
         or of list of strings)
@@ -583,19 +580,19 @@ class Status(Loop):
         self.verbose = verbose
         self.name = name
         
-        self._set_width(width)            
+        self.add_args = {}
             
         # setup loop class
         super().__init__(func=Status.show_stat_wrapper_multi, 
                          args=(self.count, 
                                self.start_time, 
                                self.max_count, 
-                               self.width, 
                                self.speed_calc_cycles, 
                                self.q,
                                self.prepend,
                                self.__class__.show_stat,
-                               self.len), 
+                               self.len,
+                               self.add_args), 
                          interval=interval, 
                          verbose=verbose, 
                          sigint=sigint, 
@@ -626,6 +623,7 @@ class Status(Loop):
                 hw = struct.unpack('hh', fcntl.ioctl(sys.stdin, termios.TIOCGWINSZ, '1234'))
                 self.width = hw[1]
             except:
+                traceback.print_exc()
                 if self.verbose > 0:
                     print("{}: failed to determine the width of the terminal".format(get_identifier(name=self.name)))
                 self.width = 80
@@ -640,23 +638,23 @@ class Status(Loop):
         Status.show_stat_wrapper_multi(self.count, 
                                  self.start_time, 
                                  self.max_count, 
-                                 self.width, 
                                  self.speed_calc_cycles, 
                                  self.q,
                                  self.prepend,
                                  self.__class__.show_stat,
-                                 self.len)
+                                 self.len, 
+                                 self.add_args)
     @staticmethod
-    def show_stat_wrapper_multi(count, start_time, max_count, width, speed_calc_cycles, q, prepend, show_stat_function, len):
+    def show_stat_wrapper_multi(count, start_time, max_count, speed_calc_cycles, q, prepend, show_stat_function, len, add_args):
         """
             call the static method show_stat_wrapper for each process
         """
         for i in range(len):
-             Status.show_stat_wrapper(count[i], start_time, max_count[i], width, speed_calc_cycles, q[i], prepend[i], show_stat_function)
+             Status.show_stat_wrapper(count[i], start_time, max_count[i], speed_calc_cycles, q[i], prepend[i], show_stat_function, add_args)
         print("\033[{}A".format(len), end='')
         
     @staticmethod        
-    def show_stat_wrapper(count, start_time, max_count, width, speed_calc_cycles, q, prepend, show_stat_function):
+    def show_stat_wrapper(count, start_time, max_count, speed_calc_cycles, q, prepend, show_stat_function, add_args):
         """
             do the pre calculations in order to get TET, speed, ETA
             and call the actual display routine show_stat with these arguments
@@ -685,18 +683,16 @@ class Status(Loop):
         else:
             eta = math.ceil((max_count_value - count_value) / speed)
 
-        return show_stat_function(count_value, max_count_value, width, prepend, speed, tet, eta)
+        return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, **add_args)
     
     @staticmethod        
-    def show_stat(count_value, max_count_value, width, prepend, speed, tet, eta):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, **kwargs):
         """
             re implement this function in a subclass
             
             count_value - current value of progress
             
             max_count_value - maximum value the progress can take
-            
-            width - number of characters available for the display
             
             prepend - some extra string to be put for example in front of the
             progress display
@@ -750,6 +746,20 @@ class Status(Loop):
             self._reset_all()
         else:
             self._reset_i(i)
+            
+def get_terminal_width(default=80, name=None, verbose=0):
+    try:
+        width = subprocess.check_output(["tput", "cols"])
+        width = int(width.decode("utf-8").strip())
+        if verbose > 1:
+            print("determined terminal width to {}".format(width))
+        return width
+    except:
+        if verbose > 0:
+            print("{}: failed to determine the width of the terminal".format(get_identifier(name=name)))
+        if verbose > 1:
+            traceback.print_exc() 
+        return default
        
 class StatusBar(Status):
     """
@@ -767,10 +777,12 @@ class StatusBar(Status):
                   sigint='stop', 
                   sigterm='stop',
                   name='statusbar'):
-        
+        """
+            width [int/'auto'] - the number of characters used to show the status bar,
+            use 'auto' to determine width from terminal information -> see _set_width
+        """
         super().__init__(count=count,
                          max_count=max_count,
-                         width=width,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles,
                          interval=interval,
@@ -778,9 +790,14 @@ class StatusBar(Status):
                          sigint=sigint,
                          sigterm=sigterm,
                          name=name)
+        if width == 'auto':
+            self.add_args['width'] = get_terminal_width(default=80, name=name, verbose=verbose)
+        else:
+            self.add_args['width'] = width
             
     @staticmethod        
-    def show_stat(count_value, max_count_value, width, prepend, speed, tet, eta):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, **kwargs):
+        width = kwargs['width']
         if eta is None:
             s3 = "] ETA --"
         else:
@@ -813,7 +830,6 @@ class StatusCounter(Status):
         
         super().__init__(count=count,
                          max_count=max_count,
-                         width=None,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles,
                          interval=interval,
@@ -823,7 +839,7 @@ class StatusCounter(Status):
                          name=name)
         
     @staticmethod        
-    def show_stat(count_value, max_count_value, width, prepend, speed, tet, eta):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, **kwargs):
         if max_count_value is not None:
             max_count_str = "/{}".format(max_count_value)
         else:
@@ -1240,9 +1256,13 @@ class JobManager_Server(object):
             print("{}: start processing incoming results".format(self._identifier))
         
   
-        with StatusBar(count = self._numresults, max_count = self._numjobs, 
-                       interval=self.msg_interval, speed_calc_cycles=self.speed_calc_cycles,
-                       verbose = self.verbose, sigint='ign', sigterm='ign') as stat:
+        with StatusBar(count = self._numresults,
+                       max_count = self._numjobs, 
+                       interval = self.msg_interval,
+                       speed_calc_cycles=self.speed_calc_cycles,
+                       verbose = self.verbose,
+                       sigint='ign',
+                       sigterm='ign') as stat:
             stat.start() 
         
             while (len(self.args_set) - self.fail_q.qsize()) > 0:
@@ -1317,7 +1337,7 @@ class JobManager_Client(object):
         
         self.show_processed_jobs = show_processed_jobs
         self.show_statusbar_for_jobs = show_statusbar_for_jobs
-        self.verbose = verbos
+        self.verbose = verbose
         
         self._pid = os.getpid()
         self._identifier = get_identifier(name=self.__class__.__name__, pid=self._pid) 

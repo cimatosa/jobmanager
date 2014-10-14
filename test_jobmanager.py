@@ -786,7 +786,7 @@ def test_sb():
                               interval=0.2,
                               speed_calc_cycles=10,
                               width='auto',
-                              verbose=0,
+                              verbose=2,
                               sigint='stop',
                               sigterm='stop',
                               name='sb',
@@ -803,7 +803,7 @@ def test_sb():
                 time.sleep(1)
                 break
                
-            time.sleep(0.02)
+            time.sleep(0.05)
             
 def test_status_counter():
     c = jobmanager.UnsignedIntValue(val=0)
@@ -873,9 +873,9 @@ if __name__ == "__main__":
 #     test_jobmanager_read_old_stat()
 #     test_hashDict()
 #     test_hashedViewOnNumpyArray()
-#     test_sb_multi()
-#     test_sb()
+    test_sb_multi()
+    test_sb()
     test_status_counter()
-#     test_status_counter_multi()
+    test_status_counter_multi()
     pass
     
