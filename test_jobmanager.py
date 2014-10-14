@@ -786,7 +786,11 @@ def test_sb():
                               interval=0.2,
                               speed_calc_cycles=10,
                               width='auto',
+<<<<<<< HEAD
                               verbose=2,
+=======
+                              verbose=0,
+>>>>>>> 6f9bec610f8435b7fe004eded1be9bb1eb58352d
                               sigint='stop',
                               sigterm='stop',
                               name='sb',
@@ -803,7 +807,11 @@ def test_sb():
                 time.sleep(1)
                 break
                
+<<<<<<< HEAD
             time.sleep(0.05)
+=======
+            time.sleep(0.02)
+>>>>>>> 6f9bec610f8435b7fe004eded1be9bb1eb58352d
             
 def test_status_counter():
     c = jobmanager.UnsignedIntValue(val=0)
