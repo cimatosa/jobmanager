@@ -571,7 +571,7 @@ class Progress(Loop):
         for i in range(len):
             Progress.show_stat_wrapper(count[i], start_time, max_count[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args)
             print()
-        print("\033[{}A\033[0m".format(len,), end='', flush=True)
+        print("\033[{}A\033[0m".format(len), end='', flush=True)
         
     @staticmethod        
     def show_stat_wrapper(count, start_time, max_count, speed_calc_cycles, width, q, prepend, show_stat_function, add_args):
