@@ -429,6 +429,12 @@ class JobManager_Server(object):
             pass
         pickle.dump(fail_list, f, protocol=pickle.HIGHEST_PROTOCOL)
         
+#         print('numjobs', self.numjobs)
+#         print('numresults', self.numresults)
+#         print('final_result', self.final_result)
+#         print('args_set', self.args_set)
+#         print('fail_list', fail_list)
+        
 
     def read_old_state(self, fname_dump=None):
         
@@ -710,15 +716,23 @@ class JobManager_Client(object):
         if verbose > 1:
             print("{}: now alive, niceness {}".format(identifier, n))
         
-        time_queue = 0
-        time_calc = 0
+        time_queue = 0.
+        time_calc = 0.
         
+        # supposed to catch SystemExit, which will shout the client down quietly 
         try:
+            
+            # the main loop, exit loop when: 
+            #    a) job_q is empty
+            #    b) SystemExit is caught
+            #    c) any queue operation (get, put) fails for what ever reason
             while True:
+
+                # try to get an item from the job_q                
                 try:
-                    tg_0 = time.clock()
+                    tg_0 = time.time()
                     arg = job_q.get(block = True, timeout = 0.1)
-                    tg_1 = time.clock()
+                    tg_1 = time.time()
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
                     if verbose > 0:
@@ -732,25 +746,35 @@ class JobManager_Client(object):
                     JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
                     break
                 
-                
-                
-                
-                
+                # try to process the retrieved argument
                 try:
-                    tf_0 = time.clock()
+                    tf_0 = time.time()
                     res = func(arg, const_arg)
-                    tf_1 = time.clock()
+                    tf_1 = time.time()
                 # handle SystemExit in outer try ... except
                 except SystemExit as e:
                     raise e
+                # something went wrong while doing the actual calculation
+                # - write traceback to file
+                # - try to inform the server of the failure
                 except:
                     err, val, trb = sys.exc_info()
                     if verbose > 0:
                         print("{}: caught exception '{}'".format(identifier, err.__name__))
                 
+                    # write traceback to file
                     hostname = socket.gethostname()
                     fname = 'traceback_err_{}_{}.trb'.format(err.__name__, getDateForFileName(includePID=True))
-                    
+                        
+                    if verbose > 0:
+                        print("        write exception to file {} ... ".format(fname), end='', flush=True)
+                    with open(fname, 'w') as f:
+                        traceback.print_exception(etype=err, value=val, tb=trb, file=f)
+                    if verbose > 0:
+                        print("done")
+                        print("        continue processing next argument.")
+                        
+                    # try to inform the server of the failure
                     if verbose > 1:
                         print("{}: try to send send failed arg to fail_q ...".format(identifier), end='', flush=True)
                     try:
@@ -769,30 +793,22 @@ class JobManager_Client(object):
                     else:
                         if verbose > 1:
                             print(" done!")
-                        
-                    if verbose > 0:
-                        print("        write exception to file {} ... ".format(fname), end='', flush=True)
-    
-                    with open(fname, 'w') as f:
-                        traceback.print_exception(etype=err, value=val, tb=trb, file=f)
-                                        
-                    if verbose > 0:
-                        print("done")
-                        print("        continue processing next argument.")
-                    
-                try:
-                    tp_0 = time.clock()
-                    result_q.put((arg, res))
-                    tp_1 = time.clock()
-                # handle SystemExit in outer try ... except
-                except SystemExit as e:
-                    raise e
-                # job_q.get failed -> server down?             
-                except:
-                    JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
-                    break
-                
-                
+                            
+                # processing the retrieved arguments succeeded
+                # - try to send the result back to the server                        
+                else:
+                    try:
+                        tp_0 = time.time()
+                        result_q.put((arg, res))
+                        tp_1 = time.time()
+                    # handle SystemExit in outer try ... except
+                    except SystemExit as e:
+                        raise e
+                    # job_q.get failed -> server down?             
+                    except:
+                        JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
+                        break
+                                
                 c += 1
                 
                 time_queue += (tg_1-tg_0 + tp_1-tp_0)

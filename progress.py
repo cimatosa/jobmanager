@@ -389,8 +389,7 @@ class Progress(Loop):
     each process and passed to the display function show_stat.
     
     This functions needs to be implemented in a subclass. It is intended to show
-    the progress of ONE process in one line. So don't mess with the end-of-line.
-    Just leave the normal EOL of the print statement when reimplementing show_stat.
+    the progress of ONE process in one line.
     
     When max_count is given (in general as list of shared memory values, a single
     shared memory value will be mapped to a one element list) the estimates time 
@@ -436,6 +435,7 @@ class Progress(Loop):
                   count, 
                   max_count=None,
                   prepend=None,
+                  width='auto',
                   speed_calc_cycles=10, 
                   interval=1, 
                   verbose=0,
@@ -489,7 +489,10 @@ class Progress(Loop):
         self.start_time = time.time()
         self.speed_calc_cycles = speed_calc_cycles
         
-        
+        if width == 'auto':
+            self.width = get_terminal_width(default=80, name=name, verbose=verbose)
+        else:
+            self.width = width
         
         self.q = []
         self.prepend = []
@@ -520,7 +523,8 @@ class Progress(Loop):
                          args=(self.count, 
                                self.start_time, 
                                self.max_count, 
-                               self.speed_calc_cycles, 
+                               self.speed_calc_cycles,
+                               self.width, 
                                self.q,
                                self.prepend,
                                self.__class__.show_stat,
@@ -551,23 +555,26 @@ class Progress(Loop):
         Progress.show_stat_wrapper_multi(self.count, 
                                  self.start_time, 
                                  self.max_count, 
-                                 self.speed_calc_cycles, 
+                                 self.speed_calc_cycles,
+                                 self.width,
                                  self.q,
                                  self.prepend,
                                  self.__class__.show_stat,
                                  self.len, 
                                  self.add_args)
     @staticmethod
-    def show_stat_wrapper_multi(count, start_time, max_count, speed_calc_cycles, q, prepend, show_stat_function, len, add_args):
+    def show_stat_wrapper_multi(count, start_time, max_count, speed_calc_cycles, width, q, prepend, show_stat_function, len, add_args):
         """
             call the static method show_stat_wrapper for each process
         """
+        print('\033[1;32m', end='', flush=True)
         for i in range(len):
-             Progress.show_stat_wrapper(count[i], start_time, max_count[i], speed_calc_cycles, q[i], prepend[i], show_stat_function, add_args)
-        print("\033[{}A".format(len), end='')
+            Progress.show_stat_wrapper(count[i], start_time, max_count[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args)
+            print()
+        print("\033[{}A\033[0m".format(len,), end='', flush=True)
         
     @staticmethod        
-    def show_stat_wrapper(count, start_time, max_count, speed_calc_cycles, q, prepend, show_stat_function, add_args):
+    def show_stat_wrapper(count, start_time, max_count, speed_calc_cycles, width, q, prepend, show_stat_function, add_args):
         """
             do the pre calculations in order to get TET, speed, ETA
             and call the actual display routine show_stat with these arguments
@@ -596,10 +603,10 @@ class Progress(Loop):
         else:
             eta = math.ceil((max_count_value - count_value) / speed)
 
-        return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, **add_args)
+        return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, width, **add_args)
     
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, **kwargs):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
         """
             re implement this function in a subclass
             
@@ -686,19 +693,16 @@ class ProgressBar(Progress):
                          max_count=max_count,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles,
+                         width=width,
                          interval=interval,
                          verbose = verbose,
                          sigint=sigint,
                          sigterm=sigterm,
                          name=name)
-        if width == 'auto':
-            self.add_args['width'] = get_terminal_width(default=80, name=name, verbose=verbose)
-        else:
-            self.add_args['width'] = width
+
             
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, **kwargs):
-        width = kwargs['width']
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
         if eta is None:
             s3 = "] ETA --"
         else:
@@ -712,7 +716,7 @@ class ProgressBar(Progress):
         a = int(l2 * count_value / max_count_value)
         b = l2 - a
         s2 = "="*a + ">" + " "*b
-        print(s1+s2+s3)
+        print(s1+s2+s3, end='', flush=True)
         
 class ProgressCounter(Progress):
     """
@@ -722,7 +726,8 @@ class ProgressCounter(Progress):
                   count, 
                   max_count=None,
                   prepend=None,
-                  speed_calc_cycles=10, 
+                  speed_calc_cycles=10,
+                  width='auto', 
                   interval=1, 
                   verbose=0,
                   sigint='stop', 
@@ -733,6 +738,7 @@ class ProgressCounter(Progress):
                          max_count=max_count,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles,
+                         width=width,
                          interval=interval,
                          verbose = verbose,
                          sigint=sigint,
@@ -740,7 +746,7 @@ class ProgressCounter(Progress):
                          name=name)
         
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, **kwargs):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
         if max_count_value is not None:
             max_count_str = "/{}".format(max_count_value)
         else:
@@ -748,4 +754,4 @@ class ProgressCounter(Progress):
             max_count_str = ""
             
         s = "{}{} [{}{}] ({})".format(prepend, humanize_time(tet), count_value, max_count_str, humanize_speed(speed))
-        print(s)
+        print(s, end='', flush=True)

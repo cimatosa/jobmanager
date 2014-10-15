@@ -388,6 +388,9 @@ def test_check_fail():
     
     set_ref = set(range(1,n))
     
+    print(data['args_set'])
+    print(data['fail_set'])
+    
     assert data['args_set'] == data['fail_set']
     
     final_result_args_set = {a[0] for a in data['final_result']}
@@ -508,10 +511,6 @@ def test_hashedViewOnNumpyArray():
     # just some redundant back conversion an checking  
     bh2 = bh2.reshape((4,))
     assert bh2 in s
-    
-    
-    
-
 
 
 if __name__ == "__main__":
@@ -519,7 +518,7 @@ if __name__ == "__main__":
     test_Signal_to_SIG_IGN,
     test_Signal_to_sys_exit,
     test_Signal_to_terminate_process_list,
-        
+         
     test_jobmanager_basic,
     test_jobmanager_server_signals,
     test_shutdown_server_while_client_running,
