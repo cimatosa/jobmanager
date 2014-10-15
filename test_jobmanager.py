@@ -115,7 +115,7 @@ def start_server(n, read_old_state=False):
     args = range(1,n)
     authkey = 'testing'
     with jobmanager.JobManager_Server(authkey=authkey,
-                                      verbose=2,
+                                      verbose=1,
                                       msg_interval=1,
                                       fname_dump='jobmanager.dump') as jm_server:
         if not read_old_state:
@@ -129,7 +129,7 @@ def start_client():
     jm_client = jobmanager.JobManager_Client(server='localhost', 
                                              authkey='testing', 
                                              port=42524, 
-                                             nproc=0, verbose=2)
+                                             nproc=0, verbose=1)
     jm_client.start()    
 
 def test_jobmanager_basic():
@@ -516,18 +516,18 @@ def test_hashedViewOnNumpyArray():
 
 if __name__ == "__main__":
     func = [
-#     test_Signal_to_SIG_IGN,
-#     test_Signal_to_sys_exit,
-#     test_Signal_to_terminate_process_list,
-#        
-#     test_jobmanager_basic,
-#     test_jobmanager_server_signals,
+    test_Signal_to_SIG_IGN,
+    test_Signal_to_sys_exit,
+    test_Signal_to_terminate_process_list,
+        
+    test_jobmanager_basic,
+    test_jobmanager_server_signals,
     test_shutdown_server_while_client_running,
-#     test_shutdown_client,
-#     test_check_fail,
-#     test_jobmanager_read_old_stat,
-#     test_hashDict,
-#     test_hashedViewOnNumpyArray
+    test_shutdown_client,
+    test_check_fail,
+    test_jobmanager_read_old_stat,
+    test_hashDict,
+    test_hashedViewOnNumpyArray
     ]
     for f in func:
         print()

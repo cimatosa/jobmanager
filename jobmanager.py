@@ -11,6 +11,10 @@ import sys
 import time
 import numpy as np
 import progress
+import socket
+
+
+myQueue = mp.Queue
 
 
 """jobmanager module
@@ -61,7 +65,7 @@ def getDateForFileName(includePID = False):
 
 def copyQueueToList(q):
     res_list = []
-    res_q = mp.Queue()
+    res_q = myQueue()
     
     try:
         while True:
@@ -261,9 +265,9 @@ class JobManager_Server(object):
         
         # NOTE: it only works using multiprocessing.Queue()
         # the Queue class from the module queue does NOT work  
-        self.job_q = mp.Queue()    # queue holding args to process
-        self.result_q = mp.Queue() # queue holding returned results
-        self.fail_q = mp.Queue()   # queue holding args where processing failed
+        self.job_q = myQueue()    # queue holding args to process
+        self.result_q = myQueue() # queue holding returned results
+        self.fail_q = myQueue()   # queue holding args where processing failed
         self.manager = None
         
         self.__start_SyncManager()
@@ -396,8 +400,8 @@ class JobManager_Server(object):
         fail_list = pickle.load(f)
         data['fail_set'] = {fail_item[0] for fail_item in fail_list}
         
-        data['fail_q'] = mp.Queue()
-        data['job_q'] = mp.Queue()
+        data['fail_q'] = myQueue()
+        data['job_q'] = myQueue()
         
         for fail_item in fail_list:
             data['fail_q'].put_nowait(fail_item)
@@ -674,6 +678,13 @@ class JobManager_Client(object):
         """
         time.sleep(0.1)
         return os.getpid()
+    
+    @staticmethod
+    def _handle_unexpected_queue_error(verbose, identifier):
+        if verbose > 0:
+                print("{}: unexpected Error, I guess the server went down, can't do anything, terminate now!".format(identifier))
+        if verbose > 1:
+            traceback.print_exc()
 
 
     @staticmethod
@@ -702,77 +713,115 @@ class JobManager_Client(object):
         time_queue = 0
         time_calc = 0
         
-        while True:
-            try:
-                t0 = time.clock()
-                arg = job_q.get(block = True, timeout = 0.1)
-                t1 = time.clock()
-            # regular case, just stop working when empty job_q was found
-            except queue.Empty:
-                if verbose > 0:
-                    print("{}: finds empty job queue, processed {} jobs".format(identifier, c))
-                break
-            except:
+        try:
+            while True:
+                try:
+                    tg_0 = time.clock()
+                    arg = job_q.get(block = True, timeout = 0.1)
+                    tg_1 = time.clock()
+                # regular case, just stop working when empty job_q was found
+                except queue.Empty:
+                    if verbose > 0:
+                        print("{}: finds empty job queue, processed {} jobs".format(identifier, c))
+                    break
+                # handle SystemExit in outer try ... except
+                except SystemExit as e:
+                    raise e
+                # job_q.get failed -> server down?             
+                except:
+                    JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
+                    break
                 
                 
                 
-                res = func(arg, const_arg)
-                t2 = time.clock()
-                result_q.put((arg, res))
-                t3 = time.clock()
+                
+                
+                try:
+                    tf_0 = time.clock()
+                    res = func(arg, const_arg)
+                    tf_1 = time.clock()
+                # handle SystemExit in outer try ... except
+                except SystemExit as e:
+                    raise e
+                except:
+                    err, val, trb = sys.exc_info()
+                    if verbose > 0:
+                        print("{}: caught exception '{}'".format(identifier, err.__name__))
+                
+                    hostname = socket.gethostname()
+                    fname = 'traceback_err_{}_{}.trb'.format(err.__name__, getDateForFileName(includePID=True))
+                    
+                    if verbose > 1:
+                        print("{}: try to send send failed arg to fail_q ...".format(identifier), end='', flush=True)
+                    try:
+                        fail_q.put((arg, err.__name__, hostname), timeout=10)
+                    # handle SystemExit in outer try ... except                        
+                    except SystemExit as e:
+                        if verbose > 1:
+                            print(" FAILED!")
+                        raise e
+                    # fail_q.put failed -> server down?             
+                    except:
+                        if verbose > 1:
+                            print(" FAILED!")
+                        JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
+                        break
+                    else:
+                        if verbose > 1:
+                            print(" done!")
+                        
+                    if verbose > 0:
+                        print("        write exception to file {} ... ".format(fname), end='', flush=True)
+    
+                    with open(fname, 'w') as f:
+                        traceback.print_exception(etype=err, value=val, tb=trb, file=f)
+                                        
+                    if verbose > 0:
+                        print("done")
+                        print("        continue processing next argument.")
+                    
+                try:
+                    tp_0 = time.clock()
+                    result_q.put((arg, res))
+                    tp_1 = time.clock()
+                # handle SystemExit in outer try ... except
+                except SystemExit as e:
+                    raise e
+                # job_q.get failed -> server down?             
+                except:
+                    JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
+                    break
+                
+                
                 c += 1
                 
-                time_queue += (t1-t0 + t3-t2)
-                time_calc += (t2-t1)
-                
-            
-            
-            # in this context usually raised if the communication to the server fails
-            except EOFError:
-                if verbose > 0:
-                    print("{}: EOFError, I guess the server went down, can't do anything, terminate now!".format(identifier))
-                break
-            
-            # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
-            # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
-            # default signal handlers
-            except SystemExit:
-                if verbose > 0:
-                    print("{}: SystemExit, quit processing, reinsert current argument".format(identifier))
-                try:
-                    if verbose > 1:
-                        print("{}: put argument back to job_q ... ".format(identifier), end='', flush=True)
-                    job_q.put(arg, timeout=10)
-                except queue.Full:
-                    if verbose > 0:
-                        print("{}: failed to reinsert argument, Server down? I quit!".format(identifier))
-                else:
-                    if verbose > 1:
-                        print("done!")
-                break
-            
-            # some unexpected Exception
-            # write argument, exception name and hostname to fail_q, save traceback
-            # continue workung 
-            except:
-                err, val, trb = sys.exc_info()
-                if verbose > 0:
-                    print("{}: caught exception '{}', report failure of current argument to server ... ".format(identifier, err.__name__), end='', flush=True)
-                
-                hostname = socket.gethostname()
-                fname = 'traceback_err_{}_{}.trb'.format(err.__name__, getDateForFileName(includePID=True))
-                fail_q.put((arg, err.__name__, hostname), timeout=10)
-                
-                if verbose > 0:
-                    print("done")
-                    print("        write exception to file {} ... ".format(fname), end='', flush=True)
+                time_queue += (tg_1-tg_0 + tp_1-tp_0)
+                time_calc += (tf_1-tf_0)
+             
+        # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
+        # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
+        # default signal handlers
+        except SystemExit:
+            if verbose > 0:
+                print("{}: SystemExit, quit processing, reinsert current argument".format(identifier))
 
-                with open(fname, 'w') as f:
-                    traceback.print_exception(etype=err, value=val, tb=trb, file=f)
-                                    
-                if verbose > 0:
-                    print("done")
-                    print("        continue processing next argument.")
+            if verbose > 1:
+                print("{}: try to put arg back to job_q ...".format(identifier), end='', flush=True)
+            try:
+                job_q.put(arg, timeout=10)
+            # handle SystemExit in outer try ... except                        
+            except SystemExit as e:
+                if verbose > 1:
+                    print(" FAILED!")
+                raise e
+            # fail_q.put failed -> server down?             
+            except:
+                if verbose > 1:
+                    print(" FAILED!")
+                JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
+            else:
+                if verbose > 1:
+                    print(" done!")
                 
         if verbose > 0:
             try:
