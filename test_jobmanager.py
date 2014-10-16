@@ -110,12 +110,12 @@ def test_Signal_to_terminate_process_list():
     
 
  
-def start_server(n, read_old_state=False):
+def start_server(n, read_old_state=False, verbose=1):
     print("START SERVER")
     args = range(1,n)
     authkey = 'testing'
     with jobmanager.JobManager_Server(authkey=authkey,
-                                      verbose=1,
+                                      verbose=verbose,
                                       msg_interval=1,
                                       fname_dump='jobmanager.dump') as jm_server:
         if not read_old_state:
@@ -124,12 +124,12 @@ def start_server(n, read_old_state=False):
             jm_server.read_old_state()
         jm_server.start()
     
-def start_client():
+def start_client(verbose=1):
     print("START CLIENT")
     jm_client = jobmanager.JobManager_Client(server='localhost', 
                                              authkey='testing', 
                                              port=42524, 
-                                             nproc=0, verbose=1)
+                                             nproc=0, verbose=verbose)
     jm_client.start()    
 
 def test_jobmanager_basic():
@@ -514,6 +514,29 @@ def test_hashedViewOnNumpyArray():
     bh2 = bh2.reshape((4,))
     assert bh2 in s
 
+def test_client_status():
+    n = 100
+    p_server = mp.Process(target=start_server, args=(n,False,0))
+    p_server.start()
+    
+    time.sleep(1)
+    
+    class Client_With_Status(jobmanager.JobManager_Client):
+        def func(self, args, const_args, c, m):
+            m.value = 100
+            for i in range(100):
+                c.value = i+1
+                time.sleep(0.05)
+
+            return os.getpid()
+
+    client = Client_With_Status(server='localhost', 
+                            authkey='testing',
+                            port=42524, 
+                            nproc=0, 
+                            verbose=1)
+    client.start()
+
 
 if __name__ == "__main__":
     func = [
@@ -521,14 +544,15 @@ if __name__ == "__main__":
 #     test_Signal_to_sys_exit,
 #     test_Signal_to_terminate_process_list,
          
-    test_jobmanager_basic,
-    test_jobmanager_server_signals,
-    test_shutdown_server_while_client_running,
-    test_shutdown_client,
+#     test_jobmanager_basic,
+#     test_jobmanager_server_signals,
+#     test_shutdown_server_while_client_running,
+#     test_shutdown_client,
 #     test_check_fail,
-    test_jobmanager_read_old_stat,
+#     test_jobmanager_read_old_stat,
 #     test_hashDict,
-#     test_hashedViewOnNumpyArray
+#     test_hashedViewOnNumpyArray,
+    test_client_status
     ]
     for f in func:
         print()

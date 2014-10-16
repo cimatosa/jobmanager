@@ -50,32 +50,29 @@ def FloatValue(val=0.):
     return mp.Value('f', val, lock=True)
 
 def check_process_termination(proc, identifier, timeout, verbose=0, auto_kill_on_last_resort = False):
-    if verbose > 1:
-        print("{}: give running loop at most {}s to finish ... ".format(identifier, timeout), end='', flush=True)
     
     proc.join(timeout)
     
     if not proc.is_alive():
         if verbose > 1:
-            print("done")
+            print("{}: loop termination within given timeout of {}s SUCCEEDED!".format(identifier, timeout))
         return True
         
     # process still runs -> send SIGTERM -> see what happens
-    if verbose > 1:    
-        print("failed!")
     if verbose > 0:
-        print("{}: found running loop still alive -> terminate via SIGTERM ...".format(identifier), end='', flush=True)
+        print("{}: loop termination within given timeout of {}s FAILED!".format(identifier, timeout))
  
     proc.terminate()
-    
-    proc.join(3*timeout)
+
+    new_timeout = 3*timeout     
+    proc.join(new_timeout)
     if not proc.is_alive():
         if verbose > 0:
-            print("done!")
+            print("{}: loop termination via SIGTERM with timeout of {}s SUCCEEDED!".format(identifier, new_timeout))
         return True
         
     if verbose > 0:
-        print("failed!")
+        print("{}: loop termination via SIGTERM with timeout of {}s FAILED!".format(identifier, new_timeout))
 
     answer = 'y' if auto_kill_on_last_resort else '_'
     while True:
@@ -598,8 +595,10 @@ class Progress(Loop):
         
         if q.qsize() > speed_calc_cycles:
             old_count_value, old_time = q.get()
+#             print("from q", old_count_value, old_time)
         else:
             old_count_value, old_time = 0, start_time
+#             print("from start", old_count_value, old_time)
 
         tet = (current_time - start_time)
         speed = (count_value - old_count_value) / (current_time - old_time)
@@ -665,6 +664,8 @@ class Progress(Loop):
         while not self.q[i].empty():
             self.q[i].get()
         self.start_time[i] = time.time()
+        print("{} new start time {}".format(i, self.start_time[i]))
+        
         
     def reset(self, i = None):
         """
@@ -861,18 +862,7 @@ class ProgressBarCounter(Progress):
             print(s_c)
             
 class ProgressSilentDummy(Progress):
-    def __init__(self, 
-                 count, 
-                 max_count=None,
-                 prepend=None,
-                 speed_calc_cycles_bar=10,
-                 speed_calc_cycles_counter=5,
-                 width='auto', 
-                 interval=1, 
-                 verbose=0,
-                 sigint='stop', 
-                 sigterm='stop',
-                 name='progress_bar_counter'):
+    def __init__(self, **kwargs):
         pass
 
     def __exit__(self, *exc_args):

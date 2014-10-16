@@ -11,7 +11,8 @@ import sys
 import time
 import numpy as np
 import progress
-
+import inspect
+import functools
 
 myQueue = mp.Queue
 
@@ -506,15 +507,20 @@ class JobManager_Server(object):
         if self.verbose > 1:
             print("{}: start processing incoming results".format(self._identifier))
         
+        if self.verbose > 0:
+            Progress = progress.ProgressBar
+        else:
+            Progress = progress.ProgressSilentDummy
   
-        with progress.ProgressBar(count = self._numresults,
+        with Progress(count = self._numresults,
                        max_count = self._numjobs, 
                        interval = self.msg_interval,
                        speed_calc_cycles=self.speed_calc_cycles,
                        verbose = self.verbose,
                        sigint='ign',
                        sigterm='ign') as stat:
-            stat.start() 
+
+            stat.start()
         
             while (len(self.args_set) - self.fail_q.qsize()) > 0:
                 try:
@@ -667,19 +673,24 @@ class JobManager_Client(object):
         return job_q, result_q, fail_q, const_arg
         
     @staticmethod
-    def func(arg, const_arg, c, m):
+    def func(arg, const_arg):
         """
         function to be called by the worker processes
         
         arg - provided by the job_q of the JobManager_Server
         
-        const_arg - tuple of constant argruments also provided by the JobManager_Server
+        const_arg - tuple of constant arguments also provided by the JobManager_Server
+        
+        to give status information to the Client class, use the variables
+        (c, m) as additional parameters. c and m will be 
+        multiprocessing.sharedctypes.Synchronized objects with an underlying
+        unsigned int. so set c.value to the current status of the operation
+        ans m.value to the final status. So at the end of the operation c.value should
+        be m.value.
         
         NOTE: This is just some dummy implementation to be used for test reasons only!
         Subclass and overwrite this function to implement your own function.  
         """
-        c.value = 0
-        m.value = -1
         time.sleep(0.1)
         return os.getpid()
     
@@ -719,6 +730,19 @@ class JobManager_Client(object):
         
         tg_1 = tg_0 = tp_1 = tp_0 = tf_1 = tf_0 = 0
         
+        args_of_func = inspect.getfullargspec(func).args
+        
+        # check for func definition without status members count, max_count
+        if len(args_of_func) == 2:
+            if verbose > 1:
+                print("{}: found function without status information".format(identifier))
+            m.value = -1  # setting max_count to -1 will hide the progress bar 
+            _func = lambda arg, const_arg, c, m : func(arg, const_arg)
+        else:
+            _func = func
+            
+        
+        
         # supposed to catch SystemExit, which will shout the client down quietly 
         try:
             
@@ -749,7 +773,7 @@ class JobManager_Client(object):
                 # try to process the retrieved argument
                 try:
                     tf_0 = time.time()
-                    res = func(arg, const_arg, c, m)
+                    res = _func(arg, const_arg, c, m)
                     tf_1 = time.time()
                 # handle SystemExit in outer try ... except
                 except SystemExit as e:
@@ -870,17 +894,17 @@ class JobManager_Client(object):
         
         m = []
         for i in range(self.nproc):
-            m.append(progress.UnsignedIntValue())
+            m.append(progress.UnsignedIntValue(-1))
             
-        if self.show_statusbar_for_jobs:
+        if (self.show_statusbar_for_jobs) and (self.verbose > 0):
             Progress = progress.ProgressBarCounter
         else:
             Progress = progress.ProgressSilentDummy  
             
-        with Progress(count=c, max_count=m) as pbc :
+        with Progress(count=c, max_count=m, interval=0.3, verbose=0) as pbc :
             pbc.start()
             for i in range(self.nproc):
-                reset_pbc = lambda : pbc._reset_i(i)
+                reset_pbc = lambda : pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
                                                                 self.nice, 
                                                                 self.verbose, 
