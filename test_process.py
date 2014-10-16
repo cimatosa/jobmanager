@@ -326,20 +326,23 @@ def test_status_counter_multi():
             
 def test_intermediate_prints_while_running_progess_bar():
     c = progress.UnsignedIntValue(val=0)
-    
-    with progress.ProgressCounter(count=c, verbose=2, interval=0.3) as sc:
-        sc.start()
-        while True:
-            with c.get_lock():
-                c.value += 1
+    try:
+        with progress.ProgressCounter(count=c, verbose=2, interval=0.3) as sc:
+            sc.start()
+            while True:
+                with c.get_lock():
+                    c.value += 1
+                    
+                if c.value == 100:
+                    print("intermediate message")
+                    
+                if c.value == 400:
+                    break
                 
-            if c.value == 100:
-                print("intermediate message")
-                
-            if c.value == 400:
-                break
-            
-            time.sleep(0.01)    
+                time.sleep(0.01)    
+    except:
+        print("IN EXCEPTION TEST")
+        traceback.print_exc()
             
             
 def test_intermediate_prints_while_running_progess_bar_multi():
@@ -364,6 +367,32 @@ def test_intermediate_prints_while_running_progess_bar_multi():
             
             time.sleep(0.01)
     
+def test_progress_bar_counter():
+    c1 = progress.UnsignedIntValue(val=0)
+    c2 = progress.UnsignedIntValue(val=0)
+    
+    maxc = 30
+    m1 = progress.UnsignedIntValue(val=maxc)
+    m2 = progress.UnsignedIntValue(val=maxc)
+    
+    c = [c1, c2]
+    m = [m1, m2]
+    
+    t0 = time.time()
+    
+    with progress.ProgressBarCounter(count=c, max_count=m, verbose=1, interval=0.2) as sc:
+        sc.start()
+        while True:
+            i = np.random.randint(0,2)
+            with c[i].get_lock():
+                c[i].value += 1
+                if c[i].value > maxc:
+                    sc.reset(i)
+                           
+            time.sleep(0.0432)
+            if (time.time() - t0) > 15:
+                break
+                
             
 if __name__ == "__main__":
     func = [    
@@ -379,8 +408,10 @@ if __name__ == "__main__":
 #     test_status_counter,
 #     test_status_counter_multi,
 #     test_intermediate_prints_while_running_progess_bar,
-    test_intermediate_prints_while_running_progess_bar_multi
+#     test_intermediate_prints_while_running_progess_bar_multi,
+    test_progress_bar_counter
     ]
+    
     for f in func:
         print()
         print('#'*80)
@@ -388,6 +419,4 @@ if __name__ == "__main__":
         print()
         f()
         time.sleep(1)
-        
-    pass
     

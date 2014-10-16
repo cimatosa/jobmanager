@@ -6,7 +6,9 @@ import sys
 import os
 import math
 import subprocess
-from subprocess import CalledProcessError
+import queue
+
+myQueue = queue.Queue
 
 # a mapping from the numeric values of the signals to their names used in the
 # standard python module signals
@@ -43,6 +45,9 @@ def humanize_speed(c_per_sec):
 
 def UnsignedIntValue(val=0):
     return mp.Value('I', val, lock=True)
+
+def FloatValue(val=0.):
+    return mp.Value('f', val, lock=True)
 
 def check_process_termination(proc, identifier, timeout, verbose=0, auto_kill_on_last_resort = False):
     if verbose > 1:
@@ -120,7 +125,7 @@ def get_terminal_width(default=80, name=None, verbose=0):
         if verbose > 0:
             print("{}: failed to determine the width of the terminal".format(identifier))
         if verbose > 1:
-            if isinstance(e, CalledProcessError):
+            if isinstance(e, subprocess.CalledProcessError):
                 print("calling 'tput cols' returned: {}".format(e.output.decode('utf-8')))
             traceback.print_exc() 
         return default
@@ -293,6 +298,7 @@ class Loop(object):
                 quit_loop = func(*args)
             except:
                 err, val, trb = sys.exc_info()
+                print('\033[0m', end='', flush=True)
                 if verbose > 0:
                     print("{}: error {} occurred in Loop class calling 'func(*args)'".format(identifier, err))
                 if verbose > 0:
@@ -486,7 +492,7 @@ class Progress(Loop):
             max_count = [None] * self.len
             
         
-        self.start_time = time.time()
+        self.start_time = [time.time()]*self.len
         self.speed_calc_cycles = speed_calc_cycles
         
         if width == 'auto':
@@ -497,7 +503,7 @@ class Progress(Loop):
         self.q = []
         self.prepend = []
         for i in range(self.len):
-            self.q.append(mp.Queue())  # queue to save the last speed_calc_cycles
+            self.q.append(myQueue())  # queue to save the last speed_calc_cycles
                                        # (time, count) information to calculate speed
             if prepend is None:
                 # no prepend given
@@ -536,7 +542,7 @@ class Progress(Loop):
                          sigterm=sigterm, 
                          name=name,
                          auto_kill_on_last_resort=True)
-
+        
     def __exit__(self, *exc_args):
         """
             will terminate loop process
@@ -569,12 +575,12 @@ class Progress(Loop):
         """
         print('\033[1;32m', end='', flush=True)
         for i in range(len):
-            Progress.show_stat_wrapper(count[i], start_time, max_count[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args)
+            Progress.show_stat_wrapper(count[i], start_time[i], max_count[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args, i)
             print()
         print("\033[{}A\033[0m".format(len), end='', flush=True)
         
-    @staticmethod        
-    def show_stat_wrapper(count, start_time, max_count, speed_calc_cycles, width, q, prepend, show_stat_function, add_args):
+    @staticmethod
+    def _calc(count, start_time, max_count, speed_calc_cycles, q):
         """
             do the pre calculations in order to get TET, speed, ETA
             and call the actual display routine show_stat with these arguments
@@ -603,7 +609,12 @@ class Progress(Loop):
         else:
             eta = math.ceil((max_count_value - count_value) / speed)
 
-        return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, width, **add_args)
+        return count_value, max_count_value, speed, tet, eta
+        
+    @staticmethod        
+    def show_stat_wrapper(count, start_time, max_count, speed_calc_cycles, width, q, prepend, show_stat_function, add_args, i):
+        count_value, max_count_value, speed, tet, eta, = Progress._calc(count, start_time, max_count, speed_calc_cycles, q) 
+        return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, width, i, **add_args)
     
     @staticmethod        
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
@@ -641,22 +652,20 @@ class Progress(Loop):
         """
             reset all progress information
         """
-        super().stop()
         for i in range(self.len):
             self.count[i].value=0
             while not self.q[i].empty():
                 self.q[i].get()
-        super().start()
+        self.start_time = [time.time()]*self.len
             
     def _reset_i(self, i):
         """
             reset i-th progress information
         """
-        super().stop()
         self.count[i].value=0
         while not self.q[i].empty():
             self.q[i].get()
-        super().start()
+        self.start_time[i] = time.time()
         
     def reset(self, i = None):
         """
@@ -664,10 +673,12 @@ class Progress(Loop):
             
             i [None, int] - None: reset all, int: reset process indexed by i 
         """
+        super().stop()
         if i is None:
             self._reset_all()
         else:
             self._reset_i(i)
+        super().start()
                    
 class ProgressBar(Progress):
     """
@@ -702,7 +713,7 @@ class ProgressBar(Progress):
 
             
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
         if eta is None:
             s3 = "] ETA --"
         else:
@@ -723,16 +734,16 @@ class ProgressCounter(Progress):
         simple Progress counter, not using the max_count information
     """
     def __init__(self, 
-                  count, 
-                  max_count=None,
-                  prepend=None,
-                  speed_calc_cycles=10,
-                  width='auto', 
-                  interval=1, 
-                  verbose=0,
-                  sigint='stop', 
-                  sigterm='stop',
-                  name='progress_counter'):
+                 count, 
+                 max_count=None,
+                 prepend=None,
+                 speed_calc_cycles=10,
+                 width='auto', 
+                 interval=1, 
+                 verbose=0,
+                 sigint='stop', 
+                 sigterm='stop',
+                 name='progress_counter'):
         
         super().__init__(count=count,
                          max_count=max_count,
@@ -746,7 +757,7 @@ class ProgressCounter(Progress):
                          name=name)
         
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
         if max_count_value is not None:
             max_count_str = "/{}".format(max_count_value)
         else:
@@ -755,3 +766,90 @@ class ProgressCounter(Progress):
             
         s = "{}{} [{}{}] ({})".format(prepend, humanize_time(tet), count_value, max_count_str, humanize_speed(speed))
         print(s, end='', flush=True)
+        
+class ProgressBarCounter(Progress):
+    def __init__(self, 
+                 count, 
+                 max_count=None,
+                 prepend=None,
+                 speed_calc_cycles_bar=10,
+                 speed_calc_cycles_counter=5,
+                 width='auto', 
+                 interval=1, 
+                 verbose=0,
+                 sigint='stop', 
+                 sigterm='stop',
+                 name='progress_bar_counter'):
+        
+        super().__init__(count=count,
+                         max_count=max_count,
+                         prepend=prepend,
+                         speed_calc_cycles=speed_calc_cycles_bar,
+                         width=width,
+                         interval=interval,
+                         verbose = verbose,
+                         sigint=sigint,
+                         sigterm=sigterm,
+                         name=name)
+        
+        self.counter_count = []
+        self.counter_q = []
+        self.counter_speed = []
+        for i in range(self.len):
+            self.counter_count.append(UnsignedIntValue(val=0))
+            self.counter_q.append(myQueue())
+            self.counter_speed.append(FloatValue())
+        
+        self.counter_speed_calc_cycles = speed_calc_cycles_counter
+        self.init_time = time.time()
+            
+        self.add_args['counter_count'] = self.counter_count
+        self.add_args['counter_speed'] = self.counter_speed
+
+        
+    def _reset_i(self, i):
+        c = self.counter_count[i] 
+        with c.get_lock():
+            c.value += 1
+            
+        count_value = c.value
+        q = self.counter_q[i]
+         
+        current_time = time.time()
+        q.put((count_value, current_time))
+        
+        if q.qsize() > self.counter_speed_calc_cycles:
+            old_count_value, old_time = q.get()
+        else:
+            old_count_value, old_time = 0, self.init_time
+
+        speed = (count_value - old_count_value) / (current_time - old_time)
+        
+        self.counter_speed[i].value = speed
+                    
+        super()._reset_i(i)
+        
+    @staticmethod
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
+        counter_count = kwargs['counter_count'][i]
+        counter_speed = kwargs['counter_speed'][i]
+        
+        s_c = "{}{} [{}] -- ".format(prepend, 
+                                     counter_count.value,
+                                     humanize_speed(counter_speed.value))
+        
+        if eta is None:
+            s3 = "] ETA --"
+        else:
+            s3 = "] ETA {}".format(humanize_time(eta))
+           
+        s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
+        
+        l = len(s1) + len(s3) + len(s_c)
+        l2 = width - l - 1
+        
+        a = int(l2 * count_value / max_count_value)
+        b = l2 - a
+        s2 = "="*a + ">" + " "*b
+        print(s_c+s1+s2+s3, end='', flush=True)
+        
