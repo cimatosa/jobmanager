@@ -11,7 +11,6 @@ import sys
 import time
 import numpy as np
 import progress
-import socket
 
 
 myQueue = mp.Queue
@@ -562,7 +561,6 @@ class JobManager_Client(object):
                   nice=19, 
                   no_warings=False, 
                   verbose=1,
-                  show_processed_jobs=True,
                   show_statusbar_for_jobs=True):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
@@ -587,7 +585,6 @@ class JobManager_Client(object):
         verbose [int] - 0: quiet, 1: status only, 2: debug messages
         """
         
-        self.show_processed_jobs = show_processed_jobs
         self.show_statusbar_for_jobs = show_statusbar_for_jobs
         self.verbose = verbose
         
@@ -639,26 +636,25 @@ class JobManager_Client(object):
     
         manager = ServerQueueManager(address=(server, port), authkey=authkey)
 
-        if verbose > 0:
-            print('{}: connecting to {}:{} authkey {}... '.format(identifier, server, port, authkey.decode('utf8')), end='', flush=True)
+            
         try:
             manager.connect()
         except:
-            if verbose > 0:    
-                print('failed!')
-            
-            err, val, trb = sys.exc_info()
-            print("caught exception {}: {}".format(err.__name__, val))
-            
-            if err == ConnectionRefusedError:
-                print("check if server is up!")
+            if verbose > 0:
+                print("{}: connecting to {}:{} authkey '{}' FAILED!".format(identifier, server, port, authkey.decode('utf8')))    
+                
+                err, val, trb = sys.exc_info()
+                print("caught exception {}: {}".format(err.__name__, val))
+                
+                if err == ConnectionRefusedError:
+                    print("make sure the server is up!")
             
             if verbose > 1:
                 traceback.print_exception(err, val, trb)
             return None
         else:
             if verbose > 0:    
-                print('done!')
+                print("{}: connecting to {}:{} authkey '{}' SUCCEEDED!".format(identifier, server, port, authkey.decode('utf8')))
             
         
         job_q = manager.get_job_q()
@@ -671,7 +667,7 @@ class JobManager_Client(object):
         return job_q, result_q, fail_q, const_arg
         
     @staticmethod
-    def func(arg, const_arg):
+    def func(arg, const_arg, c, m):
         """
         function to be called by the worker processes
         
@@ -682,6 +678,8 @@ class JobManager_Client(object):
         NOTE: This is just some dummy implementation to be used for test reasons only!
         Subclass and overwrite this function to implement your own function.  
         """
+        c.value = 0
+        m.value = -1
         time.sleep(0.1)
         return os.getpid()
     
@@ -694,7 +692,7 @@ class JobManager_Client(object):
 
 
     @staticmethod
-    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects=None):
+    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc):
         """
         the wrapper spawned nproc trimes calling and handling self.func
         """
@@ -712,12 +710,14 @@ class JobManager_Client(object):
         
         n = os.nice(0)
         n = os.nice(nice - n)
-        c = 0
+
         if verbose > 1:
             print("{}: now alive, niceness {}".format(identifier, n))
-        
+        cnt = 0
         time_queue = 0.
         time_calc = 0.
+        
+        tg_1 = tg_0 = tp_1 = tp_0 = tf_1 = tf_0 = 0
         
         # supposed to catch SystemExit, which will shout the client down quietly 
         try:
@@ -736,7 +736,7 @@ class JobManager_Client(object):
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
                     if verbose > 0:
-                        print("{}: finds empty job queue, processed {} jobs".format(identifier, c))
+                        print("{}: finds empty job queue, processed {} jobs".format(identifier, cnt))
                     break
                 # handle SystemExit in outer try ... except
                 except SystemExit as e:
@@ -749,7 +749,7 @@ class JobManager_Client(object):
                 # try to process the retrieved argument
                 try:
                     tf_0 = time.time()
-                    res = func(arg, const_arg)
+                    res = func(arg, const_arg, c, m)
                     tf_1 = time.time()
                 # handle SystemExit in outer try ... except
                 except SystemExit as e:
@@ -761,6 +761,9 @@ class JobManager_Client(object):
                     err, val, trb = sys.exc_info()
                     if verbose > 0:
                         print("{}: caught exception '{}'".format(identifier, err.__name__))
+                    
+                    if verbose > 1:
+                        traceback.print_exc()
                 
                     # write traceback to file
                     hostname = socket.gethostname()
@@ -808,11 +811,13 @@ class JobManager_Client(object):
                     except:
                         JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
                         break
-                                
-                c += 1
+                    
+                cnt += 1
                 
                 time_queue += (tg_1-tg_0 + tp_1-tp_0)
                 time_calc += (tf_1-tf_0)
+                
+                reset_pbc()
              
         # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
         # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
@@ -858,20 +863,40 @@ class JobManager_Client(object):
         """
         if self.verbose > 1:
             print("{}: start {} processes to work on the remote queue".format(self._identifier, self.nproc))
+            
+        c = []
         for i in range(self.nproc):
-            p = mp.Process(target=self.__worker_func, args=(self.func, 
-                                                            self.nice, 
-                                                            self.verbose, 
-                                                            self.server, 
-                                                            self.port,
-                                                            self.authkey,
-                                                            i,
-                                                            self.manager_objects))
-            self.procs.append(p)
-            p.start()
-            time.sleep(0.3)
+            c.append(progress.UnsignedIntValue())
         
-        Signal_to_terminate_process_list(process_list = self.procs, verbose=self.verbose)
-    
-        for p in self.procs:
-            p.join()
+        m = []
+        for i in range(self.nproc):
+            m.append(progress.UnsignedIntValue())
+            
+        if self.show_statusbar_for_jobs:
+            Progress = progress.ProgressBarCounter
+        else:
+            Progress = progress.ProgressSilentDummy  
+            
+        with Progress(count=c, max_count=m) as pbc :
+            pbc.start()
+            for i in range(self.nproc):
+                reset_pbc = lambda : pbc._reset_i(i)
+                p = mp.Process(target=self.__worker_func, args=(self.func, 
+                                                                self.nice, 
+                                                                self.verbose, 
+                                                                self.server, 
+                                                                self.port,
+                                                                self.authkey,
+                                                                i,
+                                                                self.manager_objects,
+                                                                c[i],
+                                                                m[i],
+                                                                reset_pbc))
+                self.procs.append(p)
+                p.start()
+                time.sleep(0.3)
+            
+            Signal_to_terminate_process_list(process_list = self.procs, verbose=self.verbose)
+        
+            for p in self.procs:
+                p.join()

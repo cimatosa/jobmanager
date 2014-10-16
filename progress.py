@@ -576,7 +576,6 @@ class Progress(Loop):
         print('\033[1;32m', end='', flush=True)
         for i in range(len):
             Progress.show_stat_wrapper(count[i], start_time[i], max_count[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args, i)
-            print()
         print("\033[{}A\033[0m".format(len), end='', flush=True)
         
     @staticmethod
@@ -589,7 +588,7 @@ class Progress(Loop):
             achieve a specific progress display.  
         """
         count_value = count.value
-        if max_count is None:
+        if (max_count is None) or (max_count.value == 4294967295):
             max_count_value = None
         else:
             max_count_value = max_count.value
@@ -727,7 +726,7 @@ class ProgressBar(Progress):
         a = int(l2 * count_value / max_count_value)
         b = l2 - a
         s2 = "="*a + ">" + " "*b
-        print(s1+s2+s3, end='', flush=True)
+        print(s1+s2+s3)
         
 class ProgressCounter(Progress):
     """
@@ -765,7 +764,7 @@ class ProgressCounter(Progress):
             max_count_str = ""
             
         s = "{}{} [{}{}] ({})".format(prepend, humanize_time(tet), count_value, max_count_str, humanize_speed(speed))
-        print(s, end='', flush=True)
+        print(s)
         
 class ProgressBarCounter(Progress):
     def __init__(self, 
@@ -805,7 +804,10 @@ class ProgressBarCounter(Progress):
             
         self.add_args['counter_count'] = self.counter_count
         self.add_args['counter_speed'] = self.counter_speed
+        self.add_args['init_time'] = self.init_time
 
+    def get_counter_count(self, i=0):
+        return self.counter_count[i].value
         
     def _reset_i(self, i):
         c = self.counter_count[i] 
@@ -833,23 +835,57 @@ class ProgressBarCounter(Progress):
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
         counter_count = kwargs['counter_count'][i]
         counter_speed = kwargs['counter_speed'][i]
+        counter_tet = time.time() - kwargs['init_time']
         
-        s_c = "{}{} [{}] -- ".format(prepend, 
-                                     counter_count.value,
-                                     humanize_speed(counter_speed.value))
-        
-        if eta is None:
-            s3 = "] ETA --"
+        s_c = "{}{} #{} [{}]".format(prepend,
+                                    humanize_time(counter_tet), 
+                                    counter_count.value,
+                                    humanize_speed(counter_speed.value))
+        if max_count_value is not None:
+            s_c += ' -- '
+            if eta is None:
+                s3 = "] ETA --"
+            else:
+                s3 = "] ETA {}".format(humanize_time(eta))
+               
+            s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
+            
+            l = len(s1) + len(s3) + len(s_c)
+            l2 = width - l - 1
+            
+            a = int(l2 * count_value / max_count_value)
+            b = l2 - a
+            s2 = "="*a + ">" + " "*b
+            print(s_c+s1+s2+s3)
         else:
-            s3 = "] ETA {}".format(humanize_time(eta))
-           
-        s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
+            print(s_c)
+            
+class ProgressSilentDummy(Progress):
+    def __init__(self, 
+                 count, 
+                 max_count=None,
+                 prepend=None,
+                 speed_calc_cycles_bar=10,
+                 speed_calc_cycles_counter=5,
+                 width='auto', 
+                 interval=1, 
+                 verbose=0,
+                 sigint='stop', 
+                 sigterm='stop',
+                 name='progress_bar_counter'):
+        pass
+
+    def __exit__(self, *exc_args):
+        pass
+    
+    def start(self):
+        pass
+    
+    def _reset_i(self, i):
+        pass
+    
+    def _reset_all(self):
+        pass
         
-        l = len(s1) + len(s3) + len(s_c)
-        l2 = width - l - 1
-        
-        a = int(l2 * count_value / max_count_value)
-        b = l2 - a
-        s2 = "="*a + ">" + " "*b
-        print(s_c+s1+s2+s3, end='', flush=True)
-        
+    def stop(self):
+        pass

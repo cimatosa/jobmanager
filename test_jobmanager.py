@@ -343,7 +343,9 @@ def shutdown_client(sig):
 
 def test_check_fail():
     class Client_Random_Error(jobmanager.JobManager_Client):
-        def func(self, args, const_args):
+        def func(self, args, const_args, c, m):
+            c.value = 0
+            m.value = -1
             fail_on = [3,23,45,67,89]
             time.sleep(0.1)
             if args in fail_on:
@@ -515,18 +517,18 @@ def test_hashedViewOnNumpyArray():
 
 if __name__ == "__main__":
     func = [
-    test_Signal_to_SIG_IGN,
-    test_Signal_to_sys_exit,
-    test_Signal_to_terminate_process_list,
+#     test_Signal_to_SIG_IGN,
+#     test_Signal_to_sys_exit,
+#     test_Signal_to_terminate_process_list,
          
     test_jobmanager_basic,
     test_jobmanager_server_signals,
     test_shutdown_server_while_client_running,
     test_shutdown_client,
-    test_check_fail,
+#     test_check_fail,
     test_jobmanager_read_old_stat,
-    test_hashDict,
-    test_hashedViewOnNumpyArray
+#     test_hashDict,
+#     test_hashedViewOnNumpyArray
     ]
     for f in func:
         print()
