@@ -141,16 +141,25 @@ class Signal_to_terminate_process_list(object):
     """
     SIGINT and SIGTERM will call terminate for process given in process_list
     """
-    def __init__(self, process_list, signals = [signal.SIGINT, signal.SIGTERM], verbose=0):
+    def __init__(self, process_list, signals = [signal.SIGINT, signal.SIGTERM], verbose=0, name='process', timeout=2):
         self.process_list = process_list
         self.verbose = verbose
+        self.name = name
+        self.timeout = timeout
         for s in signals:
             signal.signal(s, self._handler)
+            
     def _handler(self, signal, frame):
         if self.verbose > 0:
             print("PID {}: received sig {} -> terminate all given subprocesses".format(os.getpid(), progress.signal_dict[signal]))
-        for p in self.process_list:
+        for i, p in enumerate(self.process_list):
             p.terminate()
+            progress.check_process_termination(proc=p, 
+                                               identifier='{} {}'.format(self.name, i), 
+                                               timeout=self.timeout,
+                                               verbose=self.verbose,
+                                               auto_kill_on_last_resort=False)
+            
 
 class JobManager_Server(object):
     """general usage:
@@ -901,10 +910,10 @@ class JobManager_Client(object):
         else:
             Progress = progress.ProgressSilentDummy  
             
-        with Progress(count=c, max_count=m, interval=0.3, verbose=0) as pbc :
+        with Progress(count=c, max_count=m, interval=0.3, verbose=self.verbose) as pbc :
             pbc.start()
             for i in range(self.nproc):
-                reset_pbc = lambda : pbc.reset(i)
+                reset_pbc = lambda: pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
                                                                 self.nice, 
                                                                 self.verbose, 
@@ -920,7 +929,10 @@ class JobManager_Client(object):
                 p.start()
                 time.sleep(0.3)
             
-            Signal_to_terminate_process_list(process_list = self.procs, verbose=self.verbose)
+            Signal_to_terminate_process_list(process_list=self.procs, 
+                                             verbose=self.verbose,
+                                             name='worker',
+                                             timeout=2)
         
             for p in self.procs:
                 p.join()

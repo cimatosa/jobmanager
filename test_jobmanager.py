@@ -515,7 +515,7 @@ def test_hashedViewOnNumpyArray():
     assert bh2 in s
 
 def test_client_status():
-    n = 100
+    n = 10
     p_server = mp.Process(target=start_server, args=(n,False,0))
     p_server.start()
     
@@ -524,7 +524,7 @@ def test_client_status():
     class Client_With_Status(jobmanager.JobManager_Client):
         def func(self, args, const_args, c, m):
             m.value = 100
-            for i in range(100):
+            for i in range(m.value):
                 c.value = i+1
                 time.sleep(0.05)
 
@@ -533,7 +533,7 @@ def test_client_status():
     client = Client_With_Status(server='localhost', 
                             authkey='testing',
                             port=42524, 
-                            nproc=0, 
+                            nproc=4, 
                             verbose=1)
     client.start()
 
