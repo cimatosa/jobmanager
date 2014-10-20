@@ -894,6 +894,9 @@ class ProgressSilentDummy(Progress):
     def _reset_i(self, i):
         pass
     
+    def reset(self, i):
+        pass
+    
     def _reset_all(self):
         pass
         
