@@ -37,6 +37,8 @@ def humanize_speed(c_per_sec):
     units = ['c/s', 'c/min', 'c/h', 'c/d']
     speed = c_per_sec
     i = 0
+    if speed is None:
+        return '--'
     if speed > 0:
         while (speed < 1) and (i < len(scales)):
             speed *= scales[i]
@@ -452,7 +454,6 @@ class Progress(Loop):
     """    
     def __init__(self, 
                   count, 
-                  max_count=None,
                   prepend=None,
                   width='auto',
                   speed_calc_cycles=10, 
@@ -491,20 +492,6 @@ class Progress(Loop):
         
         self.len = len(count)
             
-        if max_count is not None:
-            if self.is_multi:
-                try:
-                    for m in max_count:
-                        assert isinstance(m, mp.sharedctypes.Synchronized), "each element of 'max_count' must be if the type multiprocessing.sharedctypes.Synchronized"
-                except TypeError:
-                    raise TypeError("'max_count' must be iterable")
-            else:
-                assert isinstance(max_count, mp.sharedctypes.Synchronized), "'max_count' must be if the type multiprocessing.sharedctypes.Synchronized"
-                max_count = [max_count]
-        else:
-            max_count = [None] * self.len
-            
-        
         self.start_time = []
         self.speed_calc_cycles = speed_calc_cycles
         
@@ -516,11 +503,24 @@ class Progress(Loop):
         self.q = []
         self.prepend = []
         self.lock = []
+        self.max_count = []
+        
+        class myValue(object):
+            def __init__(self, val):
+                self.value = val
+        
         for i in range(self.len):
-            self.q.append(myQueue())  # queue to save the last speed_calc_cycles
-                                      # (time, count) information to calculate speed
-            self.lock.append(mp.Lock())
+            self.q.append(myQueue())    # queue to save the last speed_calc_cycles
+                                        # (time, count) information to calculate speed
+                                        
+            valObj = myValue
+            self.max_count.append(valObj(val=count[i].value))           
+            self.lock.append(mp.Lock()) # needed for reset, erasing the queue elements
+                                        # is done locked 
             self.start_time.append(FloatValue(val=time.time()))
+            for j in range(self.speed_calc_cycles):
+                self.q[-1].put((count[i].value, self.start_time[-1].value))
+            
             if prepend is None:
                 # no prepend given
                 self.prepend.append('')
@@ -532,7 +532,6 @@ class Progress(Loop):
                     # list fails -> assume single prepend for all 
                     self.prepend.append(prepend)
                                                        
-        self.max_count = max_count  # list of multiprocessing value type
         self.count = count          # list of multiprocessing value type
         self.interval = interval
         self.verbose = verbose
@@ -542,9 +541,9 @@ class Progress(Loop):
             
         # setup loop class
         super().__init__(func=Progress.show_stat_wrapper_multi, 
-                         args=(self.count, 
-                               self.start_time, 
+                         args=(self.count,
                                self.max_count, 
+                               self.start_time, 
                                self.speed_calc_cycles,
                                self.width, 
                                self.q,
@@ -575,29 +574,31 @@ class Progress(Loop):
             convenient functions to call the static show_stat_wrapper_multi with
             the given class members
         """
-        Progress.show_stat_wrapper_multi(self.count, 
-                                 self.start_time, 
-                                 self.max_count, 
-                                 self.speed_calc_cycles,
-                                 self.width,
-                                 self.q,
-                                 self.prepend,
-                                 self.__class__.show_stat,
-                                 self.len, 
-                                 self.add_args,
-                                 self.lock)
+        Progress.show_stat_wrapper_multi(self.count,
+                                         self.max_count,
+                                         self.start_time, 
+                                         self.speed_calc_cycles,
+                                         self.width,
+                                         self.q,
+                                         self.prepend,
+                                         self.__class__.show_stat,
+                                         self.len, 
+                                         self.add_args,
+                                         self.lock)
     @staticmethod
-    def show_stat_wrapper_multi(count, start_time, max_count, speed_calc_cycles, width, q, prepend, show_stat_function, len, add_args, lock):
+    def show_stat_wrapper_multi(count, max_count, start_time, speed_calc_cycles, width, q, prepend, show_stat_function, len, add_args, lock):
         """
             call the static method show_stat_wrapper for each process
         """
+        quit_loop = False
         print('\033[1;32m', end='', flush=True)
         for i in range(len):
-            Progress.show_stat_wrapper(count[i], start_time[i], max_count[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args, i, lock[i])
+            quit_loop = quit_loop or Progress.show_stat_wrapper(count[i], max_count[i].value, start_time[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args, i, lock[i])
         print("\033[{}A\033[0m".format(len), end='', flush=True)
+        return quit_loop
         
     @staticmethod
-    def _calc(count, start_time, max_count, speed_calc_cycles, q, lock):
+    def _calc(count, start_time, speed_calc_cycles, q, lock):
         """
             do the pre calculations in order to get TET, speed, ETA
             and call the actual display routine show_stat with these arguments
@@ -608,32 +609,40 @@ class Progress(Loop):
         with lock:
             count_value = count.value
             start_time_value = start_time.value
-            if (max_count is None) or (max_count.value == 4294967295):
-                max_count_value = None
-            else:
-                max_count_value = max_count.value
-                
             current_time = time.time()
             q.put((count_value, current_time))
     
-            if q.qsize() > speed_calc_cycles:
-                old_count_value, old_time = q.get()
-            else:
-                old_count_value, old_time = 0, start_time_value
+            old_count_value, old_time = q.get()
 
         tet = (current_time - start_time_value)
-        speed = (count_value - old_count_value) / (current_time - old_time)
-        if (speed == 0) or (max_count_value is None):
+        diff = count_value - old_count_value 
+        # no change -> ETA = inf
+        # or counting upwards -> end not known -> can not calculate ETA
+        try: 
+            if diff >= 0:
+                eta = None
+                speed = diff / (current_time - old_time)
+            # count downwards -> assume 0 is end              
+            else:
+                speed = -diff / (current_time - old_time)
+                eta = math.ceil(count_value / speed)
+        except:
+            speed = None
             eta = None
-        else:
-            eta = math.ceil((max_count_value - count_value) / speed)
-
-        return count_value, max_count_value, speed, tet, eta
+            
+        return count_value, speed, tet, eta
         
     @staticmethod        
-    def show_stat_wrapper(count, start_time, max_count, speed_calc_cycles, width, q, prepend, show_stat_function, add_args, i, lock):
-        count_value, max_count_value, speed, tet, eta, = Progress._calc(count, start_time, max_count, speed_calc_cycles, q, lock) 
-        return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, width, i, **add_args)
+    def show_stat_wrapper(count, max_count, start_time, speed_calc_cycles, width, q, prepend, show_stat_function, add_args, i, lock):
+        count_value, speed, tet, eta, = Progress._calc(count, start_time, speed_calc_cycles, q, lock)
+        try: 
+            return show_stat_function(count_value, max_count, prepend, speed, tet, eta, width, i, **add_args)
+        except Exception as e:
+            print("{}: an '{}' exception occurred calling show_stat! show traceback".format(get_identifier(), e))
+            traceback.print_exc()
+            print("{}: if called from loop process, STOP loop process!".format(get_identifier()))
+            return True
+            
     
     @staticmethod        
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
@@ -667,27 +676,48 @@ class Progress(Loop):
         self._show_stat()
         print('\n'*(self.len-1))
         
-    def _reset_all(self):
+    def _reset_all(self, count=None):
         """
             reset all progress information
         """
         for i in range(self.len):
-            self._reset_i(i)
+            if count is None:
+                count_i = None
+            else:
+                try:
+                    count_i = count[i]
+                except:
+                    count_i = count
+                    
+            self._reset_i(i, count_i)
             
-    def _reset_i(self, i):
+    def _reset_i(self, i, count=None):
         """
             reset i-th progress information
         """
-        self.count[i].value=0
+        if count is None:
+#             print(self.count[i].value)
+            self.count[i].value=self.max_count[i].value
+#             print(self.count[i].value)
+#             print(self.max_count[i].value)
+#             print(i)
+#             print('---')
+        else:
+            self.count[i].value=count
+            self.max_count[i].value=count
+
+        self.start_time[i].value = time.time()
+            
         self.lock[i].acquire()
-        for x in range(self.q[i].qsize()):
+        for x in range(self.speed_calc_cycles):
             self.q[i].get()
+            self.q[i].put((self.count[i].value, self.start_time[i].value))
         
         self.lock[i].release()
-        self.start_time[i].value = time.time()
+
 
         
-    def reset(self, i = None):
+    def reset(self, i=None, count=None):
         """
             convenient function to reset progress information
             
@@ -695,9 +725,9 @@ class Progress(Loop):
         """
 #        super().stop()
         if i is None:
-            self._reset_all()
+            self._reset_all(count)
         else:
-            self._reset_i(i)
+            self._reset_i(i, count)
 #        super().start()
                    
 class ProgressBar(Progress):
@@ -707,7 +737,6 @@ class ProgressBar(Progress):
     """
     def __init__(self, 
                   count, 
-                  max_count,
                   width='auto',
                   prepend=None,
                   speed_calc_cycles=10, 
@@ -721,7 +750,6 @@ class ProgressBar(Progress):
             use 'auto' to determine width from terminal information -> see _set_width
         """
         super().__init__(count=count,
-                         max_count=max_count,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles,
                          width=width,
@@ -744,7 +772,7 @@ class ProgressBar(Progress):
         l = len(s1) + len(s3)
         l2 = width - l - 1
         
-        a = int(l2 * count_value / max_count_value)
+        a = int(l2 * (1 - count_value / max_count_value))
         b = l2 - a
         s2 = "="*a + ">" + " "*b
         print(s1+s2+s3)
@@ -755,7 +783,6 @@ class ProgressCounter(Progress):
     """
     def __init__(self, 
                  count, 
-                 max_count=None,
                  prepend=None,
                  speed_calc_cycles=10,
                  width='auto', 
@@ -766,7 +793,6 @@ class ProgressCounter(Progress):
                  name='progress_counter'):
         
         super().__init__(count=count,
-                         max_count=max_count,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles,
                          width=width,
@@ -778,19 +804,17 @@ class ProgressCounter(Progress):
         
     @staticmethod        
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
-        if max_count_value is not None:
-            max_count_str = "/{}".format(max_count_value)
+        if max_count_value > 0:
+            prog_str = "{}/{}".format(max_count_value - count_value, max_count_value)
         else:
-            max_count_value = count_value + 1 
-            max_count_str = ""
+            prog_str = "{}".format(count_value)
             
-        s = "{}{} [{}{}] ({})".format(prepend, humanize_time(tet), count_value, max_count_str, humanize_speed(speed))
+        s = "{}{} [{}] ({})".format(prepend, humanize_time(tet), prog_str, humanize_speed(speed))
         print(s)
         
 class ProgressBarCounter(Progress):
     def __init__(self, 
                  count, 
-                 max_count=None,
                  prepend=None,
                  speed_calc_cycles_bar=10,
                  speed_calc_cycles_counter=5,
@@ -802,7 +826,6 @@ class ProgressBarCounter(Progress):
                  name='progress_bar_counter'):
         
         super().__init__(count=count,
-                         max_count=max_count,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles_bar,
                          width=width,
@@ -874,7 +897,7 @@ class ProgressBarCounter(Progress):
             l = len(s1) + len(s3) + len(s_c)
             l2 = width - l - 1
             
-            a = int(l2 * count_value / max_count_value)
+            a = int(l2 * (1 - count_value / max_count_value))
             b = l2 - a
             s2 = "="*a + ">" + " "*b
             print(s_c+s1+s2+s3)
@@ -891,13 +914,13 @@ class ProgressSilentDummy(Progress):
     def start(self):
         pass
     
-    def _reset_i(self, i):
+    def _reset_i(self, i, count=None):
         pass
     
-    def reset(self, i):
+    def reset(self, i, count=None):
         pass
     
-    def _reset_all(self):
+    def _reset_all(self, count=None):
         pass
         
     def stop(self):

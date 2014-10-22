@@ -197,13 +197,15 @@ def test_why_with_statement():
     print("## ALL DONE! (and now comes some exception, strange!)")
     
     
+
 def test_progress_bar():
     """
     deprecated
     """
-    count = progress.UnsignedIntValue()
-    max_count = progress.UnsignedIntValue(100)
-    sb = progress.ProgressBar(count, max_count, verbose=2)
+    return
+
+    count = progress.UnsignedIntValue(100)
+    sb = progress.ProgressBar(count, verbose=2)
     assert not sb.is_alive()
     
     sb.start()
@@ -227,9 +229,8 @@ def test_progress_bar():
     #traceback.print_last()
     
 def test_progress_bar_with_statement():
-    count = progress.UnsignedIntValue()
-    max_count = progress.UnsignedIntValue(100)
-    with progress.ProgressBar(count, max_count, verbose=2) as sb:
+    count = progress.UnsignedIntValue(100)
+    with progress.ProgressBar(count, verbose=2) as sb:
         assert not sb.is_alive()
     
         sb.start()
@@ -246,20 +247,35 @@ def test_progress_bar_with_statement():
     time.sleep(0.2)
     sb.stop()
     
+def test_progress_bar_simple_run():
+    count = progress.UnsignedIntValue(100)
+    with progress.ProgressBar(count, verbose=2, interval = 0.3) as sb:
+        sb.start()
+        while count.value > 0:
+            with count.get_lock():
+                count.value -= 1
+            time.sleep(0.05)
+            
+def test_progress_counter_simple_run():
+    count = progress.UnsignedIntValue(0)
+    with progress.ProgressCounter(count, verbose=2, interval = 0.3) as sb:
+        sb.start()
+        for i in range(100):
+            with count.get_lock():
+                count.value += 1
+            time.sleep(0.05)
+    
 def test_progress_bar_multi():
     n = 4
     max_count_value = 100
     
     count = []
-    max_count = []
     prepend = []
     for i in range(n):
-        count.append(progress.UnsignedIntValue(0))
-        max_count.append(progress.UnsignedIntValue(max_count_value))
+        count.append(progress.UnsignedIntValue(max_count_value))
         prepend.append('_{}_: '.format(i))
     
     with progress.ProgressBar(count=count,
-                              max_count=max_count,
                               interval=0.2,
                               speed_calc_cycles=10,
                               width='auto',
@@ -271,10 +287,10 @@ def test_progress_bar_multi():
     
         sbm.start()
         
-        for x in range(500):
+        for x in range(1000):
             i = np.random.randint(low=0, high=n)
             with count[i].get_lock():
-                count[i].value += 1
+                count[i].value -= 1
                 
             if count[i].value > 100:
                 sbm.reset(i)
@@ -283,11 +299,9 @@ def test_progress_bar_multi():
         
            
 def test_status_counter():
-    c = progress.UnsignedIntValue(val=0)
-    m = progress.UnsignedIntValue(val=100)
+    c = progress.UnsignedIntValue(val=100)
     
     with progress.ProgressCounter(count=c,
-                                  max_count=m,
                                   interval=0.2,
                                   speed_calc_cycles=100,
                                   verbose=2,
@@ -299,9 +313,9 @@ def test_status_counter():
         sc.start()
         while True:
             with c.get_lock():
-                c.value += 1
+                c.value -= 1
                 
-            if c.value == 100:
+            if c.value == 0:
                 break
             
             time.sleep(0.01)
@@ -368,24 +382,20 @@ def test_intermediate_prints_while_running_progess_bar_multi():
             time.sleep(0.01)
     
 def test_progress_bar_counter():
-    c1 = progress.UnsignedIntValue(val=0)
-    c2 = progress.UnsignedIntValue(val=0)
-    
     maxc = 30
-    m1 = progress.UnsignedIntValue(val=maxc)
-    m2 = progress.UnsignedIntValue(val=maxc)
+    c1 = progress.UnsignedIntValue(val=maxc)
+    c2 = progress.UnsignedIntValue(val=maxc)
     
     c = [c1, c2]
-    m = [m1, m2]
     
     t0 = time.time()
     
-    with progress.ProgressBarCounter(count=c, max_count=m, verbose=1, interval=0.2) as sc:
+    with progress.ProgressBarCounter(count=c, verbose=1, interval=0.2) as sc:
         sc.start()
         while True:
             i = np.random.randint(0,2)
             with c[i].get_lock():
-                c[i].value += 1
+                c[i].value -= 1
                 if c[i].value > maxc:
                     sc.reset(i)
                            
@@ -397,23 +407,20 @@ def test_progress_bar_counter_non_max():
     c1 = progress.UnsignedIntValue(val=0)
     c2 = progress.UnsignedIntValue(val=0)
     
-    maxc = 30
-    m1 = progress.UnsignedIntValue(val=-1)
-    m2 = progress.UnsignedIntValue(val=-1)
-    
     c = [c1, c2]
-    m = [m1, m2]
+    maxc = 50
     
     t0 = time.time()
     
-    with progress.ProgressBarCounter(count=c, max_count=m, verbose=1, interval=0.2) as sc:
+    with progress.ProgressBarCounter(count=c, verbose=1, interval=0.2) as sc:
         sc.start()
         while True:
             i = np.random.randint(0,2)
             with c[i].get_lock():
-                c[i].value += 1
-                if c[i].value > maxc:
-                    sc.reset(i)
+                c[i].value -= 1
+                
+            if c[i].value > maxc:
+                sc.reset(i)
                            
             time.sleep(0.0432)
             if (time.time() - t0) > 15:
@@ -427,15 +434,18 @@ if __name__ == "__main__":
 #     test_loop_need_sigterm_to_stop(),
 #     test_loop_need_sigkill_to_stop(),
 #     test_why_with_statement,
+#     test_progress_bar_simple_run,
+#     test_progress_counter_simple_run,
 #     test_progress_bar,
 #     test_progress_bar_with_statement,
 #     test_progress_bar_multi,
-#     test_status_counter,
-#     test_status_counter_multi,
-#     test_intermediate_prints_while_running_progess_bar,
-#     test_intermediate_prints_while_running_progess_bar_multi,
-#     test_progress_bar_counter,
-    test_progress_bar_counter_non_max
+    test_status_counter,
+    test_status_counter_multi,
+    test_intermediate_prints_while_running_progess_bar,
+    test_intermediate_prints_while_running_progess_bar_multi,
+    test_progress_bar_counter,
+    test_progress_bar_counter_non_max,
+    lambda : print("END") 
     ]
     
     for f in func:
