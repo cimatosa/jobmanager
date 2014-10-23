@@ -505,16 +505,11 @@ class Progress(Loop):
         self.lock = []
         self.max_count = []
         
-        class myValue(object):
-            def __init__(self, val):
-                self.value = val
-        
         for i in range(self.len):
             self.q.append(myQueue())    # queue to save the last speed_calc_cycles
                                         # (time, count) information to calculate speed
-                                        
-            valObj = myValue
-            self.max_count.append(valObj(val=count[i].value))           
+
+            self.max_count.append(UnsignedIntValue(val=count[i].value))           
             self.lock.append(mp.Lock()) # needed for reset, erasing the queue elements
                                         # is done locked 
             self.start_time.append(FloatValue(val=time.time()))
@@ -593,7 +588,7 @@ class Progress(Loop):
         quit_loop = False
         print('\033[1;32m', end='', flush=True)
         for i in range(len):
-            quit_loop = quit_loop or Progress.show_stat_wrapper(count[i], max_count[i].value, start_time[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args, i, lock[i])
+            quit_loop = quit_loop or Progress.show_stat_wrapper(count[i].value, max_count[i].value, start_time[i].value, speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args, i, lock[i])
         print("\033[{}A\033[0m".format(len), end='', flush=True)
         return quit_loop
         
@@ -607,15 +602,12 @@ class Progress(Loop):
             achieve a specific progress display.  
         """
         with lock:
-            count_value = count.value
-            start_time_value = start_time.value
             current_time = time.time()
-            q.put((count_value, current_time))
-    
+            q.put((count, current_time))
             old_count_value, old_time = q.get()
 
-        tet = (current_time - start_time_value)
-        diff = count_value - old_count_value 
+        tet = (current_time - start_time)
+        diff = count - old_count_value 
         # no change -> ETA = inf
         # or counting upwards -> end not known -> can not calculate ETA
         try: 
@@ -625,18 +617,18 @@ class Progress(Loop):
             # count downwards -> assume 0 is end              
             else:
                 speed = -diff / (current_time - old_time)
-                eta = math.ceil(count_value / speed)
+                eta = math.ceil(count / speed)
         except:
             speed = None
             eta = None
             
-        return count_value, speed, tet, eta
+        return speed, tet, eta
         
     @staticmethod        
     def show_stat_wrapper(count, max_count, start_time, speed_calc_cycles, width, q, prepend, show_stat_function, add_args, i, lock):
-        count_value, speed, tet, eta, = Progress._calc(count, start_time, speed_calc_cycles, q, lock)
+        speed, tet, eta, = Progress._calc(count, start_time, speed_calc_cycles, q, lock)
         try: 
-            return show_stat_function(count_value, max_count, prepend, speed, tet, eta, width, i, **add_args)
+            return show_stat_function(count, max_count, prepend, speed, tet, eta, width, i, **add_args)
         except Exception as e:
             print("{}: an '{}' exception occurred calling show_stat! show traceback".format(get_identifier(), e))
             traceback.print_exc()
@@ -758,59 +750,27 @@ class ProgressBar(Progress):
                          sigint=sigint,
                          sigterm=sigterm,
                          name=name)
-
             
     @staticmethod        
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
         if eta is None:
-            s3 = "] ETA --"
+            s3 = " ETA --"
         else:
-            s3 = "] ETA {}".format(humanize_time(eta))
+            s3 = " ETA {}".format(humanize_time(eta))
            
-        s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
+        s1 = "{}{} [{}] ".format(prepend, humanize_time(tet), humanize_speed(speed))
         
-        l = len(s1) + len(s3)
-        l2 = width - l - 1
-        
-        a = int(l2 * (1 - count_value / max_count_value))
-        b = l2 - a
-        s2 = "="*a + ">" + " "*b
-        print(s1+s2+s3)
-        
-class ProgressCounter(Progress):
-    """
-        simple Progress counter, not using the max_count information
-    """
-    def __init__(self, 
-                 count, 
-                 prepend=None,
-                 speed_calc_cycles=10,
-                 width='auto', 
-                 interval=1, 
-                 verbose=0,
-                 sigint='stop', 
-                 sigterm='stop',
-                 name='progress_counter'):
-        
-        super().__init__(count=count,
-                         prepend=prepend,
-                         speed_calc_cycles=speed_calc_cycles,
-                         width=width,
-                         interval=interval,
-                         verbose = verbose,
-                         sigint=sigint,
-                         sigterm=sigterm,
-                         name=name)
-        
-    @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
-        if max_count_value > 0:
-            prog_str = "{}/{}".format(max_count_value - count_value, max_count_value)
+        if max_count_value == 0:
+            s2 = "#{}".format(count_value)
+            print(s1+s2)
         else:
-            prog_str = "{}".format(count_value)
+            l = len(s1) + len(s3)
+            l2 = width - l - 3
             
-        s = "{}{} [{}] ({})".format(prepend, humanize_time(tet), prog_str, humanize_speed(speed))
-        print(s)
+            a = int(l2 * (1 - count_value / max_count_value))
+            b = l2 - a
+            s2 = "["+"="*a + ">" + " "*b+"]"
+            print(s1+s2+s3)
         
 class ProgressBarCounter(Progress):
     def __init__(self, 
@@ -853,7 +813,7 @@ class ProgressBarCounter(Progress):
     def get_counter_count(self, i=0):
         return self.counter_count[i].value
         
-    def _reset_i(self, i):
+    def _reset_i(self, i, count=None):
         c = self.counter_count[i] 
         with c.get_lock():
             c.value += 1
@@ -873,7 +833,7 @@ class ProgressBarCounter(Progress):
         
         self.counter_speed[i].value = speed
                     
-        super()._reset_i(i)
+        super()._reset_i(i, count)
         
     @staticmethod
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
@@ -881,28 +841,31 @@ class ProgressBarCounter(Progress):
         counter_speed = kwargs['counter_speed'][i]
         counter_tet = time.time() - kwargs['init_time']
         
-        s_c = "{}{} #{} [{}]".format(prepend,
-                                    humanize_time(counter_tet), 
-                                    counter_count.value,
-                                    humanize_speed(counter_speed.value))
-        if max_count_value is not None:
-            s_c += ' -- '
-            if eta is None:
-                s3 = "] ETA --"
-            else:
-                s3 = "] ETA {}".format(humanize_time(eta))
-               
-            s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
-            
+        s_c = "{}{} [{}] #{} - ".format(prepend,
+                                     humanize_time(counter_tet),
+                                     humanize_speed(counter_speed.value), 
+                                     counter_count.value)
+        
+        if eta is None:
+            s3 = " ETA --"
+        else:
+            s3 = " ETA {}".format(humanize_time(eta))
+           
+        s1 = "{} [{}] ".format(humanize_time(tet), humanize_speed(speed))
+        
+        if max_count_value == 0:
+            s2 = "#{}".format(count_value)
+            s = s_c+s1+s2
+            l = width - len(s)
+            print(s + " "*l)
+        else:
             l = len(s1) + len(s3) + len(s_c)
-            l2 = width - l - 1
+            l2 = width - l - 3
             
             a = int(l2 * (1 - count_value / max_count_value))
             b = l2 - a
-            s2 = "="*a + ">" + " "*b
+            s2 = "["+"="*a + ">" + " "*b+"]"
             print(s_c+s1+s2+s3)
-        else:
-            print(s_c)
             
 class ProgressSilentDummy(Progress):
     def __init__(self, **kwargs):
