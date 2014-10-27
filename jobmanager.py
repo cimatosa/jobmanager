@@ -251,7 +251,11 @@ class JobManager_Server(object):
         self.__wait_before_stop = 2
         
         self.port = port
-        self.authkey = bytearray(authkey, encoding='utf8')
+        if isinstance(authkey, bytearray):
+            self.authkey = authkey
+        else:
+            self.authkey = bytearray(authkey, encoding='utf8')
+            
         self.const_arg = copy.copy(const_arg)
         self.fname_dump = fname_dump        
         self.msg_interval = msg_interval
@@ -265,9 +269,8 @@ class JobManager_Server(object):
         # the args_set will be empty
         self.args_set = set()
         
-        # thread safe integer values  
-        self._numresults = mp.Value('i', 0)  # count the successfully processed jobs
-        self._numjobs = mp.Value('i', 0)     # overall number of jobs
+        self.numjobs = 0     # overall number of jobs
+        self.numresults = 0
         
         # final result as list, other types can be achieved by subclassing 
         self.final_result = []
@@ -345,20 +348,6 @@ class JobManager_Server(object):
         self.shoutdown()
         return True
     
-    @property    
-    def numjobs(self):
-        return self._numjobs.value
-    @numjobs.setter
-    def numjobs(self, numjobs):
-        self._numjobs.value = numjobs
-        
-    @property    
-    def numresults(self):
-        return self._numresults.value
-    @numresults.setter
-    def numresults(self, numresults):
-        self._numresults.value = numresults
-
     def shoutdown(self):
         """"stop all spawned processes and clean up
         
@@ -474,8 +463,7 @@ class JobManager_Server(object):
         self.args_set.add(copy.copy(a))
         self.job_q.put(copy.copy(a))
         
-        with self._numjobs.get_lock():
-            self._numjobs.value += 1
+        self.numjobs += 1
         
     def args_from_list(self, args):
         """serialize a list of arguments to the job_q
@@ -521,24 +509,37 @@ class JobManager_Server(object):
         else:
             Progress = progress.ProgressSilentDummy
   
-        with Progress(count = self._numresults,
-                       max_count = self._numjobs, 
-                       interval = self.msg_interval,
-                       speed_calc_cycles=self.speed_calc_cycles,
-                       verbose = self.verbose,
-                       sigint='ign',
-                       sigterm='ign') as stat:
+        c = progress.UnsignedIntValue(val = self.numjobs)
+  
+        with Progress(count = c, 
+                      interval = self.msg_interval,
+                      speed_calc_cycles=self.speed_calc_cycles,
+                      verbose = self.verbose,
+                      sigint='ign',
+                      sigterm='ign') as stat:
 
             stat.start()
         
             while (len(self.args_set) - self.fail_q.qsize()) > 0:
                 try:
                     arg, result = self.result_q.get(timeout=1)
-                    self.args_set.remove(arg)
-                    self.process_new_result(arg, result)
-                    self.numresults = self.numjobs - (len(self.args_set) - self.fail_q.qsize()) 
                 except queue.Empty:
                     pass
+                else:
+                    try:
+                        self.process_new_result(arg, result)
+                    except Exception as e:
+                        if self.verbose > 0:
+                            print("{}: {} '{}' occured while trying to process new result".format(e.__class__.__name__, e, self._identifier))
+                        if self.verbose > 1:
+                            traceback.print_exc()
+                                            
+                        self.args_set.remove(arg)
+                        self.fail_q.put((arg, e.__class__.__name__, 'localhost'))
+                    else:
+                        c.value = len(self.args_set) - self.fail_q.qsize()
+                        self.numresults += 1
+
         
         if self.verbose > 1:
             print("{}: wait {}s before trigger clean up".format(self._identifier, self.__wait_before_stop))
@@ -614,7 +615,10 @@ class JobManager_Client(object):
             if self.verbose > 1:
                 print("{}: ignore all warnings".format(self._identifier))
         self.server = server
-        self.authkey = bytearray(authkey, encoding='utf8')
+        if isinstance(authkey, bytearray):
+            self.authkey = authkey
+        else:
+            self.authkey = bytearray(authkey, encoding='utf8')
         self.port = port
         self.nice = nice
         if nproc > 0:
@@ -745,8 +749,8 @@ class JobManager_Client(object):
         if len(args_of_func) == 2:
             if verbose > 1:
                 print("{}: found function without status information".format(identifier))
-            m.value = -1  # setting max_count to -1 will hide the progress bar 
-            _func = lambda arg, const_arg, c, m : func(arg, const_arg)
+            c.value = 0  # setting max_count to -1 will hide the progress bar 
+            _func = lambda arg, const_arg, c : func(arg, const_arg)
         else:
             _func = func
             
@@ -936,3 +940,58 @@ class JobManager_Client(object):
         
             for p in self.procs:
                 p.join()
+
+class JobManager_Local(JobManager_Server):
+    def __init__(self,
+                  client_class,
+                  authkey,
+                  nproc=0,
+                  delay=1,
+                  const_arg=None, 
+                  port=42524, 
+                  verbose=1,
+                  verbose_client=0, 
+                  msg_interval=1,
+                  fname_dump='auto',
+                  speed_calc_cycles=50):
+        
+        super().__init__(authkey=authkey,
+                         const_arg=const_arg, 
+                         port=port, 
+                         verbose=verbose, 
+                         msg_interval=msg_interval,
+                         fname_dump=fname_dump,
+                         speed_calc_cycles=speed_calc_cycles)
+        
+        self.client_class = client_class
+        self.nproc = nproc
+        self.delay = delay
+        self.verbose_client=verbose_client
+
+    @staticmethod 
+    def _start_client(authkey, client_class, nproc=0, delay=1, verbose=0):
+        Signal_to_SIG_IGN(verbose=verbose)
+        time.sleep(delay)
+        client = client_class(server='localhost',
+                              authkey=authkey,
+                              nproc=nproc, 
+                              verbose=verbose)
+        
+        client.start()
+        
+        
+    def start(self):
+        p_client = mp.Process(target=JobManager_Local._start_client,
+                              args=(self.authkey, 
+                                    self.client_class, 
+                                    self.nproc, 
+                                    self.delay,
+                                    self.verbose_client))
+        p_client.start()
+        super().start()
+        
+        progress.check_process_termination(p_client, 
+                                           identifier='local_client',
+                                           timeout=2,
+                                           verbose=self.verbose_client)
+        
