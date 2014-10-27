@@ -10,9 +10,11 @@ import os
 import sys
 import time
 import numpy as np
-import progress
 import inspect
 import functools
+
+sys.path.append(os.path.dirname(__file__))
+import progress
 
 myQueue = mp.Queue
 
@@ -309,7 +311,7 @@ class JobManager_Server(object):
         JobQueueManager.register('get_job_q', callable=lambda: self.job_q)
         JobQueueManager.register('get_result_q', callable=lambda: self.result_q)
         JobQueueManager.register('get_fail_q', callable=lambda: self.fail_q)
-        JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg, exposed=["__iter__"])
+        JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg, proxytype=mp.managers.DictProxy)
     
         address=('', self.port)   #ip='' means local
         authkey=self.authkey
@@ -578,7 +580,7 @@ class JobManager_Client(object):
                   port = 42524, 
                   nproc = 0, 
                   nice=19, 
-                  no_warings=False, 
+                  no_warnigs=False, 
                   verbose=1,
                   show_statusbar_for_jobs=True):
         """
@@ -612,7 +614,7 @@ class JobManager_Client(object):
         if self.verbose > 1:
             print("{}: init".format(self._identifier))
        
-        if no_warings:
+        if no_warnigs:
             import warnings
             warnings.filterwarnings("ignore")
             if self.verbose > 1:
@@ -675,7 +677,7 @@ class JobManager_Client(object):
                 traceback.print_exception(err, val, trb)
             return None
         else:
-            if verbose > 0:    
+            if verbose > 1:    
                 print("{}: connecting to {}:{} authkey '{}' SUCCEEDED!".format(identifier, server, port, authkey.decode('utf8')))
             
         
@@ -775,7 +777,7 @@ class JobManager_Client(object):
                     tg_1 = time.time()
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
-                    if verbose > 0:
+                    if verbose > 1:
                         print("{}: finds empty job queue, processed {} jobs".format(identifier, cnt))
                     break
                 # handle SystemExit in outer try ... except
@@ -884,7 +886,7 @@ class JobManager_Client(object):
                 if verbose > 1:
                     print(" done!")
                 
-        if verbose > 0:
+        if verbose > 1:
             try:
                 print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
             except:
@@ -915,7 +917,7 @@ class JobManager_Client(object):
         if (self.show_statusbar_for_jobs) and (self.verbose > 0):
             Progress = progress.ProgressBarCounter
         else:
-            Progress = progress.ProgressSilentDummy  
+            Progress = progress.ProgressSilentDummy
             
         with Progress(count=c, max_count=m, interval=0.3, verbose=self.verbose) as pbc :
             pbc.start()
@@ -954,6 +956,7 @@ class JobManager_Local(JobManager_Server):
                   port=42524, 
                   verbose=1,
                   verbose_client=0, 
+                  show_statusbar_for_jobs=False,
                   msg_interval=1,
                   fname_dump='auto',
                   speed_calc_cycles=50):
@@ -970,15 +973,17 @@ class JobManager_Local(JobManager_Server):
         self.nproc = nproc
         self.delay = delay
         self.verbose_client=verbose_client
+        self.show_statusbar_for_jobs=show_statusbar_for_jobs
 
     @staticmethod 
-    def _start_client(authkey, client_class, nproc=0, delay=1, verbose=0):
+    def _start_client(authkey, client_class, nproc=0, delay=1, verbose=0, show_statusbar_for_jobs=False):
         Signal_to_SIG_IGN(verbose=verbose)
         time.sleep(delay)
         client = client_class(server='localhost',
                               authkey=authkey,
                               nproc=nproc, 
-                              verbose=verbose)
+                              verbose=verbose,
+                              show_statusbar_for_jobs=show_statusbar_for_jobs)
         
         client.start()
         
@@ -989,7 +994,8 @@ class JobManager_Local(JobManager_Server):
                                     self.client_class, 
                                     self.nproc, 
                                     self.delay,
-                                    self.verbose_client))
+                                    self.verbose_client,
+                                    self.show_statusbar_for_jobs))
         p_client.start()
         super().start()
         
