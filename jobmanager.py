@@ -749,8 +749,10 @@ class JobManager_Client(object):
         if len(args_of_func) == 2:
             if verbose > 1:
                 print("{}: found function without status information".format(identifier))
+
             c.value = 0  # setting max_count to -1 will hide the progress bar 
             _func = lambda arg, const_arg, c : func(arg, const_arg)
+
         else:
             _func = func
             
