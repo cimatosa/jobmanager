@@ -284,9 +284,9 @@ def test_progress_bar_multi():
            
 def test_status_counter():
     c = progress.UnsignedIntValue(val=0)
-    m = progress.UnsignedIntValue(val=100)
+    m = None
     
-    with progress.ProgressCounter(count=c,
+    with progress.ProgressBar(count=c,
                                   max_count=m,
                                   interval=0.2,
                                   speed_calc_cycles=100,
@@ -312,7 +312,7 @@ def test_status_counter_multi():
     
     c = [c1, c2]
     prepend = ['c1: ', 'c2: ']
-    with progress.ProgressCounter(count=c, prepend=prepend, verbose=2) as sc:
+    with progress.ProgressBar(count=c, prepend=prepend, verbose=2) as sc:
         sc.start()
         while True:
             i = np.random.randint(0,2)
@@ -327,7 +327,7 @@ def test_status_counter_multi():
 def test_intermediate_prints_while_running_progess_bar():
     c = progress.UnsignedIntValue(val=0)
     try:
-        with progress.ProgressCounter(count=c, verbose=2, interval=0.3) as sc:
+        with progress.ProgressBar(count=c, verbose=2, interval=0.3) as sc:
             sc.start()
             while True:
                 with c.get_lock():
@@ -350,7 +350,7 @@ def test_intermediate_prints_while_running_progess_bar_multi():
     c2 = progress.UnsignedIntValue(val=0)
     
     c = [c1,c2]
-    with progress.ProgressCounter(count=c, verbose=2, interval=0.3) as sc:
+    with progress.ProgressBar(count=c, verbose=2, interval=0.3) as sc:
         sc.start()
         while True:
             i = np.random.randint(0,2)
@@ -397,16 +397,11 @@ def test_progress_bar_counter_non_max():
     c1 = progress.UnsignedIntValue(val=0)
     c2 = progress.UnsignedIntValue(val=0)
     
-    maxc = 30
-    m1 = progress.UnsignedIntValue(val=-1)
-    m2 = progress.UnsignedIntValue(val=-1)
-    
     c = [c1, c2]
-    m = [m1, m2]
-    
+    maxc = 30
     t0 = time.time()
     
-    with progress.ProgressBarCounter(count=c, max_count=m, verbose=1, interval=0.2) as sc:
+    with progress.ProgressBarCounter(count=c, verbose=1, interval=0.2) as sc:
         sc.start()
         while True:
             i = np.random.randint(0,2)
@@ -421,19 +416,19 @@ def test_progress_bar_counter_non_max():
             
 if __name__ == "__main__":
     func = [    
-    test_loop_basic,
-    test_loop_signals,
-    test_loop_normal_stop,
-    test_loop_need_sigterm_to_stop,
-    test_loop_need_sigkill_to_stop,
-    test_why_with_statement,
-    test_progress_bar,
-    test_progress_bar_with_statement,
-    test_progress_bar_multi,
-    test_status_counter,
-    test_status_counter_multi,
-    test_intermediate_prints_while_running_progess_bar,
-    test_intermediate_prints_while_running_progess_bar_multi,
+#     test_loop_basic,
+#     test_loop_signals,
+#     test_loop_normal_stop,
+#     test_loop_need_sigterm_to_stop,
+#     test_loop_need_sigkill_to_stop,
+#     test_why_with_statement,
+#     test_progress_bar,
+#     test_progress_bar_with_statement,
+#     test_progress_bar_multi,
+#     test_status_counter,
+#     test_status_counter_multi,
+#     test_intermediate_prints_while_running_progess_bar,
+#     test_intermediate_prints_while_running_progess_bar_multi,
     test_progress_bar_counter,
     test_progress_bar_counter_non_max,
     lambda: print("END")
