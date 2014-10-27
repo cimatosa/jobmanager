@@ -465,7 +465,8 @@ class Progress(Loop):
         count [mp.Value] - shared memory to hold the current state, (list or single value)
         
         max_count [mp.Value] - shared memory holding the final state, (None, list or single value),
-        may be changed by external process without having to explicitly tell this class
+        may be changed by external process without having to explicitly tell this class.
+        If None, no ETA and relative progress can be calculated -> ETA = None 
         
         prepend [string] - string to put in front of the progress output, (None, single string
         or of list of strings)
@@ -626,7 +627,7 @@ class Progress(Loop):
 
         tet = (current_time - start_time_value)
         speed = (count_value - old_count_value) / (current_time - old_time)
-        if (speed == 0) or (max_count_value is None):
+        if (speed == 0) or (max_count_value is None) or (max_count_value == 0):
             eta = None
         else:
             eta = math.ceil((max_count_value - count_value) / speed)
@@ -707,6 +708,9 @@ class ProgressBar(Progress):
     """
     Implements a Progress bar (progress par) similar to the one known from 'wget'
     or 'pv'
+    
+    
+    
     """
     def __init__(self, 
                   count, 
@@ -796,6 +800,19 @@ class ProgressBar(Progress):
 #         print(s)
         
 class ProgressBarCounter(Progress):
+    """
+        records also the time of each reset and calculates the speed
+        of the resets.
+        
+        shows the TET since init (not effected by reset)
+        the speed of the resets (number of finished processed per time)
+        and the number of finished processes
+        
+        after that also show a progress of each process
+        max_count > 0 and not None -> bar
+        max_count == None -> absolute count statistic
+        max_count == 0 -> hide process statistic at all 
+    """
     def __init__(self, 
                  count, 
                  max_count=None,
@@ -866,10 +883,16 @@ class ProgressBarCounter(Progress):
         counter_speed = kwargs['counter_speed'][i]
         counter_tet = time.time() - kwargs['init_time']
         
-        s_c = "{}{} [{}] #{} - ".format(prepend,
+        s_c = "{}{} [{}] #{}".format(prepend,
                                     humanize_time(counter_tet),
                                     humanize_speed(counter_speed.value), 
                                     counter_count.value)
+        if max_count_value == 0:
+            print(s_c)
+            return
+    
+        s_c += ' - '
+    
         if max_count_value is None:
             print("{}{}{} [{}] #{}    ".format(s_c, prepend, humanize_time(tet), humanize_speed(speed), count_value))            
         else:

@@ -412,7 +412,31 @@ def test_progress_bar_counter_non_max():
                            
             time.sleep(0.0432)
             if (time.time() - t0) > 15:
-                break                
+                break
+            
+def test_progress_bar_counter_hide_bar():
+    c1 = progress.UnsignedIntValue(val=0)
+    c2 = progress.UnsignedIntValue(val=0)
+    
+    m1 = progress.UnsignedIntValue(val=0)
+    
+    c = [c1, c2]
+    m = [m1, m1]
+    maxc = 30
+    t0 = time.time()
+    
+    with progress.ProgressBarCounter(count=c, max_count=m, verbose=1, interval=0.2) as sc:
+        sc.start()
+        while True:
+            i = np.random.randint(0,2)
+            with c[i].get_lock():
+                c[i].value += 1
+                if c[i].value > maxc:
+                    sc.reset(i)
+                           
+            time.sleep(0.0432)
+            if (time.time() - t0) > 15:
+                break            
             
 if __name__ == "__main__":
     func = [    
@@ -429,8 +453,9 @@ if __name__ == "__main__":
 #     test_status_counter_multi,
 #     test_intermediate_prints_while_running_progess_bar,
 #     test_intermediate_prints_while_running_progess_bar_multi,
-    test_progress_bar_counter,
-    test_progress_bar_counter_non_max,
+#     test_progress_bar_counter,
+#     test_progress_bar_counter_non_max,
+    test_progress_bar_counter_hide_bar,
     lambda: print("END")
     ]
     

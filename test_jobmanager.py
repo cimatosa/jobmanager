@@ -536,6 +536,17 @@ def test_client_status():
                             nproc=4, 
                             verbose=1)
     client.start()
+    
+def test_jobmanager_local():
+    args = range(1,200)
+    authkey = 'testing'
+    with jobmanager.JobManager_Local(client_class = jobmanager.JobManager_Client,
+                                     authkey=authkey,
+                                     verbose=1,
+                                     verbose_client=0,
+                                     ) as jm_server:
+        jm_server.args_from_list(args)
+        jm_server.start()
 
 
 if __name__ == "__main__":
@@ -552,7 +563,9 @@ if __name__ == "__main__":
 #     test_jobmanager_read_old_stat,
 #     test_hashDict,
 #     test_hashedViewOnNumpyArray,
-    test_client_status
+#     test_client_status,
+    test_jobmanager_local,
+    lambda : print("END")
     ]
     for f in func:
         print()

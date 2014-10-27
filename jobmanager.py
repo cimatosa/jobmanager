@@ -251,7 +251,11 @@ class JobManager_Server(object):
         self.__wait_before_stop = 2
         
         self.port = port
-        self.authkey = bytearray(authkey, encoding='utf8')
+
+        if isinstance(authkey, bytearray):
+            self.authkey = authkey
+        else: 
+            self.authkey = bytearray(authkey, encoding='utf8')
         self.const_arg = copy.copy(const_arg)
         self.fname_dump = fname_dump        
         self.msg_interval = msg_interval
@@ -614,7 +618,10 @@ class JobManager_Client(object):
             if self.verbose > 1:
                 print("{}: ignore all warnings".format(self._identifier))
         self.server = server
-        self.authkey = bytearray(authkey, encoding='utf8')
+        if isinstance(authkey, bytearray):
+            self.authkey = authkey
+        else: 
+            self.authkey = bytearray(authkey, encoding='utf8')
         self.port = port
         self.nice = nice
         if nproc > 0:
@@ -745,7 +752,7 @@ class JobManager_Client(object):
         if len(args_of_func) == 2:
             if verbose > 1:
                 print("{}: found function without status information".format(identifier))
-            m.value = -1  # setting max_count to -1 will hide the progress bar 
+            m.value = 0  # setting max_count to -1 will hide the progress bar 
             _func = lambda arg, const_arg, c, m : func(arg, const_arg)
         else:
             _func = func
@@ -903,7 +910,7 @@ class JobManager_Client(object):
         
         m = []
         for i in range(self.nproc):
-            m.append(progress.UnsignedIntValue(-1))
+            m.append(progress.UnsignedIntValue(0))
             
         if (self.show_statusbar_for_jobs) and (self.verbose > 0):
             Progress = progress.ProgressBarCounter
@@ -936,3 +943,57 @@ class JobManager_Client(object):
         
             for p in self.procs:
                 p.join()
+
+class JobManager_Local(JobManager_Server):
+    def __init__(self,
+                  client_class,
+                  authkey='local_jobmanager',
+                  nproc=0,
+                  delay=1,
+                  const_arg=None, 
+                  port=42524, 
+                  verbose=1,
+                  verbose_client=0, 
+                  msg_interval=1,
+                  fname_dump='auto',
+                  speed_calc_cycles=50):
+        
+        super().__init__(authkey=authkey,
+                         const_arg=const_arg, 
+                         port=port, 
+                         verbose=verbose, 
+                         msg_interval=msg_interval,
+                         fname_dump=fname_dump,
+                         speed_calc_cycles=speed_calc_cycles)
+        
+        self.client_class = client_class
+        self.nproc = nproc
+        self.delay = delay
+        self.verbose_client=verbose_client
+
+    @staticmethod 
+    def _start_client(authkey, client_class, nproc=0, delay=1, verbose=0):
+        Signal_to_SIG_IGN(verbose=verbose)
+        time.sleep(delay)
+        client = client_class(server='localhost',
+                              authkey=authkey,
+                              nproc=nproc, 
+                              verbose=verbose)
+        
+        client.start()
+        
+        
+    def start(self):
+        p_client = mp.Process(target=JobManager_Local._start_client,
+                              args=(self.authkey, 
+                                    self.client_class, 
+                                    self.nproc, 
+                                    self.delay,
+                                    self.verbose_client))
+        p_client.start()
+        super().start()
+        
+        progress.check_process_termination(p_client, 
+                                           identifier='local_client',
+                                           timeout=2,
+                                           verbose=self.verbose_client)
