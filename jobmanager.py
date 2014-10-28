@@ -912,6 +912,7 @@ class JobManager_Client(object):
                 
         if verbose > 1:
             try:
+                print("{}: pure calculation time: {}".format(identifier, progress.humanize_time(time_calc) ))
                 print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
             except:
                 pass
@@ -981,6 +982,7 @@ class JobManager_Local(JobManager_Server):
                   verbose=1,
                   verbose_client=0, 
                   show_statusbar_for_jobs=False,
+                  niceness_clients=19,
                   msg_interval=1,
                   fname_dump='auto',
                   speed_calc_cycles=50):
@@ -998,14 +1000,19 @@ class JobManager_Local(JobManager_Server):
         self.delay = delay
         self.verbose_client=verbose_client
         self.show_statusbar_for_jobs=show_statusbar_for_jobs
+        self.niceness_clients = niceness_clients
 
     @staticmethod 
-    def _start_client(authkey, client_class, nproc=0, delay=1, verbose=0, show_statusbar_for_jobs=False):
+    def _start_client(authkey, client_class, nproc=0, nice=19, delay=1, verbose=0, show_statusbar_for_jobs=False):
+        # ignore signal, because any signal bringing the server down
+        # will cause an error in the client server communication
+        # therefore the clients will also quit 
         Signal_to_SIG_IGN(verbose=verbose)
         time.sleep(delay)
         client = client_class(server='localhost',
                               authkey=authkey,
                               nproc=nproc, 
+                              nice=nice,
                               verbose=verbose,
                               show_statusbar_for_jobs=show_statusbar_for_jobs)
         
@@ -1016,7 +1023,8 @@ class JobManager_Local(JobManager_Server):
         p_client = mp.Process(target=JobManager_Local._start_client,
                               args=(self.authkey, 
                                     self.client_class, 
-                                    self.nproc, 
+                                    self.nproc,
+                                    self.niceness_clients, 
                                     self.delay,
                                     self.verbose_client,
                                     self.show_statusbar_for_jobs))
