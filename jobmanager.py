@@ -347,7 +347,7 @@ class JobManager_Server(object):
             print("{}: started on {}:{} with authkey '{}'".format(progress.get_identifier('SyncManager', self.manager._process.pid), 
                                                                   self.hostname, 
                                                                   self.port,  
-                                                                  authkey, encoding='utf8'))
+                                                                  authkey))
     
     def __restart_SyncManager(self):
         self.__stop_SyncManager()
