@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
 import multiprocessing as mp
 import time
 import traceback
@@ -6,8 +10,14 @@ import sys
 import os
 import math
 import subprocess
-import queue
 import copy
+
+if sys.version_info[0] == 2:
+    # Python 2
+    import Queue as queue
+else:
+    # Python 3
+    import queue
 
 myQueue = mp.Queue
 
@@ -106,13 +116,15 @@ def check_process_termination(proc, identifier, timeout, verbose=0, auto_kill_on
             print("{}: still running!".format(identifier))
         
         while not answer in 'yn':
-            print("Do you want to send SIGKILL to '{}'? [y/n]: ".format(identifier), end='', flush=True)
+            print("Do you want to send SIGKILL to '{}'? [y/n]: ".format(identifier), end='')
+            sys.stdout.flush()
             answer = sys.stdin.readline()[:-1]
 
         
         if answer == 'n':
             while not answer in 'yn':
-                print("Do you want let the process '{}' running? [y/n]: ".format(identifier), end='', flush=True)
+                print("Do you want let the process '{}' running? [y/n]: ".format(identifier), end='')
+                sys.stdout.flush()
                 answer = sys.stdin.readline()[:-1]
             if answer == 'y':
                 print("{}: keeps running".format(identifier))
@@ -312,7 +324,8 @@ class Loop(object):
                 quit_loop = func(*args)
             except:
                 err, val, trb = sys.exc_info()
-                print('\033[0m', end='', flush=True)
+                print('\033[0m', end='')
+                sys.stdout.flush()
                 if verbose > 0:
                     print("{}: error {} occurred in Loop class calling 'func(*args)'".format(identifier, err))
                     traceback.print_exc()
@@ -542,7 +555,7 @@ class Progress(Loop):
         self.add_args = {}
             
         # setup loop class
-        super().__init__(func=Progress.show_stat_wrapper_multi, 
+        super(Progress, self).__init__(func=Progress.show_stat_wrapper_multi, 
                          args=(self.count, 
                                self.start_time, 
                                self.max_count, 
@@ -567,7 +580,7 @@ class Progress(Loop):
             
             show a last progress -> see the full 100% on exit
         """
-        super().__exit__(*exc_args)
+        super(Progress, self).__exit__(*exc_args)
         self._show_stat()
         print('\n'*(self.len-1))
         
@@ -592,10 +605,12 @@ class Progress(Loop):
         """
             call the static method show_stat_wrapper for each process
         """
-        print('\033[1;32m', end='', flush=True)
+        print('\033[1;32m', end='')
+        sys.stdout.flush()
         for i in range(len):
             Progress.show_stat_wrapper(count[i], start_time[i], max_count[i], speed_calc_cycles, width, q[i], prepend[i], show_stat_function, add_args, i, lock[i])
-        print("\033[{}A\033[0m".format(len), end='', flush=True)
+        print("\033[{}A\033[0m".format(len), end='')
+        sys.stdout.flush()
         
     @staticmethod
     def _calc(count, start_time, max_count, speed_calc_cycles, q, lock):
@@ -667,7 +682,7 @@ class Progress(Loop):
             trigger clean up by hand, needs to be done when not using
             context management via 'with' statement
         """
-        super().stop()
+        super(Progress, self).stop()
         self._show_stat()
         print('\n'*(self.len-1))
         
@@ -697,12 +712,12 @@ class Progress(Loop):
             
             i [None, int] - None: reset all, int: reset process indexed by i 
         """
-#        super().stop()
+#        super(Progress, self).stop()
         if i is None:
             self._reset_all()
         else:
             self._reset_i(i)
-#        super().start()
+#        super(Progress, self).start()
                    
 class ProgressBar(Progress):
     """
@@ -727,7 +742,7 @@ class ProgressBar(Progress):
             width [int/'auto'] - the number of characters used to show the Progress bar,
             use 'auto' to determine width from terminal information -> see _set_width
         """
-        super().__init__(count=count,
+        super(ProgressBar, self).__init__(count=count,
                          max_count=max_count,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles,
@@ -777,7 +792,7 @@ class ProgressBar(Progress):
 #                  sigterm='stop',
 #                  name='progress_counter'):
 #         
-#         super().__init__(count=count,
+#         super(ProgressCounter, self).__init__(count=count,
 #                          max_count=max_count,
 #                          prepend=prepend,
 #                          speed_calc_cycles=speed_calc_cycles,
@@ -826,7 +841,7 @@ class ProgressBarCounter(Progress):
                  sigterm='stop',
                  name='progress_bar_counter'):
         
-        super().__init__(count=count,
+        super(ProgressBarCounter, self).__init__(count=count,
                          max_count=max_count,
                          prepend=prepend,
                          speed_calc_cycles=speed_calc_cycles_bar,
@@ -875,7 +890,7 @@ class ProgressBarCounter(Progress):
         
         self.counter_speed[i].value = speed
                     
-        super()._reset_i(i)
+        super(ProgressBarCounter, self)._reset_i(i)
         
     @staticmethod
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):

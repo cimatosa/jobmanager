@@ -1,10 +1,13 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
 import os
 import sys
 import time
 import signal
 import multiprocessing as mp
 import numpy as np
-
 
 path = os.path.dirname(__file__)
 sys.path.append(path)

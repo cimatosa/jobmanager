@@ -1,12 +1,18 @@
-import os, sys
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+from scipy.optimize import minimize
+import sys
+
 sys.path.append(os.path.abspath("../"))
 
 import jobmanager as jm
 from calculations import *
-from scipy.optimize import minimize
-import numpy as np
 
-import matplotlib.pyplot as plt
 
 class FitFunc_Client(jm.JobManager_Client):
     def __init__(self):
@@ -15,7 +21,7 @@ class FitFunc_Client(jm.JobManager_Client):
                                              port = 42524, 
                                              nproc = 0, 
                                              nice=19, 
-                                             no_warings=True, 
+                                             no_warnings=True, 
                                              verbose=2)
     @staticmethod
     def func(args, const_args):
