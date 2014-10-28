@@ -1,10 +1,13 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
 import os
 import sys
 import time
 import signal
 import multiprocessing as mp
 import numpy as np
-
 
 path = os.path.dirname(__file__)
 sys.path.append(path)
@@ -536,6 +539,7 @@ def test_client_status():
                             nproc=4, 
                             verbose=1)
     client.start()
+    p_server.join()
     
 def test_jobmanager_local():
     args = range(1,200)
@@ -554,7 +558,7 @@ if __name__ == "__main__":
 #     test_Signal_to_SIG_IGN,
 #     test_Signal_to_sys_exit,
 #     test_Signal_to_terminate_process_list,
-         
+#           
 #     test_jobmanager_basic,
 #     test_jobmanager_server_signals,
 #     test_shutdown_server_while_client_running,
@@ -563,7 +567,7 @@ if __name__ == "__main__":
 #     test_jobmanager_read_old_stat,
 #     test_hashDict,
 #     test_hashedViewOnNumpyArray,
-#     test_client_status,
+    test_client_status,
     test_jobmanager_local,
     lambda : print("END")
     ]

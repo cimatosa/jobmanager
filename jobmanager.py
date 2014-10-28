@@ -1,17 +1,37 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
+import copy
+import functools
+import inspect
 import multiprocessing as mp
 from multiprocessing.managers import SyncManager
-import queue
-import copy
-import signal
-import pickle
-import traceback
-import socket
+import numpy as np
 import os
+import pickle
+import signal
+import socket
 import sys
 import time
-import numpy as np
-import inspect
-import functools
+import traceback
+
+# Magic conversion from 3 to 2
+if sys.version_info[0] == 2:
+    # Python 2
+    import Queue as queue
+    
+    class getfullargspec(object):
+        "A quick and dirty replacement for getfullargspec for Python 2"
+        def __init__(self, f):
+            self.args, self.varargs, self.varkw, self.defaults = \
+                inspect.getargspec(f)
+            self.annotations = getattr(f, '__annotations__', {})
+    inspect.getfullargspec = getfullargspec
+    
+else:
+    # Python 3
+    import queue
 
 sys.path.append(os.path.dirname(__file__))
 import progress
@@ -327,7 +347,7 @@ class JobManager_Server(object):
             print("{}: started on {}:{} with authkey '{}'".format(progress.get_identifier('SyncManager', self.manager._process.pid), 
                                                                   self.hostname, 
                                                                   self.port,  
-                                                                  str(authkey, encoding='utf8')))
+                                                                  authkey))
     
     def __restart_SyncManager(self):
         self.__stop_SyncManager()
@@ -386,7 +406,8 @@ class JobManager_Server(object):
         if self.fname_dump != None:
         
             if self.verbose > 0:
-                print("{}: dump current state ... ".format(self._identifier), end='', flush=True)
+                print("{}: dump current state ... ".format(self._identifier), end='')
+                sys.stdout.flush()
                 
             if self.fname_dump == 'auto':
                 fname = "{}_{}.dump".format(self.authkey.decode('utf8'), getDateForFileName(includePID=False))
@@ -580,7 +601,7 @@ class JobManager_Client(object):
                   port = 42524, 
                   nproc = 0, 
                   nice=19, 
-                  no_warnigs=False, 
+                  no_warnings=False, 
                   verbose=1,
                   show_statusbar_for_jobs=True):
         """
@@ -614,7 +635,7 @@ class JobManager_Client(object):
         if self.verbose > 1:
             print("{}: init".format(self._identifier))
        
-        if no_warnigs:
+        if no_warnings:
             import warnings
             warnings.filterwarnings("ignore")
             if self.verbose > 1:
@@ -812,7 +833,8 @@ class JobManager_Client(object):
                     fname = 'traceback_err_{}_{}.trb'.format(err.__name__, getDateForFileName(includePID=True))
                         
                     if verbose > 0:
-                        print("        write exception to file {} ... ".format(fname), end='', flush=True)
+                        print("        write exception to file {} ... ".format(fname), end='')
+                        sys.stdout.flush()
                     with open(fname, 'w') as f:
                         traceback.print_exception(etype=err, value=val, tb=trb, file=f)
                     if verbose > 0:
@@ -821,7 +843,8 @@ class JobManager_Client(object):
                         
                     # try to inform the server of the failure
                     if verbose > 1:
-                        print("{}: try to send send failed arg to fail_q ...".format(identifier), end='', flush=True)
+                        print("{}: try to send send failed arg to fail_q ...".format(identifier), end='')
+                        sys.stdout.flush()
                     try:
                         fail_q.put((arg, err.__name__, hostname), timeout=10)
                     # handle SystemExit in outer try ... except                        
@@ -869,7 +892,8 @@ class JobManager_Client(object):
                 print("{}: SystemExit, quit processing, reinsert current argument".format(identifier))
 
             if verbose > 1:
-                print("{}: try to put arg back to job_q ...".format(identifier), end='', flush=True)
+                print("{}: try to put arg back to job_q ...".format(identifier), end='')
+                sys.stdout.flush()
             try:
                 job_q.put(arg, timeout=10)
             # handle SystemExit in outer try ... except                        
@@ -961,7 +985,7 @@ class JobManager_Local(JobManager_Server):
                   fname_dump='auto',
                   speed_calc_cycles=50):
         
-        super().__init__(authkey=authkey,
+        super(JobManager_Local, self).__init__(authkey=authkey,
                          const_arg=const_arg, 
                          port=port, 
                          verbose=verbose, 
@@ -997,7 +1021,7 @@ class JobManager_Local(JobManager_Server):
                                     self.verbose_client,
                                     self.show_statusbar_for_jobs))
         p_client.start()
-        super().start()
+        super(JobManager_Local, self).start()
         
         progress.check_process_termination(p_client, 
                                            identifier='local_client',

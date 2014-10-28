@@ -1,15 +1,20 @@
-import numpy as np
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
 import multiprocessing as mp
+import numpy as np
+import sys
 import time
 
-import sys
 sys.path.append('../')
+
 import jobmanager as jm
 
 class Example_Client(jm.JobManager_Client):
     def __init__(self):
         # start quiet client (verbopse=0)
-        super().__init__(server="localhost", 
+        super(Example_Client, self).__init__(server="localhost", 
                          authkey='simple example', 
                          verbose=0)
         
@@ -23,7 +28,7 @@ class Example_Client(jm.JobManager_Client):
 class Example_Server(jm.JobManager_Server):
     def __init__(self):
         # server show status information (verbose=1)
-        super().__init__(authkey='simple example',
+        super(Example_Server, self).__init__(authkey='simple example',
                          verbose=2)
 
         self.final_result = 1

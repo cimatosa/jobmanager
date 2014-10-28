@@ -1,10 +1,14 @@
-import os
-import sys
-import time
-import signal
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
 import multiprocessing as mp
 import numpy as np
+import os
 import psutil
+import signal
+import sys
+import time
 import traceback
 
 path = os.path.dirname(__file__)
@@ -440,21 +444,21 @@ def test_progress_bar_counter_hide_bar():
             
 if __name__ == "__main__":
     func = [    
-#     test_loop_basic,
-#     test_loop_signals,
-#     test_loop_normal_stop,
-#     test_loop_need_sigterm_to_stop,
-#     test_loop_need_sigkill_to_stop,
-#     test_why_with_statement,
-#     test_progress_bar,
-#     test_progress_bar_with_statement,
-#     test_progress_bar_multi,
-#     test_status_counter,
-#     test_status_counter_multi,
-#     test_intermediate_prints_while_running_progess_bar,
-#     test_intermediate_prints_while_running_progess_bar_multi,
-#     test_progress_bar_counter,
-#     test_progress_bar_counter_non_max,
+    test_loop_basic,
+    test_loop_signals,
+    test_loop_normal_stop,
+    test_loop_need_sigterm_to_stop,
+    test_loop_need_sigkill_to_stop,
+    test_why_with_statement,
+    test_progress_bar,
+    test_progress_bar_with_statement,
+    test_progress_bar_multi,
+    test_status_counter,
+    test_status_counter_multi,
+    test_intermediate_prints_while_running_progess_bar,
+    test_intermediate_prints_while_running_progess_bar_multi,
+    test_progress_bar_counter,
+    test_progress_bar_counter_non_max,
     test_progress_bar_counter_hide_bar,
     lambda: print("END")
     ]
