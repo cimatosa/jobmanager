@@ -26,7 +26,6 @@ def wrap_complex_intgeration(f_complex):
     
 
 def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, **kwargs):
-    
         f_partial_complex = lambda t, x: f(t, x, *args)
         if integrator == 'zvode':
             # define complex derivative
