@@ -2,8 +2,7 @@ import os
 import sys
 import traceback
 
-#sys.path.append(os.path.dirname(__file__))
-from jobmanager import JobManager_Client
+from .jobmanager import JobManager_Client
 import ode_wrapper
 
 """
@@ -60,23 +59,8 @@ class Integration_Client_CPLX(JobManager_Client):
         which means that the call signature of f has to be
         f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...) 
     """
-    def __init__(self, 
-                  server, 
-                  authkey, 
-                  port=42524, 
-                  nproc=0,
-                  nice=19,
-                  no_warings=False,
-                  verbose=1,
-                  show_statusbar_for_jobs=True):
-        super().__init__(server=server, 
-                         authkey=authkey, 
-                         port=port, 
-                         nproc=nproc,
-                         nice=nice, 
-                         no_warnings=no_warings,
-                         verbose=verbose,
-                         show_statusbar_for_jobs=show_statusbar_for_jobs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         
     @staticmethod
     def func(arg, const_arg, c, m):
@@ -120,23 +104,8 @@ class Integration_Client_REAL(JobManager_Client):
         that 'vode' and 'lsoda' do not do any wrapping, so there is no
         performance issue and 'zvode' is obviously not supported. 
     """
-    def __init__(self, 
-                  server, 
-                  authkey, 
-                  port=42524, 
-                  nproc=0,
-                  nice=19,
-                  no_warings=False,
-                  verbose=1,
-                  show_statusbar_for_jobs=True):
-        super().__init__(server=server, 
-                         authkey=authkey, 
-                         port=port, 
-                         nproc=nproc,
-                         nice=nice, 
-                         no_warnings=no_warings,
-                         verbose=verbose,
-                         show_statusbar_for_jobs=show_statusbar_for_jobs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         
     @staticmethod
     def func(arg, const_arg, c, m):

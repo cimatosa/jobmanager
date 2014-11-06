@@ -603,7 +603,8 @@ class JobManager_Client(object):
                   nice=19, 
                   no_warnings=False, 
                   verbose=1,
-                  show_statusbar_for_jobs=True):
+                  show_statusbar_for_jobs=True,
+                  show_counter_only=False):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -628,6 +629,7 @@ class JobManager_Client(object):
         """
         
         self.show_statusbar_for_jobs = show_statusbar_for_jobs
+        self.show_counter_only = show_counter_only
         self.verbose = verbose
         
         self._pid = os.getpid()
@@ -655,7 +657,7 @@ class JobManager_Client(object):
 
         self.procs = []
         
-        self.manager_objects = self.get_manager_objects() 
+        self.manager_objects = self.get_manager_objects()
         
        
     def get_manager_objects(self):
@@ -935,16 +937,23 @@ class JobManager_Client(object):
         for i in range(self.nproc):
             c.append(progress.UnsignedIntValue())
         
-        m = []
+        m_progress = []
         for i in range(self.nproc):
-            m.append(progress.UnsignedIntValue(0))
+            m_progress.append(progress.UnsignedIntValue(0))
+            
+        m_set_by_function = []
+        for i in range(self.nproc):
+            m_set_by_function.append(progress.UnsignedIntValue(0))
+            
+        if not self.show_counter_only:
+            m_set_by_function = m_progress
             
         if (self.show_statusbar_for_jobs) and (self.verbose > 0):
             Progress = progress.ProgressBarCounter
         else:
             Progress = progress.ProgressSilentDummy
             
-        with Progress(count=c, max_count=m, interval=0.3, verbose=self.verbose) as pbc :
+        with Progress(count=c, max_count=m_progress, interval=0.3, verbose=self.verbose) as pbc :
             pbc.start()
             for i in range(self.nproc):
                 reset_pbc = lambda: pbc.reset(i)
@@ -957,7 +966,7 @@ class JobManager_Client(object):
                                                                 i,
                                                                 self.manager_objects,
                                                                 c[i],
-                                                                m[i],
+                                                                m_set_by_function[i],
                                                                 reset_pbc))
                 self.procs.append(p)
                 p.start()
@@ -975,13 +984,14 @@ class JobManager_Local(JobManager_Server):
     def __init__(self,
                   client_class,
                   authkey='local_jobmanager',
-                  nproc=0,
+                  nproc=-1,
                   delay=1,
                   const_arg=None, 
                   port=42524, 
                   verbose=1,
                   verbose_client=0, 
                   show_statusbar_for_jobs=False,
+                  show_counter_only=False,
                   niceness_clients=19,
                   msg_interval=1,
                   fname_dump='auto',
@@ -999,12 +1009,19 @@ class JobManager_Local(JobManager_Server):
         self.nproc = nproc
         self.delay = delay
         self.verbose_client=verbose_client
-        self.show_statusbar_for_jobs=show_statusbar_for_jobs
+        self.show_statusbar_for_jobs = show_statusbar_for_jobs
+        self.show_counter_only = show_counter_only
         self.niceness_clients = niceness_clients
 
     @staticmethod 
-    def _start_client(authkey, client_class, nproc=0, nice=19, delay=1, verbose=0, show_statusbar_for_jobs=False):
-        # ignore signal, because any signal bringing the server down
+    def _start_client(authkey, 
+                        client_class,
+                        nproc=0, 
+                        nice=19, 
+                        delay=1, 
+                        verbose=0, 
+                        show_statusbar_for_jobs=False,
+                        show_counter_only=False):        # ignore signal, because any signal bringing the server down
         # will cause an error in the client server communication
         # therefore the clients will also quit 
         Signal_to_SIG_IGN(verbose=verbose)
@@ -1014,7 +1031,8 @@ class JobManager_Local(JobManager_Server):
                               nproc=nproc, 
                               nice=nice,
                               verbose=verbose,
-                              show_statusbar_for_jobs=show_statusbar_for_jobs)
+                              show_statusbar_for_jobs=show_statusbar_for_jobs,
+                              show_counter_only=show_counter_only)
         
         client.start()
         
@@ -1027,7 +1045,8 @@ class JobManager_Local(JobManager_Server):
                                     self.niceness_clients, 
                                     self.delay,
                                     self.verbose_client,
-                                    self.show_statusbar_for_jobs))
+                                    self.show_statusbar_for_jobs,
+                                    self.show_counter_only))
         p_client.start()
         super(JobManager_Local, self).start()
         

@@ -67,7 +67,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, **kwargs):
             i += 1
 
         if not r.successful():
-            warnings.warn("integration NOT successful!")
+            print("INTEGRATION WARNING, NOT successful!")
         
         return t, x
         
@@ -103,6 +103,5 @@ def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, **kwargs):
             i += 1
 
         if not r.successful():
-            warnings.warn("integration NOT successful!")
-        
+            print("INTEGRATION WARNING, NOT successful!")        
         return t, x
