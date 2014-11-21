@@ -108,7 +108,7 @@ class Integration_Client_REAL(JobManager_Client):
         super().__init__(**kwargs)
         
     @staticmethod
-    def func(arg, const_arg, c, m, call_back = lambda **args: None):
+    def func(arg, const_arg, c, m):
         # construct the arguments passed to the DGL defining function
         # from the two tuples coming from arg and const_arg
         # e.g. 
@@ -138,7 +138,10 @@ class Integration_Client_REAL(JobManager_Client):
         if 'arg' in kwargs: 
             kwargs.pop('arg')
             
-        call_back(args=args_dgl, **kwargs)
+        try:
+            const_arg['call_back'](arg, const_arg)
+        except KeyError:
+            pass
             
         # t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs
         return ode_wrapper.integrate_real(c=c, args=args_dgl, **kwargs)
