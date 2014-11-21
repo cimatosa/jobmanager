@@ -495,6 +495,8 @@ class JobManager_Server(object):
             # try to add hashability
             if isinstance(a, dict):
                 a = hashDict(a)
+            elif isinstance(a, np.ndarray):
+                a = hashableCopyOfNumpyArray(a)
             else:
                 raise AttributeError("'{}' is not hashable".format(type(a)))
         
