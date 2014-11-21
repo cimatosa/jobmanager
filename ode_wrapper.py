@@ -1,6 +1,11 @@
 from scipy.integrate import ode
 import numpy as np
 
+class Dummy_c(object):
+    def __init__(self):
+        self.value = 0
+        pass
+
 def complex_to_real(vc):
     return np.hstack([np.real(vc), np.imag(vc)])
 
