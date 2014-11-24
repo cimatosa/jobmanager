@@ -57,6 +57,8 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, **kwargs):
         x = np.empty(shape=(N, len(x0)), dtype=np.complex128)
         x[0] = x0
         
+#         print(args.eta._Z)
+        
         i = 1        
         while r.successful() and i < N:
             r.integrate(t[i])
