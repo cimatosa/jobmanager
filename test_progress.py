@@ -440,26 +440,44 @@ def test_progress_bar_counter_hide_bar():
                            
             time.sleep(0.0432)
             if (time.time() - t0) > 15:
-                break            
+                break       
+            
+def test_progress_bar_slow_change():
+    max_count_value = 100
+    
+    count = progress.UnsignedIntValue(0)
+    max_count = progress.UnsignedIntValue(max_count_value)
+    
+    with progress.ProgressBar(count=count,
+                              max_count=max_count,
+                              interval=0.1,
+                              speed_calc_cycles=5) as sbm:
+    
+        sbm.start()
+        
+        for i in range(max_count_value):               
+            time.sleep(1)     
+            count.value = i
             
 if __name__ == "__main__":
     func = [    
-    test_loop_basic,
-    test_loop_signals,
-    test_loop_normal_stop,
-    test_loop_need_sigterm_to_stop,
-    test_loop_need_sigkill_to_stop,
-    test_why_with_statement,
-    test_progress_bar,
-    test_progress_bar_with_statement,
-    test_progress_bar_multi,
-    test_status_counter,
-    test_status_counter_multi,
-    test_intermediate_prints_while_running_progess_bar,
-    test_intermediate_prints_while_running_progess_bar_multi,
-    test_progress_bar_counter,
-    test_progress_bar_counter_non_max,
-    test_progress_bar_counter_hide_bar,
+#     test_loop_basic,
+#     test_loop_signals,
+#     test_loop_normal_stop,
+#     test_loop_need_sigterm_to_stop,
+#     test_loop_need_sigkill_to_stop,
+#     test_why_with_statement,
+#     test_progress_bar,
+#     test_progress_bar_with_statement,
+#     test_progress_bar_multi,
+#     test_status_counter,
+#     test_status_counter_multi,
+#     test_intermediate_prints_while_running_progess_bar,
+#     test_intermediate_prints_while_running_progess_bar_multi,
+#     test_progress_bar_counter,
+#     test_progress_bar_counter_non_max,
+#     test_progress_bar_counter_hide_bar,
+    test_progress_bar_slow_change,
     lambda: print("END")
     ]
     
