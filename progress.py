@@ -984,30 +984,28 @@ class ProgressBarCounter(Progress):
                                     humanize_time(counter_tet),
                                     humanize_speed(counter_speed.value), 
                                     counter_count.value)
-        if max_count_value == 0:
-            print(s_c)
-            return
-    
-        s_c += ' - '
-    
-        if max_count_value is None:
-            print("{}{}{} [{}] #{}    ".format(s_c, prepend, humanize_time(tet), humanize_speed(speed), count_value))            
-        else:
-            if eta is None:
-                s3 = "] ETA --"
+        if max_count_value != 0:
+            s_c += ' - '
+        
+            if max_count_value is None:
+                s_c = "{}{}{} [{}] #{}    ".format(s_c, prepend, humanize_time(tet), humanize_speed(speed), count_value)            
             else:
-                s3 = "] ETA {}".format(humanize_time(eta))
-               
-            s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
-            
-            l = len(s1) + len(s3) + len(s_c)
-            l2 = width - l - 1
-            
-            a = int(l2 * count_value / max_count_value)
-            b = l2 - a
-            s2 = "="*a + ">" + " "*b
-            print(s_c+s1+s2+s3)
-
+                if eta is None:
+                    s3 = "] ETA --"
+                else:
+                    s3 = "] ETA {}".format(humanize_time(eta))
+                   
+                s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
+                
+                l = len(s1) + len(s3) + len(s_c)
+                l2 = width - l - 1
+                
+                a = int(l2 * count_value / max_count_value)
+                b = l2 - a
+                s2 = "="*a + ">" + " "*b
+                s_c = s_c+s1+s2+s3
+                
+        print(s_c + ' '*(width - len(s_c)))
             
 class ProgressSilentDummy(Progress):
     def __init__(self, **kwargs):
