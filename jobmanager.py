@@ -399,39 +399,53 @@ class JobManager_Server(object):
         
         self.__stop_SyncManager()
         
+        self.show_statistics()
        
         # do user defined final processing
         self.process_final_result()
         
-        if self.fname_dump != None:
         
-            if self.verbose > 0:
-                print("{}: dump current state ... ".format(self._identifier), end='')
-                sys.stdout.flush()
-                
+        if self.fname_dump != None:
             if self.fname_dump == 'auto':
                 fname = "{}_{}.dump".format(self.authkey.decode('utf8'), getDateForFileName(includePID=False))
             else:
                 fname = self.fname_dump
-    
+
+            if self.verbose > 0:
+                print("{}: dump current state to '{}'".format(self._identifier, fname))    
             with open(fname, 'wb') as f:
                 self.__dump(f)
                 
-                if self.verbose > 0:
-                    print("done!")
+
         else:
             if self.verbose > 0:
                 print("{}: fname_dump == None, ignore dumping current state!".format(self._identifier))
         
         print("{}: JobManager_Server was successfully shout down".format(self._identifier))
+        
+    def show_statistics(self):
+        if self.verbose > 0:
+            print("total number of jobs  : {}".format(self.numjobs))
+            print("  processed   : {}".format(self.numresults))
+            print("    succeeded : {}".format(self.numresults - self.fail_q.qsize()))
+            print("    failed    : {}".format(self.fail_q.qsize()))
+            print("  not processed     : {}".format(len(self.args_set)))
+            print("    queried         : {}".format(len(self.args_set) - self.job_q.qsize()))
+            print("    not queried yet : {}".format(self.job_q.qsize()))        
 
     @staticmethod
     def static_load(f):
         data = {}
         data['numjobs'] = pickle.load(f)
+#         print(data['numjobs'])
+        
         data['numresults'] = pickle.load(f)
+#         print(data['numresults'])
+        
         data['final_result'] = pickle.load(f)
+        
         data['args_set'] = pickle.load(f)
+#         print(len(data['args_set']))
         
         fail_list = pickle.load(f)
         data['fail_set'] = {fail_item[0] for fail_item in fail_list}
@@ -482,10 +496,14 @@ class JobManager_Server(object):
         if not os.path.isfile(fname_dump):
             raise RuntimeError("file '{}' to read old state from not found".format(fname_dump))
 
+        if self.verbose > 0:
+            print("{}: load state from file '{}'".format(self._identifier, fname_dump))
         
         with open(fname_dump, 'rb') as f:
             self.__load(f)
         self.__restart_SyncManager()
+        
+        self.show_statistics()
             
 
     def put_arg(self, a):
@@ -534,7 +552,12 @@ class JobManager_Server(object):
             raise RuntimeError("do not run JobManager_Server.start() in a subprocess")
 
         if (self.numjobs - self.numresults) != len(self.args_set):
-            raise RuntimeError("inconsistency detected! use JobManager_Server.put_arg to put arguments to the job_q")
+            if self.verbose > 1:
+                print("numjobs: {}".format(self.numjobs))
+                print("numresults: {}".format(self.numresults))
+                print("len(self.args_set): {}".format(len(self.args_set)))
+                
+            raise RuntimeError("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_set)! use JobManager_Server.put_arg to put arguments to the job_q")
         
         if self.numjobs == 0:
             raise RuntimeError("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
@@ -564,8 +587,8 @@ class JobManager_Server(object):
                 try:
                     arg, result = self.result_q.get(timeout=1)
                     self.args_set.remove(arg)
+                    self.numresults = self.numjobs - (len(self.args_set) - self.fail_q.qsize())
                     self.process_new_result(arg, result)
-                    self.numresults = self.numjobs - (len(self.args_set) - self.fail_q.qsize()) 
                 except queue.Empty:
                     pass
         
