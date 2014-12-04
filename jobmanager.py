@@ -435,8 +435,8 @@ class JobManager_Server(object):
     def show_statistics(self):
         if self.verbose > 0:
             print("total number of jobs  : {}".format(self.numjobs))
-            print("  processed   : {}".format(self.numresults))
-            print("    succeeded : {}".format(self.numresults - self.fail_q.qsize()))
+            print("  processed   : {}".format(self.numresults + self.fail_q.qsize()))
+            print("    succeeded : {}".format(self.numresults))
             print("    failed    : {}".format(self.fail_q.qsize()))
             print("  not processed     : {}".format(len(self.args_set)))
             print("    queried         : {}".format(len(self.args_set) - self.job_q.qsize()))
