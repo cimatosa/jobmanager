@@ -145,3 +145,19 @@ class Integration_Client_REAL(JobManager_Client):
             
         # t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs
         return ode_wrapper.integrate_real(c=c, args=args_dgl, **kwargs)
+    
+class FunctionCall_Client(JobManager_Client):
+    @staticmethod
+    def func(arg, const_arg, c, m):
+        f = const_arg['f']
+        const_arg.pop('f')
+        f_kwargs = {}
+        f_kwargs.update(arg)
+        f_kwargs.update(const_arg)
+        f_kwargs['__c'] = c
+        f_kwargs['__m'] = m
+        
+        return f(**f_kwargs)
+        
+        
+    
