@@ -100,7 +100,16 @@ def copyQueueToList(q):
         
 class hashDict(dict):
     def __hash__(self):
-        return hash(tuple(sorted(self.items())))
+        try:
+            return hash(tuple(sorted(self.items())))
+        except:
+            for i in self.items():
+                try:
+                    hash(i)
+                except Exception as e:
+                    print("item '{}' of dict is not hashable".format(i))
+                    raise e
+                    
     
 class hashableCopyOfNumpyArray(np.ndarray):
     def __new__(self, other):
