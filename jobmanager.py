@@ -83,8 +83,6 @@ def getDateForFileName(includePID = False):
         name += "_{}".format(os.getpid()) 
     return name
 
-
-
 def copyQueueToList(q):
     res_list = []
     res_q = myQueue()
@@ -434,13 +432,28 @@ class JobManager_Server(object):
         
     def show_statistics(self):
         if self.verbose > 0:
-            print("total number of jobs  : {}".format(self.numjobs))
-            print("  processed   : {}".format(self.numresults + self.fail_q.qsize()))
-            print("    succeeded : {}".format(self.numresults))
-            print("    failed    : {}".format(self.fail_q.qsize()))
-            print("  not processed     : {}".format(len(self.args_set)))
-            print("    queried         : {}".format(len(self.args_set) - self.job_q.qsize()))
-            print("    not queried yet : {}".format(self.job_q.qsize()))        
+            all_jobs = self.numjobs
+            succeeded = self.numresults
+            failed = self.fail_q.qsize()
+            all_processed = succeeded + failed
+            
+            print("total number of jobs  : {}".format(all_jobs))
+            print("  processed   : {}".format(all_processed))
+            print("    succeeded : {}".format(succeeded))
+            print("    failed    : {}".format(failed))
+            
+            all_not_processed = all_jobs - all_processed
+            not_queried = self.job_q.qsize()
+            queried_but_not_processed = all_not_processed - not_queried  
+            
+            print("  not processed     : {}".format(all_not_processed))
+            print("    queried         : {}".format(queried_but_not_processed))
+            print("    not queried yet : {}".format(not_queried))
+            print("len(args_set : {}".format(len(self.args_set)))
+            if (all_not_processed + failed) != len(self.args_set):
+                raise RuntimeWarning("'all_not_processed != len(self.args_set)' something is inconsistent!")
+            
+            
 
     @staticmethod
     def static_load(f):
@@ -832,6 +845,7 @@ class JobManager_Client(object):
                     tg_0 = time.time()
                     arg = job_q.get(block = True, timeout = 0.1)
                     tg_1 = time.time()
+                 
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
                     if verbose > 1:
