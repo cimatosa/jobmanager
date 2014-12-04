@@ -150,10 +150,10 @@ class FunctionCall_Client(JobManager_Client):
     @staticmethod
     def func(arg, const_arg, c, m):
         f = const_arg['f']
-        const_arg.pop('f')
         f_kwargs = {}
         f_kwargs.update(arg)
         f_kwargs.update(const_arg)
+        f_kwargs.pop('f')
         f_kwargs['__c'] = c
         f_kwargs['__m'] = m
         
