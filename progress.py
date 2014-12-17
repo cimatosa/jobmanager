@@ -259,7 +259,8 @@ class Loop(object):
         self.func = func
         self.args = args
         self.interval = interval
-        self._run = mp.Value('b', False)
+        self._run   = mp.Value('b', False)
+        self._pause = mp.Value('b', False)
         self.verbose = verbose
         self._proc = None
         self._sigint = sigint
@@ -312,7 +313,7 @@ class Loop(object):
 
 
     @staticmethod
-    def _wrapper_func(func, args, shared_mem_run, interval, verbose, sigint, sigterm, name):
+    def _wrapper_func(func, args, shared_mem_run, shared_mem_pause, interval, verbose, sigint, sigterm, name):
         """to be executed as a seperate process (that's why this functions is declared static)
         """
         # implement the process specific signal handler
@@ -320,19 +321,25 @@ class Loop(object):
         SIG_handler_Loop(shared_mem_run, sigint, sigterm, identifier, verbose)
 
         while shared_mem_run.value:
-            try:
-                quit_loop = func(*args)
-            except:
-                err, val, trb = sys.exc_info()
-                print('\033[0m', end='')
-                sys.stdout.flush()
-                if verbose > 0:
-                    print("{}: error {} occurred in Loop class calling 'func(*args)'".format(identifier, err))
-                    traceback.print_exc()
-                return
+            # in pause mode, simply sleep 
+            if shared_mem_pause.value:
+                quit_loop = False
+            else:
+                # if not pause mode -> call func and see what happens
+                try:
+                    quit_loop = func(*args)
+                except:
+                    err, val, trb = sys.exc_info()
+                    print('\033[0m', end='')
+                    sys.stdout.flush()
+                    if verbose > 0:
+                        print("{}: error {} occurred in Loop class calling 'func(*args)'".format(identifier, err))
+                        traceback.print_exc()
+                    return
 
-            if quit_loop is True:
-                return
+                if quit_loop is True:
+                    return
+                
             time.sleep(interval)
             
         if verbose > 1:
@@ -350,7 +357,7 @@ class Loop(object):
             
         self.run = True
         self._proc = mp.Process(target = Loop._wrapper_func, 
-                                args = (self.func, self.args, self._run, self.interval, 
+                                args = (self.func, self.args, self._run, self._pause, self.interval, 
                                         self.verbose, self._sigint, self._sigterm, self._name),
                                 name=self._name)
         self._proc.start()
@@ -394,6 +401,26 @@ class Loop(object):
         else:
             return self._proc.is_alive()
         
+    def pause(self):
+        if not self.run:
+            if self.verbose > 0:
+                print("{} is not running -> can not pause".format(self._identifier))
+        
+        if self._pause.value == True:
+            if self.verbose > 1:
+                print("{} is already in pause mode!".format(self._identifier))
+        self._pause.value = True
+        
+    def resume(self):
+        if not self.run:
+            if self.verbose > 0:
+                print("{} is not running -> can not resume".format(self._identifier))
+        
+        if self._pause.value == False:
+            if self.verbose > 1:
+                print("{} is not in pause mode -> can not resume!".format(self._identifier))
+                
+        self._pause.value = False
     
     @property
     def run(self):
@@ -1027,4 +1054,10 @@ class ProgressSilentDummy(Progress):
         pass
         
     def stop(self):
+        pass
+    
+    def pause(self):
+        pass
+    
+    def resume(self):
         pass

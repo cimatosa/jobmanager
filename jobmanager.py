@@ -152,6 +152,7 @@ class Signal_to_SIG_IGN(object):
         self.verbose = verbose
         for s in signals:
             signal.signal(s, self._handler)
+    
     def _handler(self, sig, frame):
         if self.verbose > 0:
             print("PID {}: received signal {} -> will be ignored".format(os.getpid(), progress.signal_dict[sig]))
@@ -165,6 +166,42 @@ class Signal_to_sys_exit(object):
         if self.verbose > 0:
             print("PID {}: received signal {} -> call sys.exit -> raise SystemExit".format(os.getpid(), progress.signal_dict[signal]))
         sys.exit('exit due to signal {}'.format(progress.signal_dict[signal]))
+        
+class Signal_handler_for_Jobmanager_client(object):
+    def __init__(self, client_object, exit_handler, signals=[signal.SIGINT], verbose=0):
+        self.client_object = client_object
+        self.exit_handler = exit_handler
+        self.verbose = verbose
+        for s in signals:
+            signal.signal(s, self._handler)
+            
+    def _handler(self, sig, frame):
+        if self.verbose > 0:
+            print("PID {}: received signal {}".format(os.getpid(), progress.signal_dict[sig]))
+        
+        if self.client_object.pbc is not None:
+            self.client_object.pbc.pause()
+        
+        r = input("<q> - quit, <i> - server info: ")
+        if r == 'i':
+            self._show_server_info()
+        elif r == 'q':
+            print('PID {}: terminate worker functions'.format(os.getpid()))
+            self.exit_handler._handler(sig, frame)
+            print('PID {}: call sys.exit -> raise SystemExit'.format(os.getpid()))
+            sys.exit('exit due to user')
+        else:
+            print("input '{}' ignored".format(r))
+        
+        if self.client_object.pbc is not None:
+            self.client_object.pbc.resume()
+        
+    def _show_server_info(self):
+        self.client_object.server
+        self.client_object.authkey
+        print("{}: connected to {} using authkey {}".format(self.client_object._identifier,
+                                                            self.client_object.server,
+                                                            self.client_object.authkey))    
         
 class Signal_to_terminate_process_list(object):
     """
@@ -449,7 +486,7 @@ class JobManager_Server(object):
             print("  not processed     : {}".format(all_not_processed))
             print("    queried         : {}".format(queried_but_not_processed))
             print("    not queried yet : {}".format(not_queried))
-            print("len(args_set : {}".format(len(self.args_set)))
+            print("len(args_set) : {}".format(len(self.args_set)))
             if (all_not_processed + failed) != len(self.args_set):
                 raise RuntimeWarning("'all_not_processed != len(self.args_set)' something is inconsistent!")
             
@@ -651,7 +688,8 @@ class JobManager_Client(object):
                   no_warnings=False, 
                   verbose=1,
                   show_statusbar_for_jobs=True,
-                  show_counter_only=False):
+                  show_counter_only=False,
+                  interval=0.3):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -677,6 +715,7 @@ class JobManager_Client(object):
         
         self.show_statusbar_for_jobs = show_statusbar_for_jobs
         self.show_counter_only = show_counter_only
+        self.interval = interval
         self.verbose = verbose
         
         self._pid = os.getpid()
@@ -705,6 +744,8 @@ class JobManager_Client(object):
         self.procs = []
         
         self.manager_objects = self.get_manager_objects()
+        
+        self.pbc = None
         
        
     def get_manager_objects(self):
@@ -796,10 +837,11 @@ class JobManager_Client(object):
         the wrapper spawned nproc trimes calling and handling self.func
         """
         identifier = progress.get_identifier(name='worker{}'.format(i+1))
-        Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
+        Signal_to_sys_exit(signals=[signal.SIGTERM])
+        Signal_to_SIG_IGN(signals=[signal.SIGINT])
 
         if manager_objects is None:        
-            manager_objects = JobManager_Client._get_manager_object(server, port, authkey, identifier, verbose)
+            manager_objects = JobManager_Client._get_manager_objects(server, port, authkey, identifier, verbose)
             if manager_objects == None:
                 if verbose > 1:
                     print("{}: no shared object recieved, terminate!".format(identifier))
@@ -1001,8 +1043,13 @@ class JobManager_Client(object):
         else:
             Progress = progress.ProgressSilentDummy
             
-        with Progress(count=c, max_count=m_progress, interval=0.3, verbose=self.verbose) as pbc :
-            pbc.start()
+        with Progress(count=c, 
+                      max_count=m_progress, 
+                      interval=self.interval, 
+                      verbose=self.verbose,
+                      sigint='ign',
+                      sigterm='ign') as self.pbc :
+            self.pbc.start()
             for i in range(self.nproc):
                 reset_pbc = lambda: pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
@@ -1020,10 +1067,18 @@ class JobManager_Client(object):
                 p.start()
                 time.sleep(0.3)
             
-            Signal_to_terminate_process_list(process_list=self.procs, 
-                                             verbose=self.verbose,
-                                             name='worker',
-                                             timeout=2)
+            exit_handler = Signal_to_terminate_process_list(process_list=self.procs,
+                                                            signals=[signal.SIGTERM], 
+                                                            verbose=self.verbose,
+                                                            name='worker',
+                                                            timeout=2)
+            
+            interrupt_handler = Signal_handler_for_Jobmanager_client(client_object = self,
+                                                                     exit_handler=exit_handler,
+                                                                     signals=[signal.SIGINT],
+                                                                     verbose=self.verbose)
+            
+            
         
             for p in self.procs:
                 p.join()
