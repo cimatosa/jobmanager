@@ -551,33 +551,54 @@ def test_jobmanager_local():
                                      ) as jm_server:
         jm_server.args_from_list(args)
         jm_server.start()
+        
+def _test_interrupt_server():
+    start_server(n = 100)
+    
+def _test_interrupt_client():
+    
+    class DoNothing_Client(jobmanager.JobManager_Client):
+        @staticmethod
+        def func(arg, const_arg):
+            while True:
+               time.sleep(10) 
+   
+    c = DoNothing_Client(server='localhost', authkey = 'testing', verbose=2, show_statusbar_for_jobs=True)
+    c.start()
+        
 
+     
+    
 
 if __name__ == "__main__":
-    func = [
-#     test_Signal_to_SIG_IGN,
-#     test_Signal_to_sys_exit,
-#     test_Signal_to_terminate_process_list,
-#           
-#     test_jobmanager_basic,
-#     test_jobmanager_server_signals,
-#     test_shutdown_server_while_client_running,
-#     test_shutdown_client,
-#     test_check_fail,
-#     test_jobmanager_read_old_stat,
-#     test_hashDict,
-#     test_hashedViewOnNumpyArray,
-    test_client_status,
-    test_jobmanager_local,
-    lambda : print("END")
-    ]
-    for f in func:
-        print()
-        print('#'*80)
-        print('##  {}'.format(f.__name__))
-        print()
-        f()
-        time.sleep(1)
-
-    pass
+    if len(sys.argv) > 1:
+        if sys.argv[1] == 'server':
+            start_server(n = 100)
+    else:    
+        func = [
+    #     test_Signal_to_SIG_IGN,
+    #     test_Signal_to_sys_exit,
+    #     test_Signal_to_terminate_process_list,
+    #           
+    #     test_jobmanager_basic,
+    #     test_jobmanager_server_signals,
+    #     test_shutdown_server_while_client_running,
+    #     test_shutdown_client,
+    #     test_check_fail,
+    #     test_jobmanager_read_old_stat,
+    #     test_hashDict,
+    #     test_hashedViewOnNumpyArray,
+    #     test_client_status,
+    #     test_jobmanager_local,
+        lambda : print("END")
+        ]
+    #     for f in func:
+    #         print()
+    #         print('#'*80)
+    #         print('##  {}'.format(f.__name__))
+    #         print()
+    #         f()
+    #         time.sleep(1)
+    
+        _test_interrupt_client()
     
