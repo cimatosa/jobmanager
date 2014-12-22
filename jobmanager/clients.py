@@ -1,15 +1,17 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+The clients module
+
+This module provides special subclasses of the JobManager_Client
+"""
+
 import os
 import sys
 import traceback
 
 from .jobmanager import JobManager_Client
 import ode_wrapper
-
-"""
-The clients module
-
-This module provides special subclasses of the JobManager_Client
-"""
 
 
 class Integration_Client_CPLX(JobManager_Client):

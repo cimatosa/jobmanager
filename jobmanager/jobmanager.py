@@ -16,6 +16,14 @@ import sys
 import time
 import traceback
 
+# This is a list of all python objects that will be imported upon
+# initialization during module import (see __init__.py)
+__all__ = ["JobManager_Client",
+           "JobManager_Local",
+           "JobManager_Server",
+          ]
+           
+
 # Magic conversion from 3 to 2
 if sys.version_info[0] == 2:
     # Python 2
