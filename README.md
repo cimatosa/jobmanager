@@ -1,12 +1,16 @@
 jobmanager
 ==========
 
-easy distributed computing based on the python class SyncManager for remote communication and python module multiprocessing for local parallelism 
+Easy distributed computing based on the python class SyncManager for remote communication and python module multiprocessing for local parallelism.
 
-### testing
+### Testing on Linux
+After cloning into jobmanager, create a virtual environment
 
-   virtualenv --system-site-packages ve_jm
-   source ve_jm/bin/activate
-   python setupy.py install
-   python examples/simple/simple_example.py
+    virtualenv --system-site-packages ve_jm
+    source ve_jm/bin/activate
+
+Install jobmanager into the environment and run a simple example.   
+
+    python setupy.py install
+    python examples/simple_example.py
    
