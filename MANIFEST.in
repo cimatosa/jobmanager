@@ -1,0 +1,4 @@
+include examples/*.py
+include examples/advanced/*.py
+include doc/*
+include README.md
