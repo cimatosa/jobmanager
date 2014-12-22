@@ -1059,7 +1059,7 @@ class JobManager_Client(object):
                       sigterm='ign') as self.pbc :
             self.pbc.start()
             for i in range(self.nproc):
-                reset_pbc = lambda: pbc.reset(i)
+                reset_pbc = lambda: self.pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
                                                                 self.nice, 
                                                                 self.verbose, 
