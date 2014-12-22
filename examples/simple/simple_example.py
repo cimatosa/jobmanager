@@ -29,7 +29,7 @@ class Example_Server(jm.JobManager_Server):
     def __init__(self):
         # server show status information (verbose=1)
         super(Example_Server, self).__init__(authkey='simple example',
-                         verbose=2)
+                         verbose=1)
 
         self.final_result = 1
             
