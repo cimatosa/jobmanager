@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from jm_version import __version__
+from .jm_version import __version__
 
 from .jobmanager import *
 
