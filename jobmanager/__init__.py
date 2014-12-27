@@ -5,6 +5,7 @@ from .jm_version import __version__
 from .jobmanager import *
 
 from . import clients
+from . import decorators
 from . import servers
 from . import progress
 
