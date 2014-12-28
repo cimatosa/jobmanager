@@ -11,7 +11,7 @@ import sys
 import traceback
 
 from .jobmanager import JobManager_Client
-import ode_wrapper
+from . import ode_wrapper
 
 
 class Integration_Client_CPLX(JobManager_Client):
@@ -62,7 +62,7 @@ class Integration_Client_CPLX(JobManager_Client):
         f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...) 
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(Integration_Client_CPLX, self).__init__(**kwargs)
         
     @staticmethod
     def func(arg, const_arg, c, m):
@@ -107,7 +107,7 @@ class Integration_Client_REAL(JobManager_Client):
         performance issue and 'zvode' is obviously not supported. 
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(Integration_Client_REAL, self).__init__(**kwargs)
         
     @staticmethod
     def func(arg, const_arg, c, m):

@@ -21,6 +21,7 @@ import traceback
 __all__ = ["JobManager_Client",
            "JobManager_Local",
            "JobManager_Server",
+           "hashDict",
           ]
            
 
