@@ -109,12 +109,14 @@ class ProgressBar(object):
         **kwargs : dict
             Keyword-arguments for `func`.
         """
-        count = progress.UnsignedIntValue()
-        max_count = progress.UnsignedIntValue(0)
-        kwargs[self.cm[0]] = count
-        kwargs[self.cm[1]] = max_count
-        with progress.ProgressBar(count, max_count, 
-                                       *self.args, **self.kwargs) as pb:
+        if not kwargs.has_key(self.cm[0]) or kwargs[self.cm[0]] is None:
+            # count
+            kwargs[self.cm[0]] = progress.UnsignedIntValue(0)
+        if not kwargs.has_key(self.cm[1]) or kwargs[self.cm[1]] is None:
+            # max_count
+            kwargs[self.cm[1]] = progress.UnsignedIntValue(0)
+        with progress.ProgressBar(kwargs[self.cm[0]], kwargs[self.cm[1]], 
+                                  *self.args, **self.kwargs) as pb:
             pb.start()
             return self.func(*args, **kwargs)
 
@@ -145,7 +147,9 @@ def decorate_module_ProgressBar(module, **kwargs):
                     wrapper = ProgressBar(getattr(module, newid), **kwargs)
                     # set new function
                     setattr(module, key, wrapper)
-                    print("Jobmanager wrapped {}.{}".format(
+                    if (kwargs.has_key("verbose") and
+                        kwargs["verbose"] > 0):
+                        print("Jobmanager wrapped {}.{}".format(
                                                   module.__name__, key))
                     
 
