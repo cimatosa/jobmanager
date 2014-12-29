@@ -109,13 +109,15 @@ class ProgressBar(object):
         **kwargs : dict
             Keyword-arguments for `func`.
         """
+        # check if the kwarg is already given 
+        # (e.g. by a function that is nested.
         if not kwargs.has_key(self.cm[0]) or kwargs[self.cm[0]] is None:
             # count
             kwargs[self.cm[0]] = progress.UnsignedIntValue(0)
         if not kwargs.has_key(self.cm[1]) or kwargs[self.cm[1]] is None:
             # max_count
             kwargs[self.cm[1]] = progress.UnsignedIntValue(0)
-        with progress.ProgressBar(kwargs[self.cm[0]], kwargs[self.cm[1]], 
+        with progress.ProgressBar(kwargs[self.cm[0]], kwargs[self.cm[1]],
                                   *self.args, **self.kwargs) as pb:
             pb.start()
             return self.func(*args, **kwargs)
@@ -131,6 +133,9 @@ def decorate_module_ProgressBar(module, **kwargs):
     by defining a function `_jm_decorate_{func}".
     
     **kwargs are keyword arguments for ProgressBar
+    
+    Note that decorating all functions in a module might lead to
+    strange behavior of the progress bar for nested functions.
     """
     vdict = module.__dict__
     for key in list(vdict.keys()):
