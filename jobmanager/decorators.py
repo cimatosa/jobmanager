@@ -85,6 +85,7 @@ class ProgressBar(object):
         automatically creates the necessary `multiprocessing.Value`
         objects.
         """
+        self.__name__ = func.__name__ # act like the function
         self.func = func
         self.args = args
         self.kwargs = kwargs
@@ -97,7 +98,7 @@ class ProgressBar(object):
                   "The wrapped function `{}` ".format(func.func_name)+
                   "must accept one of the folling pairs of "+
                   "keyword arguments:{}".format(validCountKwargs))
-        
+
         
     def __call__(self, *args, **kwargs):
         """ Calls `func` - previously defined in `__init__`.
