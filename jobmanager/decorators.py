@@ -10,11 +10,13 @@ import time
 
 from . import progress
 
-__all__ = ["SingleProgressBar"]
+from .jobmanager import getCountKwargs, validCountKwargs
+
+__all__ = ["ProgressBar"]
 
 
 
-class SingleProgressBar(object):
+class ProgressBar(object):
     """ A wrapper/decorator with a text-based progress bar.
     
     Methods:
@@ -25,10 +27,10 @@ class SingleProgressBar(object):
     Examples
     --------
     
-    >>> from jobmanager.decorators import SingleProgressBar
+    >>> from jobmanager.decorators import ProgressBar
     >>> import time
     >>> 
-    >>> @SingleProgressBar
+    >>> @ProgressBar
     >>> def my_func(arg, kwarg="1", count=None, max_count=None):
     >>>     maxval = 100
     >>>     if max_count is not None:
@@ -51,7 +53,7 @@ class SingleProgressBar(object):
     You can also use this class as a wrapper and tune parameters of the
     progress bar.
     
-    >>> wrapper = SingleProgressBar(my_func, interval=.1)
+    >>> wrapper = ProgressBar(my_func, interval=.1)
     >>> result = wrapper("wrapped function", kwarg=" test")
     
     """
@@ -59,7 +61,7 @@ class SingleProgressBar(object):
         """ Initiates the wrapper objet.
         
         A function can be wrapped by decorating it with
-        `SingleProgressBar` or by instantiating `SingleProgressBar` and
+        `ProgressBar` or by instantiating `ProgressBar` and
         subsequently calling it with the arguments for `func`.
         
         
@@ -89,16 +91,12 @@ class SingleProgressBar(object):
         # works with Python 2.7 and 3.3
         valid = func.__code__.co_varnames[:func.__code__.co_argcount]
         # Check arguments
-        self.cm = None
-        if ( "count" in valid and "max_count" in valid ):
-            self.cm = ["count", "max_count"]
-        elif ( "c" in valid and "m" in valid ):
-            self.cm = ["c", "m"]
-        else:
+        self.cm = getCountKwargs(func)
+        if self.cm is None:
             raise ValueError(
                   "The wrapped function `{}` ".format(func.func_name)+
-                  "must accept the arguments `count`, `max_count`, "+
-                  "or `c`, `m`, but it only accepts {}.".format(valid))
+                  "must accept one of the folling pairs of "+
+                  "keyword arguments:{}".format(validCountKwargs))
         
         
     def __call__(self, *args, **kwargs):
@@ -122,7 +120,7 @@ class SingleProgressBar(object):
 
 
 
-@SingleProgressBar
+@ProgressBar
 def _my_func_1(arg, kwarg="1", count=None, max_count=None):
     maxval = 100
     if max_count is not None:
@@ -149,11 +147,11 @@ def _my_func_2(arg, c, m, kwarg="2"):
     return arg+kwarg
 
 
-def _test_SingleProgressBar():
+def _test_ProgressBar():
     result1 = _my_func_1("decorated function", kwarg=" 1")
     print(result1)
     
-    wrapper = SingleProgressBar(_my_func_2, interval=.1)
+    wrapper = ProgressBar(_my_func_2, interval=.1)
     result2 = wrapper("wrapped function", kwarg=" 2")
     print(result2)
 
