@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import sys
 from os.path import abspath, dirname, split
 
@@ -15,11 +17,13 @@ from scipy.special import mathieu_sem, mathieu_cem, mathieu_a, mathieu_b
 import multiprocessing as mp
 import time
 
+
 def dgl_mathieu(t, f, a, q):
     f1, f2 = f[0], f[1]
     f1_dot = f2
     f2_dot = -(a - 2*q*np.cos(2*t))*f1
     return [f1_dot, f2_dot]
+
 
 def solve_mathiue_dgl(t0, tmax, N, m, q):
     a = mathieu_a(m, q)

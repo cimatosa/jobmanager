@@ -5,10 +5,11 @@ from __future__ import division, print_function
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from os.path import split, dirname, abspath
 from scipy.optimize import minimize
 import sys
 
-sys.path.append(os.path.abspath("../"))
+sys.path.append(split(split(dirname(abspath(__file__)))[0])[0])
 
 import jobmanager as jm
 from calculations import *

@@ -14,6 +14,7 @@ from .jobmanager import JobManager_Client
 from . import ode_wrapper
 
 
+
 class Integration_Client_CPLX(JobManager_Client):
     """
         A JobManager_Client subclass to integrate a set of complex valued ODE.
@@ -98,6 +99,8 @@ class Integration_Client_CPLX(JobManager_Client):
         # t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs
         return ode_wrapper.integrate_cplx(c=c, args=args_dgl, **kwargs)
     
+    
+    
 class Integration_Client_REAL(JobManager_Client):
     """
         A JobManager_Client subclass to integrate a set of complex real ODE.
@@ -147,6 +150,8 @@ class Integration_Client_REAL(JobManager_Client):
             
         # t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs
         return ode_wrapper.integrate_real(c=c, args=args_dgl, **kwargs)
+    
+    
     
 class FunctionCall_Client(JobManager_Client):
     @staticmethod

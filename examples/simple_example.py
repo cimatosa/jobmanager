@@ -4,12 +4,15 @@ from __future__ import division, print_function
 
 import multiprocessing as mp
 import numpy as np
+from os.path import split, dirname, abspath
 import sys
 import time
 
-sys.path.append('../')
+sys.path.append(split(dirname(abspath(__file__)))[0])
 
 import jobmanager as jm
+
+
 
 class Example_Client(jm.JobManager_Client):
     def __init__(self):
@@ -44,16 +47,18 @@ class Example_Server(jm.JobManager_Server):
         print("final_result:", self.final_result)
         
 
+
 def run_server():
     server = Example_Server()
     for i in range(5000):
         server.put_arg(np.random.rand())
-        
     server.start()
+    
     
 def run_client():
     client = Example_Client()
     client.start()
+
 
 if __name__ == "__main__":
     p_server = mp.Process(target=run_server)

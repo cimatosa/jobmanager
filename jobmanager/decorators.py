@@ -12,6 +12,8 @@ from . import progress
 
 __all__ = ["SingleProgressBar"]
 
+
+
 class SingleProgressBar(object):
     """ A wrapper/decorator with a text-based progress bar.
     
@@ -65,8 +67,9 @@ class SingleProgressBar(object):
         ----------
         func : callable
             The method that is wrapped/decorated. It must accept the
-            two keyword-arguments `count` and `max_count`. The method
-            `func` increments `count.value` up to `max_count.value`.
+            two keyword-arguments `count` and `max_count` (or `c` and
+            `m`). The method `func` increments `count.value` up to
+            `max_count.value` (`c.value`, `m.value`).
         *args : list
             Arguments for `jobmanager.ProgressBar`.
         **kwargs : dict
@@ -75,20 +78,27 @@ class SingleProgressBar(object):
         
         Notes
         -----
-        `func` must accept `count` and `max_count` and properly set
-        their `.value` properties. This wrapper automatically creates
-        the necessary `multiprocessing.Value` objects.
+        `func` must accept `count` and `max_count` (or `c`, `m`) and 
+        properly set their `.value` properties. This wrapper
+        automatically creates the necessary `multiprocessing.Value`
+        objects.
         """
         self.func = func
         self.args = args
         self.kwargs = kwargs
         # works with Python 2.7 and 3.3
         valid = func.__code__.co_varnames[:func.__code__.co_argcount]
-        if not ( "count" in valid and "max_count" in valid ):
+        # Check arguments
+        self.cm = None
+        if ( "count" in valid and "max_count" in valid ):
+            self.cm = ["count", "max_count"]
+        elif ( "c" in valid and "m" in valid ):
+            self.cm = ["c", "m"]
+        else:
             raise ValueError(
                   "The wrapped function `{}` ".format(func.func_name)+
-                  "must accept the arguments `count` and `max_count`,"+
-                  " but it only accepts {}.".format(valid))
+                  "must accept the arguments `count`, `max_count`, "+
+                  "or `c`, `m`, but it only accepts {}.".format(valid))
         
         
     def __call__(self, *args, **kwargs):
@@ -102,12 +112,13 @@ class SingleProgressBar(object):
             Keyword-arguments for `func`.
         """
         count = progress.UnsignedIntValue()
-        max_count = progress.UnsignedIntValue(1000)
+        max_count = progress.UnsignedIntValue(0)
+        kwargs[self.cm[0]] = count
+        kwargs[self.cm[1]] = max_count
         with progress.ProgressBar(count, max_count, 
                                        *self.args, **self.kwargs) as pb:
             pb.start()
-            return self.func(*args, count=count, max_count=max_count,
-                        **kwargs)
+            return self.func(*args, **kwargs)
 
 
 
@@ -121,21 +132,19 @@ def _my_func_1(arg, kwarg="1", count=None, max_count=None):
         if count is not None:
             count.value += 1
             
-        time.sleep(0.05)
+        time.sleep(0.02)
 
     return arg+kwarg
 
 
-def _my_func_2(arg, kwarg="2", count=None, max_count=None):
+def _my_func_2(arg, c, m, kwarg="2"):
     maxval = 100
-    if max_count is not None:
-        max_count.value = maxval
+    m.value += maxval
         
     for i in range(maxval):
-        if count is not None:
-            count.value += 1
+        c.value += 1
             
-        time.sleep(0.05)
+        time.sleep(0.02)
 
     return arg+kwarg
 
