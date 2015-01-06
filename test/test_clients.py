@@ -114,7 +114,6 @@ def test_distributed_mathieu():
     
     authkey = 'integration_jm'
     
-
     with jm.JobManager_Local(client_class = jm.clients.Integration_Client_REAL,
                              authkey = authkey,
                              const_arg = const_arg,
@@ -173,7 +172,82 @@ def test_distributed_mathieu():
 #     ax.plot_trisurf(data[0], data[1], data[2], cmap=cm.jet, linewidth=0.2)
 # 
 #     plt.show()
+
+class MYO(object):
+    def __init__(self):
+        self.a = (1,2,3)
+        self.b = (56, -8.4)
+        
+    def __eq__(self, other):
+        return False
+
+from collections import namedtuple as nt
+N1 = nt('N1', ['x', 'y'])
+
+def test_tuple_equal():
+
+            
+    myo1 = MYO()
+    
+    t1 = (myo1, myo1)
+    
+    myo2 = MYO()
+    
+    t2 = (myo2, myo2)
+   
+    def f(x):
+        return x**2
+    
+    def g(x):
+        return x**2
+    
+    g = f
+    import copy
+    
+    h = copy.deepcopy(f)
+    
+    print(g is f)
+    print(h == f)
+    
+
+    
+
+    na = N1(y=2., x=4)
+    nb = N1(4,2)
+    
+    print(na == nb)
+    
+    import sqlitedict
+    
+    d = sqlitedict.SqliteDict(filename='tmp.db', tablename='test', autocommit=True)
+    
+    hash1 = hash(na)
+    
+    print(hash1, type(hash1))
+    d[hash1] = na
+    
+    
+    print(hash1 in d)
+    print(str(hash1) in d)
+    
+    s = str(hash1)
+    print(s, type(s))
+    
+    print(d[s])
+    
+    import pickle
+    
+    key_tuple = (2,3,4,'s', na)
+    key_bytes = pickle.dumps(key_tuple)
+    print(key_bytes)
+    
+    d[key_bytes] = 'tuple'
+    
+    print(d[key_bytes])
+    
     
 if __name__ == "__main__":
 #     test_mathiue_dgl(plot=False)
-    test_distributed_mathieu()
+#     test_distributed_mathieu()
+    test_tuple_equal()
+

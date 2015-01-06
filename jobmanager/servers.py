@@ -7,29 +7,28 @@ from collections import namedtuple
 Data_Type = namedtuple('Data_Type', ['key', 'data'])
 
 class PersistentDataBase(object):
-    def __init__(self, fname):
+    def __init__(self, fname, table_name):
         self.fname = fname
+        self.table_name = table_name
     
     def has_key(self, key):
         hash_key = hash(key)
-        with sqlitedict.SqliteDict(self.fname) as data: 
+        with sqlitedict.SqliteDict(filename = self.fname, tablename=self.table_name) as data: 
             if hash_key in data:
                 # hash already exists -> key might exists
                 for i, d in enumerate(data[hash_key]):
                     if d.key == key:
-                        return i
-        return -1
+                        return i, hash_key
+        return -1, hash_key
         
     def dump(self, key, data, overwrite=False):
-        hash_key = hash(key)
+        key_idx, hash_key = self.has_key(key)
         
-        key_idx = self.has_key(key)
-        
-        if self.has_key(key) >= 0:
+        if key_idx >= 0:
             print("key {} already exists!")
             if overwrite:
                 print("overwrite data")
-                with sqlitedict.SqliteDict(self.fname) as data_dict: 
+                with sqlitedict.SqliteDict(filename = self.fname, tablename=self.table_name) as data_dict: 
                     data_dict[hash_key][key_idx].data = data
                     data_dict.commit()
                     return True
@@ -38,15 +37,31 @@ class PersistentDataBase(object):
                 return False
         else:
             # hash does not exists -> create new item (list of Data_Type elements)
-            with sqlitedict.SqliteDict(self.fname) as data_dict:
+            with sqlitedict.SqliteDict(filename = self.fname, tablename=self.table_name) as data_dict:
                 data_dict[hash_key] = []
                 data_dict[hash_key].append(Data_Type(key = key, data = data))
                 data_dict.commit()
                 return True
+
+class PersistentDataBase_byte_keys(object):
+    def __init__(self, fname, table_name):
+        self.fname = fname
+        self.table_name = table_name
+    
+    def dump(self, key_as_bytes, data, overwrite=False):
+        with sqlitedict.SqliteDict(filename = self.fname, tablename=self.table_name) as data_dict:
+            if overwrite or (not key_as_bytes in data_dict):
+                data_dict[key_as_bytes] = data
+                data_dict.commit()
+                return True
+        
+        return False
+
             
 class PersistentData_Server(JobManager_Server, PersistentDataBase):
     def __init__(self, 
                  fname_persistent_data,
+                 table_key,
                  authkey, 
                  const_arg=None, 
                  port=42524, 

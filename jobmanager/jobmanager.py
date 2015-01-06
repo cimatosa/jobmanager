@@ -130,6 +130,16 @@ def copyQueueToList(q):
         pass
 
     return res_q, res_list
+
+def try_pickle(obj, show_exception=False):
+    blackhole = open(os.devnull, 'wb')
+    try:
+        pickle.dump(obj, blackhole)
+        return True
+    except:
+        if show_exception:
+            traceback.print_exc()
+        return False
         
         
 class hashDict(dict):
@@ -218,7 +228,12 @@ class Signal_handler_for_Jobmanager_client(object):
         if self.client_object.pbc is not None:
             self.client_object.pbc.pause()
         
-        r = input("<q> - quit, <i> - server info: ")
+        try:
+            r = input("<q> - quit, <i> - server info: ")
+        except:
+            r = 'q'
+            
+            
         if r == 'i':
             self._show_server_info()
         elif r == 'q':
@@ -358,7 +373,17 @@ class JobManager_Server(object):
             self.authkey = authkey
         else: 
             self.authkey = bytearray(authkey, encoding='utf8')
+            
+        if not isinstance(const_arg, dict):
+            raise RuntimeError('const_arg must be an instance of dict!')
+        
+#         for k in const_arg.keys():
+#             if not try_pickle(const_arg[k], show_exception=True):
+#                 raise RuntimeError("key '{}' of const_arg is not pickable!\n{}={}".format(k, k, const_arg[k]))
+        
         self.const_arg = copy.copy(const_arg)
+        
+        
         self.fname_dump = fname_dump        
         self.msg_interval = msg_interval
         self.speed_calc_cycles = speed_calc_cycles
@@ -485,7 +510,8 @@ class JobManager_Server(object):
         self.process_final_result()
         
         
-        if self.fname_dump != None:
+        print(self.fname_dump)
+        if self.fname_dump is not None:
             if self.fname_dump == 'auto':
                 fname = "{}_{}.dump".format(self.authkey.decode('utf8'), getDateForFileName(includePID=False))
             else:
@@ -1053,7 +1079,7 @@ class JobManager_Client(object):
                 if verbose > 1:
                     print(" done!")
                 
-        if verbose > 1:
+        if verbose > 0:
             try:
                 print("{}: pure calculation time: {}".format(identifier, progress.humanize_time(time_calc) ))
                 print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
