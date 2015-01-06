@@ -49,10 +49,10 @@ class Example_Server(jm.JobManager_Server):
 
 
 def run_server():
-    server = Example_Server()
-    for i in range(5000):
-        server.put_arg(np.random.rand())
-    server.start()
+    with Example_Server() as server:
+        for i in range(5000):
+            server.put_arg(np.random.rand())
+        server.start()
     
     
 def run_client():
