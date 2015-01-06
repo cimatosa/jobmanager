@@ -8,6 +8,7 @@ from . import clients
 from . import decorators
 from . import servers
 from . import progress
+from . import persistentData
 
 # ode_wrapper requires scipy
 try:
