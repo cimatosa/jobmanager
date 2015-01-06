@@ -691,6 +691,7 @@ class JobManager_Server(object):
             print("{}: wait {}s before trigger clean up".format(self._identifier, self.__wait_before_stop))
         time.sleep(self.__wait_before_stop)
 
+
 class JobManager_Client(object):
     """
     Calls the functions self.func with arguments fetched from the job_q. You should
@@ -902,13 +903,14 @@ class JobManager_Client(object):
         #args_of_func = inspect.getfullargspec(func).args
         #if len(args_of_func) == 2:
         count_args = getCountKwargs(func)
-        print(count_args)
         if count_args is None:
             if verbose > 1:
                 print("{}: found function without status information".format(identifier))
             m.value = 0  # setting max_count to -1 will hide the progress bar 
             _func = lambda arg, const_arg, c, m : func(arg, const_arg)
         elif count_args != ["c", "m"]:
+            if verbose > 1:
+                print("{}: found counter keyword arguments: {}".format(identifier, count_args))
             # Allow other arguments, such as ["jmc", "jmm"] as defined
             # in `validCountKwargs`.
             # Here we translate to "c" and "m".
@@ -916,6 +918,8 @@ class JobManager_Client(object):
                 arg[count_args[0]] = c
                 arg[count_args[1]] = m
         else:
+            if verbose > 1:
+                print("{}: found standard keyword arguments: [c, m]".format(identifier))
             _func = func
             
         
