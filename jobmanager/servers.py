@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import sqlitedict
 from .jobmanager import JobManager_Server
 from collections import namedtuple

@@ -16,6 +16,15 @@ import sys
 import time
 import traceback
 
+# This is a list of all python objects that will be imported upon
+# initialization during module import (see __init__.py)
+__all__ = ["JobManager_Client",
+           "JobManager_Local",
+           "JobManager_Server",
+           "hashDict",
+          ]
+           
+
 # Magic conversion from 3 to 2
 if sys.version_info[0] == 2:
     # Python 2
@@ -73,6 +82,15 @@ The class JobManager_Client
 # a list of all names of the implemented python signals
 all_signals = [s for s in dir(signal) if (s.startswith('SIG') and s[3] != '_')]
 
+# keyword arguments that define counting in wrapped functions
+validCountKwargs = [
+                    [ "count", "count_max"],
+                    [ "count", "max_count"],
+                    [ "c", "m"],
+                    [ "jmc", "jmm"],
+                   ]
+                     
+                     
 def getDateForFileName(includePID = False):
     """returns the current date-time and optionally the process id in the format
     YYYY_MM_DD_hh_mm_ss_pid
@@ -82,6 +100,23 @@ def getDateForFileName(includePID = False):
     if includePID:
         name += "_{}".format(os.getpid()) 
     return name
+
+
+def getCountKwargs(func):
+    """ Returns a list ["count kwarg", "count_max kwarg"] for a
+    given function. Valid combinations are defined in 
+    `jobmanager.jobmanager.validCountKwargs`.
+    
+    Returns None if no keyword arguments are found.
+    """
+    # Get all arguments of the function
+    func_args = func.__code__.co_varnames[:func.__code__.co_argcount]
+    for pair in validCountKwargs:
+        if ( pair[0] in func_args and pair[1] in func_args ):
+            return pair
+    # else
+    return None
+            
 
 def copyQueueToList(q):
     res_list = []
@@ -95,6 +130,7 @@ def copyQueueToList(q):
         pass
 
     return res_q, res_list
+        
         
 class hashDict(dict):
     def __hash__(self):
@@ -860,14 +896,25 @@ class JobManager_Client(object):
         
         tg_1 = tg_0 = tp_1 = tp_0 = tf_1 = tf_0 = 0
         
-        args_of_func = inspect.getfullargspec(func).args
         
+
         # check for func definition without status members count, max_count
-        if len(args_of_func) == 2:
+        #args_of_func = inspect.getfullargspec(func).args
+        #if len(args_of_func) == 2:
+        count_args = getCountKwargs(func)
+        print(count_args)
+        if count_args is None:
             if verbose > 1:
                 print("{}: found function without status information".format(identifier))
             m.value = 0  # setting max_count to -1 will hide the progress bar 
             _func = lambda arg, const_arg, c, m : func(arg, const_arg)
+        elif count_args != ["c", "m"]:
+            # Allow other arguments, such as ["jmc", "jmm"] as defined
+            # in `validCountKwargs`.
+            # Here we translate to "c" and "m".
+            def _func(arg, const_arg, c, m):
+                arg[count_args[0]] = c
+                arg[count_args[1]] = m
         else:
             _func = func
             
@@ -1051,7 +1098,7 @@ class JobManager_Client(object):
                       sigterm='ign') as self.pbc :
             self.pbc.start()
             for i in range(self.nproc):
-                reset_pbc = lambda: pbc.reset(i)
+                reset_pbc = lambda: self.pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
                                                                 self.nice, 
                                                                 self.verbose, 
@@ -1157,3 +1204,4 @@ class JobManager_Local(JobManager_Server):
                                            identifier='local_client',
                                            timeout=2,
                                            verbose=self.verbose_client)
+

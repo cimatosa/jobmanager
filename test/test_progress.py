@@ -11,10 +11,12 @@ import sys
 import time
 import traceback
 
-path = os.path.dirname(__file__)
-sys.path.append(path)
+from os.path import abspath, dirname, split
 
-import progress
+# Add parent directory to beginning of path variable
+sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
+
+from jobmanager import progress
 
 def test_loop_basic():
     """

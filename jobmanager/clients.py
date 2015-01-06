@@ -1,15 +1,18 @@
-import os
-import sys
-import traceback
-
-from .jobmanager import JobManager_Client
-import ode_wrapper
-
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 The clients module
 
 This module provides special subclasses of the JobManager_Client
 """
+
+import os
+import sys
+import traceback
+
+from .jobmanager import JobManager_Client
+from . import ode_wrapper
+
 
 
 class Integration_Client_CPLX(JobManager_Client):
@@ -60,7 +63,7 @@ class Integration_Client_CPLX(JobManager_Client):
         f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...) 
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(Integration_Client_CPLX, self).__init__(**kwargs)
         
     @staticmethod
     def func(arg, const_arg, c, m):
@@ -96,6 +99,8 @@ class Integration_Client_CPLX(JobManager_Client):
         # t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs
         return ode_wrapper.integrate_cplx(c=c, args=args_dgl, **kwargs)
     
+    
+    
 class Integration_Client_REAL(JobManager_Client):
     """
         A JobManager_Client subclass to integrate a set of complex real ODE.
@@ -105,7 +110,7 @@ class Integration_Client_REAL(JobManager_Client):
         performance issue and 'zvode' is obviously not supported. 
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(Integration_Client_REAL, self).__init__(**kwargs)
         
     @staticmethod
     def func(arg, const_arg, c, m):
@@ -145,6 +150,8 @@ class Integration_Client_REAL(JobManager_Client):
             
         # t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs
         return ode_wrapper.integrate_real(c=c, args=args_dgl, **kwargs)
+    
+    
     
 class FunctionCall_Client(JobManager_Client):
     @staticmethod

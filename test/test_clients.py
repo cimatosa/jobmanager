@@ -1,10 +1,12 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import sys
-import os
+from os.path import abspath, dirname, split
 
-sys.path.append(os.path.dirname(__file__))
+# Add parent directory to beginning of path variable
+sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
-import externals.jobmanager.jobmanager as jm
-import integrationClient
+import jobmanager as jm
 
 from scipy.integrate import ode
 import numpy as np
@@ -15,11 +17,13 @@ from scipy.special import mathieu_sem, mathieu_cem, mathieu_a, mathieu_b
 import multiprocessing as mp
 import time
 
+
 def dgl_mathieu(t, f, a, q):
     f1, f2 = f[0], f[1]
     f1_dot = f2
     f2_dot = -(a - 2*q*np.cos(2*t))*f1
     return [f1_dot, f2_dot]
+
 
 def solve_mathiue_dgl(t0, tmax, N, m, q):
     a = mathieu_a(m, q)
@@ -110,7 +114,8 @@ def test_distributed_mathieu():
     
     authkey = 'integration_jm'
     
-    with jm.JobManager_Local(client_class = integrationClient.Integration_Client_REAL,
+
+    with jm.JobManager_Local(client_class = jm.clients.Integration_Client_REAL,
                              authkey = authkey,
                              const_arg = const_arg,
                              nproc=1,
