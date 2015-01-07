@@ -510,7 +510,7 @@ class JobManager_Server(object):
         self.process_final_result()
         
         
-        print(self.fname_dump)
+        # print(self.fname_dump)
         if self.fname_dump is not None:
             if self.fname_dump == 'auto':
                 fname = "{}_{}.dump".format(self.authkey.decode('utf8'), getDateForFileName(includePID=False))

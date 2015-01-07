@@ -8,7 +8,8 @@ from os.path import split, dirname, abspath
 import sys
 import time
 
-sys.path.append(split(dirname(abspath(__file__)))[0])
+# Add parent directory to beginning of path variable
+sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 import jobmanager as jm
 
