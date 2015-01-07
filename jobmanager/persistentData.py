@@ -7,7 +7,7 @@ MAGIC_SIGN = 0xff4a87
 RESERVED_KEYS = (0, 1)
 
 class PersistentDataStructure(object):
-    def __init__(self, name, path="./", verbose=0):
+    def __init__(self, name, path="./", verbose=1):
         self.__name = name
         self.__path = abspath(path)
         if not exists(self.__path):
