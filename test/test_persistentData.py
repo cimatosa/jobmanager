@@ -135,10 +135,44 @@ def test_directory_removal():
     assert exists(data._PersistentDataStructure__dir_name)
     remove(data._PersistentDataStructure__dir_name + '/other_file')
     rmdir(data._PersistentDataStructure__dir_name)
+    
+def test_mp_read_from_sqlite():
+    import sqlitedict as sqd
+    import multiprocessing as mp
+    import time
+    
+    d = sqd.SqliteDict('test.db', autocommit = True)
+    d.terminate()
+    
+    
+    def write(arg):
+        with sqd.SqliteDict('test.db', autocommit = True) as d:
+            for i in range(100):
+                d[i] = (i, arg)
+    
+    def read():
+        with sqd.SqliteDict('test.db', autocommit = True) as d:
+            for i in range(len(d)):
+                print(i, d[i])
+            
+    p1 = mp.Process(target = write, args=('p1', ))
+    time.sleep(0.1)
+    p2 = mp.Process(target = read)
+    
+    p1.start()
+    p2.start()
+    
+    p1.join()
+    p2.join()
+    
+    
+    
+    
       
 if __name__ == "__main__":
-    test_reserved_key_catch()
-    test_pd()
-    test_pd_bytes()
-    test_directory_removal()
+#     test_reserved_key_catch()
+#     test_pd()
+#     test_pd_bytes()
+#     test_directory_removal()
+    test_mp_read_from_sqlite()
     
