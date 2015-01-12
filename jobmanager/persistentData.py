@@ -221,6 +221,9 @@ class PersistentDataStructure(object):
                     print("getData key does NOT exists -> create subData")
                 return self.newSubData(key)
             
+    def __contains__(self, key):
+        return (key in self.db)
+            
     def __getitem__(self, key):
         self.__check_key(key)
         return self.getData(key, create_sub_data=False)
