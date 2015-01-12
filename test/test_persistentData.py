@@ -165,6 +165,17 @@ def test_mp_read_from_sqlite():
     p1.join()
     p2.join()
     
+from collections import namedtuple
+a_tup_type = namedtuple('a_tup_type', ['a', 'b'])
+
+def test_dict_dump():
+    a = {'a': 1, 'b': 2}
+    import pickle
+    print(pickle.dumps(a))
+    
+    a_tup = a_tup_type(**a)
+    print(pickle.dumps(a_tup))
+    print(hash(a_tup))
     
     
     
@@ -174,5 +185,6 @@ if __name__ == "__main__":
 #     test_pd()
 #     test_pd_bytes()
 #     test_directory_removal()
-    test_mp_read_from_sqlite()
+#     test_mp_read_from_sqlite()
+    test_dict_dump()
     
