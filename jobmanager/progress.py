@@ -33,6 +33,47 @@ for s in dir(signal):
             signal_dict[n] = s
 
 
+ESC_NO_CHAR_ATTR  = "\033[0m"
+
+ESC_BOLD          = "\033[1m"
+ESC_DIM           = "\033[2m"
+ESC_UNDERLINED    = "\033[4m"
+ESC_BLINK         = "\033[5m"
+ESC_INVERTED      = "\033[7m"
+ESC_HIDDEN        = "\033[8m"
+
+ESC_RESET_BOLD       = "\033[21m"
+ESC_RESET_DIM        = "\033[22m"
+ESC_RESET_UNDERLINED = "\033[24m"
+ESC_RESET_BLINK      = "\033[25m"
+ESC_RESET_INVERTED   = "\033[27m"
+ESC_RESET_HIDDEN     = "\033[28m"
+
+ESC_DEFAULT       = "\033[39m"
+ESC_BLACK         = "\033[30m"
+ESC_RED           = "\033[31m"
+ESC_GREEN         = "\033[32m"
+ESC_YELLOW        = "\033[33m"
+ESC_BLUE          = "\033[34m"
+ESC_MAGENTA       = "\033[35m"
+ESC_CYAN          = "\033[36m"
+ESC_LIGHT_GREY    = "\033[37m"
+ESC_DARK_GREY     = "\033[90m"
+ESC_LIGHT_RED     = "\033[91m"
+ESC_LIGHT_GREEN   = "\033[92m"
+ESC_LIGHT_YELLOW  = "\033[93m"
+ESC_LIGHT_BLUE    = "\033[94m"
+ESC_LIGHT_MAGENTA = "\033[95m"
+ESC_LIGHT_CYAN    = "\033[96m"
+ESC_WHITE         = "\033[97m"
+
+def ESC_MOVE_LINE_UP(n):
+    return "\033[{}A".format(n)
+
+def ESC_MOVE_LINE_DOWN(n):
+    return "\033[{}B".format(n)
+
+
 def humanize_time(secs):
     """convert second in to hh:mm:ss format
     """
@@ -130,14 +171,22 @@ def check_process_termination(proc, identifier, timeout, verbose=0, auto_kill_on
                 print("{}: keeps running".format(identifier))
                 return False
             
-def get_identifier(name=None, pid=None):
+def get_identifier(name=None, pid=None, bold=True):
     if pid == None:
         pid = os.getpid()
+        
+    if bold:
+        esc_bold = ESC_BOLD
+        esc_no_char_attr = ESC_NO_CHAR_ATTR
+    else:
+        esc_bold = ""
+        esc_no_char_attr = ""
+        
     
     if name == None:
-        return "PID {}".format(pid) 
+        return "{}PID {}{}".format(esc_bold, pid, esc_no_char_attr) 
     else:
-        return "{} ({})".format(name, pid)
+        return "{}{} ({}){}".format(esc_bold, name, pid, esc_no_char_attr)
     
 def get_terminal_width(default=80, name=None, verbose=0):
     identifier = get_identifier(name=name)
@@ -658,7 +707,7 @@ class Progress(Loop):
         """
             call the static method show_stat_wrapper for each process
         """
-        print('\033[1;32m', end='')
+        print(ESC_BOLD + ESC_GREEN, end='')
         sys.stdout.flush()
         for i in range(len_):
             Progress.show_stat_wrapper(count[i], 
@@ -675,7 +724,7 @@ class Progress(Loop):
                                        add_args, 
                                        i, 
                                        lock[i])
-        print("\033[{}A\033[0m".format(len_), end='')
+        print(ESC_MOVE_LINE_UP(len_) + ESC_NO_CHAR_ATTR, end='')
         sys.stdout.flush()
         
     @staticmethod
