@@ -927,15 +927,16 @@ class ProgressBar(Progress):
             s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
             
             l = len(s1) + len(s3)
-            l2 = width - l - 1
+            
             
             if max_count_value != 0:
+                l2 = width - l - 1
                 a = int(l2 * count_value / max_count_value)
+                b = l2 - a
+                s2 = "="*a + ">" + " "*b
             else:
-                a = 0
-                
-            b = l2 - a
-            s2 = "="*a + ">" + " "*b
+                s2 = " "*(width - l)
+
             print(s1+s2+s3)
         
 # class ProgressCounter(Progress):
@@ -1084,6 +1085,7 @@ class ProgressBarCounter(Progress):
                 b = l2 - a
                 s2 = "="*a + ">" + " "*b
                 s_c = s_c+s1+s2+s3
+        
                 
         print(s_c + ' '*(width - len(s_c)))
             
