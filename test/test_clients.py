@@ -245,9 +245,30 @@ def test_tuple_equal():
     
     print(d[key_bytes])
     
+def test_namedtuple_as_dict():
+    from collections import namedtuple
+    import copy
+    
+    my_type = namedtuple('my_type', ['a', 'b'])
+    
+    my_nt = my_type(a=1, b=2)
+    my_d = {'a': 1, 'b':2}
+    
+    d1 =  {'b':0, 'c':3}
+    d2 = copy.deepcopy(d1)
+    
+    d1.update(my_d)
+    print(d1)
+    
+    d2.update(my_nt._asdict())
+    print(d2)
+
+    
+    
     
 if __name__ == "__main__":
 #     test_mathiue_dgl(plot=False)
 #     test_distributed_mathieu()
-    test_tuple_equal()
+#     test_tuple_equal()
+    test_namedtuple_as_dict()
 
