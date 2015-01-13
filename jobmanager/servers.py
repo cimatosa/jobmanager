@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from .jobmanager import JobManager_Server
-import pickle
+import pickle 
 
 def recursive_scan_for_instance(obj, type, explicit_exclude = None ):
     """
@@ -51,11 +51,17 @@ def recursive_scan_for_dict_instance(obj):
     # as it is iterable, but can not contain an dict as item, only characters
     return recursive_scan_for_instance(obj, type=dict, explicit_exclude=(str, ))
             
-def as_binary_data(a):
-    if isinstance(a, dict):
-        raise RuntimeError()
+def data_as_binary_key(data):
+    # since the hash value of a string is randomly seeded each time python
+    # is started -> the order of the entries in a dict is not guaranteed
+    # and therefore its binary representation may vary
+    # this forbids to use dicts as a key for persistent data structures
+    if recursive_scan_for_dict_instance(data):
+        raise RuntimeError("data used as 'key' must not include dictionaries!")
     
-    return pickle.dumps(a)
+    # protocol 2 ensures backwards compatibility 
+    # (at least here) down to Python 2.3
+    return pickle.dumps(data, protocol=2)
 
 class PersistentData_Server(JobManager_Server):
     def __init__(self, 
@@ -74,11 +80,10 @@ class PersistentData_Server(JobManager_Server):
         self.overwrite = overwrite
          
     def process_new_result(self, arg, result):
-        self.pds[as_binary_data(arg)] = result
-        self.pds.commit()
+        self.pds[data_as_binary_key(arg)] = result
         
     def put_arg(self, a):
-        a_bin = as_binary_data(a)
-        if overwrite or (not a_bin in self.pds):
+        a_bin = data_as_binary_key(a)
+        if self.overwrite or (not a_bin in self.pds):
             JobManager_Server.put_arg(self, a)
         
