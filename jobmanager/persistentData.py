@@ -7,6 +7,18 @@ MAGIC_SIGN = 0xff4a87
 RESERVED_KEYS = (0, 1)
 
 class PersistentDataStructure(object):
+    """
+        Note: avoid using pickled dictionaries as binary keys! The problem with dicts is
+        that the order of the keys, when returned as list, depends on the hash value of
+        the keys. If the keys are strings, the hash value will be randomly seeded for
+        each python session, which may lead to different binary representations of the
+        same dict. Therefore the same dict may actually be considered as distinct keys.
+        
+        The same hold true when using classes with default pickler routine as binary keys
+        (because the pickler will essentially pickle the dictionary self.__dict__).
+        If you want to use "complicated" python objects as binary keys make sure you
+        implement your own pickle behavior without the need of dictionaries.   
+    """
     def __init__(self, name, path="./", verbose=1):
         self.__name = name
         self.__path = abspath(path)
