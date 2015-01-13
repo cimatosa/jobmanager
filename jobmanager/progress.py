@@ -929,7 +929,11 @@ class ProgressBar(Progress):
             l = len(s1) + len(s3)
             l2 = width - l - 1
             
-            a = int(l2 * count_value / max_count_value)
+            if max_count_value != 0:
+                a = int(l2 * count_value / max_count_value)
+            else:
+                a = 0
+                
             b = l2 - a
             s2 = "="*a + ">" + " "*b
             print(s1+s2+s3)

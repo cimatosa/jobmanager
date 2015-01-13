@@ -117,7 +117,7 @@ class ProgressBar(object):
             kwargs[self.cm[0]] = progress.UnsignedIntValue(0)
         if not kwargs.has_key(self.cm[1]) or kwargs[self.cm[1]] is None:
             # max_count
-            kwargs[self.cm[1]] = progress.UnsignedIntValue(0)
+            kwargs[self.cm[1]] = progress.UnsignedIntValue(1)
         with progress.ProgressBar(kwargs[self.cm[0]], kwargs[self.cm[1]],
                                   *self.args, **self.kwargs) as pb:
             pb.start()
