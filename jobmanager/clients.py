@@ -36,7 +36,10 @@ def merge_arg_and_const_arg(arg, const_arg):
         f(t, x, 2, 'low', 15, np.pi)
         
         returns further the combined dictionary
-        arg + const_arg with the keyword 'args' removed 
+        arg + const_arg with the keyword 'args' removed
+        
+        For any duplicate keys the value will be the value
+        from the 'arg' dictionary. 
     """
     
     # extract the args keyword from arg and const_arg
@@ -47,8 +50,8 @@ def merge_arg_and_const_arg(arg, const_arg):
         args_dgl += const_arg['args']
 
     kwargs = {}
-    kwargs.update(arg)
     kwargs.update(const_arg)
+    kwargs.update(arg)
     # remove args as they have been constructed explicitly
     kwargs.pop('args')
     
@@ -59,16 +62,17 @@ class Integration_Client_CPLX(JobManager_Client):
     """
         A JobManager_Client subclass to integrate a set of complex valued ODE.
         
-        'arg' as well as 'const_arg' which are passed from the JobManager_Server
-        to the JobManager_Client's function 'func' must be hashable dictionaries
-        (see for example jobmanager.HashDict). The updated dictionary kwargs
-         
-            kwargs = {}
-            kwargs.update(const_arg)
-            kwargs.update(arg)
+        'arg' and 'const_arg' are understood as keyword arguments in oder to
+        call ode_wrapper.integrate_cplx. They are passed to merge_arg_and_const_arg
+        in order to separate the kwargs needed by ode_wrapper.integrate_cplx
+        from the args (as tupled) passed to the function calculating derivative of the DGL.
+        This tuple of parameters itself is passed as a special argument to
+        ode_wrapper.integrate_cplx namely 'args'.
         
-        will hold the keyword arguments passed to ode_wrapper.integrate_cplx.
-        This implies that the keys of kwargs MUST include
+        If 'arg' or 'const_arg' provide the attribute '_asdict' it will be called
+        in order to construct dictionaries and use them for further processing.
+        
+        The following keys MUST be provided by 'arg' or 'const_arg'
             
             t0            : initial time
             t1            : final time
@@ -94,19 +98,29 @@ class Integration_Client_CPLX(JobManager_Client):
             verbose        : default 0
             integrator related arguments (see the scipy doc ODE)
             
-        As the key 'args' itself has a tuple as value, it's composition used
-        instead of a simple update. So 
-        
-            kwargs['args'] = arg['args'] + const_arg['args']
-            
+        The key 'args' itself (should be tuple) will be merged as
+        kwargs['args'] = arg['args'] + const_arg['args']  
         which means that the call signature of f has to be
-        f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...) 
+        f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...). 
     """
     def __init__(self, **kwargs):
         super(Integration_Client_CPLX, self).__init__(**kwargs)
         
     @staticmethod
     def func(arg, const_arg, c, m):
+        # allows arg to be a namedtuple (or any other object that
+        # can be converted to a dict)
+        # the purpose is that dicts are not allowed as keys for
+        # the persistent data structure, where as namedtupled are
+        # and therefore arg as a neamedtuple may be used to identify
+        # the result of this calculation in the database
+        if hasattr(arg, '_asdict'):
+            arg = arg._asdict()
+            
+        # same for const_arg, as a reason of consistency
+        if hasattr(const_arg, '_asdict'):
+            const_arg = const_arg._asdict()
+            
         args_dgl, kwargs = merge_arg_and_const_arg(arg, const_arg)
         m.value = kwargs['N']
        
@@ -128,6 +142,19 @@ class Integration_Client_REAL(JobManager_Client):
         
     @staticmethod
     def func(arg, const_arg, c, m):
+        # allows arg to be a namedtuple (or any other object that
+        # can be converted to a dict)
+        # the purpose is that dicts are not allowed as keys for
+        # the persistent data structure, where as namedtupled are
+        # and therefore arg as a neamedtuple may be used to identify
+        # the result of this calculation in the database
+        if hasattr(arg, '_asdict'):
+            arg = arg._asdict()
+            
+        # same for const_arg, as a reason of consistency
+        if hasattr(const_arg, '_asdict'):
+            const_arg = const_arg._asdict()        
+        
         args_dgl, kwargs = merge_arg_and_const_arg(arg, const_arg)
         m.value = kwargs['N']
         
@@ -139,6 +166,11 @@ class Integration_Client_REAL(JobManager_Client):
 class FunctionCall_Client(JobManager_Client):
     @staticmethod
     def func(arg, const_arg, c, m):
+        if hasattr(arg, '_asdict'):
+            arg = arg._asdict()
+        if hasattr(const_arg, '_asdict'):
+            const_arg = const_arg._asdict()     
+        
         f = const_arg['f']
         f_kwargs = {}
         f_kwargs.update(arg)
