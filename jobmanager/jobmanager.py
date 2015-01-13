@@ -22,6 +22,7 @@ __all__ = ["JobManager_Client",
            "JobManager_Local",
            "JobManager_Server",
            "hashDict",
+           "hashableCopyOfNumpyArray"
           ]
            
 
@@ -536,19 +537,22 @@ class JobManager_Server(object):
             failed = self.fail_q.qsize()
             all_processed = succeeded + failed
             
-            print("total number of jobs  : {}".format(all_jobs))
-            print("  processed   : {}".format(all_processed))
-            print("    succeeded : {}".format(succeeded))
-            print("    failed    : {}".format(failed))
+            id  = self._identifier + ": "
+            id2 = progress.ESC_HIDDEN +  self._identifier + progress.ESC_RESET_HIDDEN + "| " 
+            
+            print("{}total number of jobs  : {}".format(id, all_jobs))
+            print("{}  processed   : {}".format(id2, all_processed))
+            print("{}    succeeded : {}".format(id2, succeeded))
+            print("{}    failed    : {}".format(id2, failed))
             
             all_not_processed = all_jobs - all_processed
             not_queried = self.job_q.qsize()
             queried_but_not_processed = all_not_processed - not_queried  
             
-            print("  not processed     : {}".format(all_not_processed))
-            print("    queried         : {}".format(queried_but_not_processed))
-            print("    not queried yet : {}".format(not_queried))
-            print("len(args_set) : {}".format(len(self.args_set)))
+            print("{}  not processed     : {}".format(id2, all_not_processed))
+            print("{}    queried         : {}".format(id2, queried_but_not_processed))
+            print("{}    not queried yet : {}".format(id2, not_queried))
+            print("{}len(args_set) : {}".format(id2, len(self.args_set)))
             if (all_not_processed + failed) != len(self.args_set):
                 raise RuntimeWarning("'all_not_processed != len(self.args_set)' something is inconsistent!")
             
@@ -681,7 +685,10 @@ class JobManager_Server(object):
             raise RuntimeError("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_set)! use JobManager_Server.put_arg to put arguments to the job_q")
         
         if self.numjobs == 0:
-            raise RuntimeError("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
+            print("{}: WARNING no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q".format(self._identifier))
+            return
+        else:
+            print("{}: start with {} jobs in queue".format(self._identifier, self.numjobs))
         
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
