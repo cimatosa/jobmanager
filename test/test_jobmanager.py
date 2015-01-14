@@ -553,6 +553,76 @@ def test_jobmanager_local():
         jm_server.args_from_list(args)
         jm_server.start()
         
+def test_start_server_on_used_port():
+    def start_server():
+        const_arg = None
+        arg = [10,20,30]
+        with jobmanager.JobManager_Server(authkey='test_shared_const_arg', 
+                                          const_arg=const_arg,
+                                          fname_dump=None) as server:
+            server.args_from_list(arg)
+            server.start()
+            
+    def start_server2():
+        const_arg = None
+        arg = [10,20,30]
+        with jobmanager.JobManager_Server(authkey='test_shared_const_arg', 
+                                          const_arg=const_arg,
+                                          fname_dump=None) as server:
+            server.args_from_list(arg)
+            server.start()
+            
+    p1 = mp.Process(target=start_server)
+    p1.start()
+    
+    time.sleep(1)
+    
+    start_server2()
+    
+    print(os.getpid())
+    
+    time.sleep(1)
+    p1.terminate()
+    time.sleep(1)
+    p1.join()    
+        
+def test_shared_const_arg():
+    def start_server():
+        const_arg = [1,2,3]
+        arg = [10,20,30]
+        with jobmanager.JobManager_Server(authkey='test_shared_const_arg', 
+                                          const_arg=const_arg,
+                                          fname_dump=None) as server:
+            server.args_from_list(arg)
+            server.start()
+            
+        print("const_arg at server side", const_arg)
+            
+    def start_client():
+        class myClient(jobmanager.JobManager_Client):
+            @staticmethod
+            def func(arg, const_arg):
+                const_arg.append(os.get_pid())
+                print(self._identifier, arg, const_arg)
+                return None
+            
+    p1 = mp.Process(target=start_server)
+    p2 = mp.Process(target=start_server)
+    
+    p1.start()
+    
+    time.sleep(1)
+    
+    p2.start()
+    
+    p2.join()
+    
+    time.sleep(1)
+    p1.terminate()
+    time.sleep(1)
+    p1.join()
+    
+        
 def _test_interrupt_server():
     start_server(n = 100)
     
@@ -591,15 +661,18 @@ if __name__ == "__main__":
     #     test_hashedViewOnNumpyArray,
     #     test_client_status,
     #     test_jobmanager_local,
+        test_start_server_on_used_port,
+#         test_shared_const_arg,
+
         lambda : print("END")
         ]
-    #     for f in func:
-    #         print()
-    #         print('#'*80)
-    #         print('##  {}'.format(f.__name__))
-    #         print()
-    #         f()
-    #         time.sleep(1)
+        for f in func:
+            print()
+            print('#'*80)
+            print('##  {}'.format(f.__name__))
+            print()
+            f()
+            time.sleep(1)
     
-        _test_interrupt_client()
+#         _test_interrupt_client()
     

@@ -32,7 +32,6 @@ for s in dir(signal):
         else:
             signal_dict[n] = s
 
-
 ESC_NO_CHAR_ATTR  = "\033[0m"
 
 ESC_BOLD          = "\033[1m"
@@ -67,12 +66,48 @@ ESC_LIGHT_MAGENTA = "\033[95m"
 ESC_LIGHT_CYAN    = "\033[96m"
 ESC_WHITE         = "\033[97m"
 
+ESC_SEQ_SET = [ESC_NO_CHAR_ATTR,
+               ESC_BOLD,
+               ESC_DIM,
+               ESC_UNDERLINED,
+               ESC_BLINK,
+               ESC_INVERTED,
+               ESC_HIDDEN,
+               ESC_RESET_BOLD,
+               ESC_RESET_DIM,
+               ESC_RESET_UNDERLINED,
+               ESC_RESET_BLINK,
+               ESC_RESET_INVERTED,
+               ESC_RESET_HIDDEN,
+               ESC_DEFAULT,
+               ESC_BLACK,
+               ESC_RED,
+               ESC_GREEN,
+               ESC_YELLOW,
+               ESC_BLUE,
+               ESC_MAGENTA,
+               ESC_CYAN,
+               ESC_LIGHT_GREY,
+               ESC_DARK_GREY,
+               ESC_LIGHT_RED,
+               ESC_LIGHT_GREEN,
+               ESC_LIGHT_YELLOW,
+               ESC_LIGHT_BLUE,
+               ESC_LIGHT_MAGENTA,
+               ESC_LIGHT_CYAN,
+               ESC_WHITE]
+
 def ESC_MOVE_LINE_UP(n):
     return "\033[{}A".format(n)
 
 def ESC_MOVE_LINE_DOWN(n):
     return "\033[{}B".format(n)
 
+def remove_ESC_SEQ_from_string(s):
+    for esc_seq in ESC_SEQ_SET:
+        s = s.replace(esc_seq, '')
+    return s
+            
 
 def humanize_time(secs):
     """convert second in to hh:mm:ss format
