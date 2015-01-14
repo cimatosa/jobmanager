@@ -22,7 +22,8 @@ __all__ = ["JobManager_Client",
            "JobManager_Local",
            "JobManager_Server",
            "hashDict",
-           "hashableCopyOfNumpyArray"
+           "hashableCopyOfNumpyArray",
+           "getDateForFileName"
           ]
            
 
@@ -375,14 +376,8 @@ class JobManager_Server(object):
         else: 
             self.authkey = bytearray(authkey, encoding='utf8')
             
-        if not isinstance(const_arg, dict):
-            raise RuntimeError('const_arg must be an instance of dict!')
-        
-#         for k in const_arg.keys():
-#             if not try_pickle(const_arg[k], show_exception=True):
-#                 raise RuntimeError("key '{}' of const_arg is not pickable!\n{}={}".format(k, k, const_arg[k]))
-        
-        self.const_arg = copy.copy(const_arg)
+      
+        self.const_arg = const_arg
         
         
         self.fname_dump = fname_dump        
@@ -437,7 +432,7 @@ class JobManager_Server(object):
         JobQueueManager.register('get_job_q', callable=lambda: self.job_q)
         JobQueueManager.register('get_result_q', callable=lambda: self.result_q)
         JobQueueManager.register('get_fail_q', callable=lambda: self.fail_q)
-        JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg, proxytype=mp.managers.DictProxy)
+        JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg)
     
         address=('', self.port)   #ip='' means local
         authkey=self.authkey
