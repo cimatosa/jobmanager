@@ -8,6 +8,7 @@ import time
 import signal
 import multiprocessing as mp
 import numpy as np
+import traceback
 
 from os.path import abspath, dirname, split
 # Add parent directory to beginning of path variable
@@ -433,6 +434,8 @@ def test_jobmanager_read_old_stat():
     assert not p_server.is_alive(), "the server did not terminate on time!"
     print("[+] client and server terminated")
     
+    time.sleep(2)
+    
     p_server = mp.Process(target=start_server, args=(n,True))
     p_server.start()
     
@@ -577,18 +580,25 @@ def test_start_server_on_used_port():
     
     time.sleep(1)
     
-    start_server2()
+    other_error = False
     
-    print(os.getpid())
+    try:
+        start_server2()
+    except (RuntimeError, OSError) as e:
+        print("caught Exception '{}' {}".format(type(e).__name__, e))
+    except:
+        other_error = True
     
     time.sleep(1)
     p1.terminate()
     time.sleep(1)
     p1.join()    
+    
+    assert not other_error
         
 def test_shared_const_arg():
     def start_server():
-        const_arg = [1,2,3]
+        const_arg = {1:1, 2:2, 3:3}
         arg = [10,20,30]
         with jobmanager.JobManager_Server(authkey='test_shared_const_arg', 
                                           const_arg=const_arg,
@@ -602,12 +612,19 @@ def test_shared_const_arg():
         class myClient(jobmanager.JobManager_Client):
             @staticmethod
             def func(arg, const_arg):
-                const_arg.append(os.get_pid())
-                print(self._identifier, arg, const_arg)
+                const_arg[os.getpid()] = os.getpid() 
+                print(os.getpid(), arg, const_arg)
                 return None
             
+        client = myClient(server='localhost',
+                          authkey='test_shared_const_arg',
+                          nproc=1,
+                          verbose=2)
+        
+        client.start()
+            
     p1 = mp.Process(target=start_server)
-    p2 = mp.Process(target=start_server)
+    p2 = mp.Process(target=start_client)
     
     p1.start()
     
@@ -617,8 +634,6 @@ def test_shared_const_arg():
     
     p2.join()
     
-    time.sleep(1)
-    p1.terminate()
     time.sleep(1)
     p1.join()
     
@@ -656,12 +671,12 @@ if __name__ == "__main__":
     #     test_shutdown_server_while_client_running,
     #     test_shutdown_client,
     #     test_check_fail,
-    #     test_jobmanager_read_old_stat,
+        test_jobmanager_read_old_stat,
     #     test_hashDict,
     #     test_hashedViewOnNumpyArray,
     #     test_client_status,
     #     test_jobmanager_local,
-        test_start_server_on_used_port,
+#         test_start_server_on_used_port,
 #         test_shared_const_arg,
 
         lambda : print("END")

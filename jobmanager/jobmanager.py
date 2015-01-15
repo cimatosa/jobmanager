@@ -279,6 +279,7 @@ class Signal_to_terminate_process_list(object):
                                                auto_kill_on_last_resort=False)
             
 
+
 class JobManager_Server(object):
     """general usage:
     
@@ -359,55 +360,53 @@ class JobManager_Server(object):
         This init actually starts the SyncManager as a new process. As a next step
         the job_q has to be filled, see put_arg().
         """
-        try:
-            self.verbose = verbose        
-            self._pid = os.getpid()
-            self._pid_start = None
-            self._identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid)
-            if self.verbose > 1:
-                print("{}: I'm the JobManager_Server main process".format(self._identifier))
+
+        self.verbose = verbose        
+        self._pid = os.getpid()
+        self._pid_start = None
+        self._identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid)
+        if self.verbose > 1:
+            print("{}: I'm the JobManager_Server main process".format(self._identifier))
+        
+        self.__wait_before_stop = 2
+        
+        self.port = port
+
+        if isinstance(authkey, bytearray):
+            self.authkey = authkey
+        else: 
+            self.authkey = bytearray(authkey, encoding='utf8')
             
-            self.__wait_before_stop = 2
-            
-            self.port = port
-    
-            if isinstance(authkey, bytearray):
-                self.authkey = authkey
-            else: 
-                self.authkey = bytearray(authkey, encoding='utf8')
-                
-          
-            self.const_arg = const_arg
-            
-            
-            self.fname_dump = fname_dump        
-            self.msg_interval = msg_interval
-            self.speed_calc_cycles = speed_calc_cycles
-    
-            # to do some redundant checking, might be removed
-            # the args_set holds all arguments to be processed
-            # in contrast to the job_q, an argument will only be removed
-            # from the set if it was caught by the result_q
-            # so iff all results have been processed successfully,
-            # the args_set will be empty
-            self.args_set = set()
-            
-            # thread safe integer values  
-            self._numresults = mp.Value('i', 0)  # count the successfully processed jobs
-            self._numjobs = mp.Value('i', 0)     # overall number of jobs
-            
-            # final result as list, other types can be achieved by subclassing 
-            self.final_result = []
-            
-            # NOTE: it only works using multiprocessing.Queue()
-            # the Queue class from the module queue does NOT work  
-            self.job_q = myQueue()    # queue holding args to process
-            self.result_q = myQueue() # queue holding returned results
-            self.fail_q = myQueue()   # queue holding args where processing failed
-            self.manager = None
-        except:
-            print("RERAISE in __init__")
-            raise    
+      
+        self.const_arg = const_arg
+        
+        
+        self.fname_dump = fname_dump        
+        self.msg_interval = msg_interval
+        self.speed_calc_cycles = speed_calc_cycles
+
+        # to do some redundant checking, might be removed
+        # the args_set holds all arguments to be processed
+        # in contrast to the job_q, an argument will only be removed
+        # from the set if it was caught by the result_q
+        # so iff all results have been processed successfully,
+        # the args_set will be empty
+        self.args_set = set()
+        
+        # thread safe integer values  
+        self._numresults = mp.Value('i', 0)  # count the successfully processed jobs
+        self._numjobs = mp.Value('i', 0)     # overall number of jobs
+        
+        # final result as list, other types can be achieved by subclassing 
+        self.final_result = []
+        
+        # NOTE: it only works using multiprocessing.Queue()
+        # the Queue class from the module queue does NOT work  
+        self.job_q = myQueue()    # queue holding args to process
+        self.result_q = myQueue() # queue holding returned results
+        self.fail_q = myQueue()   # queue holding args where processing failed
+        self.manager = None
+        self.hostname = socket.gethostname()
         
     def __stop_SyncManager(self):
         if self.manager == None:
@@ -424,27 +423,38 @@ class JobManager_Server(object):
                                   timeout=2, 
                                   verbose=self.verbose, 
                                   auto_kill_on_last_resort=True)
+
+    def __check_bind(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind((self.hostname, self.port))
+        except:
+            print("{}: test bind to {}:{} failed".format(progress.ESC_RED + self._identifier, self.hostname, self.port))
+            raise
+        s.close()
                 
     def __start_SyncManager(self):
+        self.__check_bind()
+        
         class JobQueueManager(SyncManager):
             pass
 
-        try:    
-            # make job_q, result_q, fail_q, const_arg available via network
-            JobQueueManager.register('get_job_q', callable=lambda: self.job_q)
-            JobQueueManager.register('get_result_q', callable=lambda: self.result_q)
-            JobQueueManager.register('get_fail_q', callable=lambda: self.fail_q)
-            JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg, exposed=['__iter__'])
-        
-            address=('', self.port)   #ip='' means local
-            authkey=self.authkey
-        
-            self.manager = JobQueueManager(address, authkey)
-            self.hostname = socket.gethostname()
+   
+        # make job_q, result_q, fail_q, const_arg available via network
+        JobQueueManager.register('get_job_q', callable=lambda: self.job_q)
+        JobQueueManager.register('get_result_q', callable=lambda: self.result_q)
+        JobQueueManager.register('get_fail_q', callable=lambda: self.fail_q)
+        JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg)
+    
+        address=('', self.port)   #ip='' means local
+        authkey=self.authkey
+    
+        self.manager = JobQueueManager(address, authkey)
             
-            # start manager with non default signal handling given by
-            # the additional init function setup_SIG_handler_manager
+        # start manager with non default signal handling given by
+        # the additional init function setup_SIG_handler_manager
 
+        try:
             self.manager.start(setup_SIG_handler_manager)
         except EOFError as e:
             print("{}: can not start {} on {}:{}".format(progress.ESC_RED + self._identifier, self.__class__.__name__, self.hostname, self.port))
@@ -481,14 +491,14 @@ class JobManager_Server(object):
         # SystemExit is considered non erroneous
         if (err is None) or (err == SystemExit):
             if self.verbose > 0:
-                print("{}: normal shutdown caused by SystemExit".format(self._identifier))
+                print("{}: normal shutdown".format(self._identifier))
             # bring everything down, dump status to file 
             self.shoutdown()
             # no exception traceback will be printed
             return True
         else:
             if self.verbose > 0:
-                print("{}: shutdown due to exception {}".format(progress.ESC_RED + self._identifier, err))
+                print("{}: shutdown due to exception '{}'".format(progress.ESC_RED + self._identifier, err.__name__))
             # bring everything down, dump status to file 
             self.shoutdown()
             # causes exception traceback to be printed
@@ -648,7 +658,6 @@ class JobManager_Server(object):
         
         with open(fname_dump, 'rb') as f:
             self.__load(f)
-        self.__restart_SyncManager()
         
         self.show_statistics()
             
@@ -785,8 +794,7 @@ class JobManager_Client(object):
                   verbose=1,
                   show_statusbar_for_jobs=True,
                   show_counter_only=False,
-                  interval=0.3,
-                  copy_const_arg=False):
+                  interval=0.3):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -814,7 +822,6 @@ class JobManager_Client(object):
         self.show_counter_only = show_counter_only
         self.interval = interval
         self.verbose = verbose
-        self.copy_const_arg = copy_const_arg
         
         self._pid = os.getpid()
         self._identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid) 
@@ -851,14 +858,16 @@ class JobManager_Client(object):
                                                       self.port, 
                                                       self.authkey, 
                                                       self._identifier,
-                                                      self.verbose,
-                                                      self.copy_const_arg)
+                                                      self.verbose)
        
     @staticmethod
-    def _get_manager_objects(server, port, authkey, identifier, verbose = 0, copy_const_arg = False):
+    def _get_manager_objects(server, port, authkey, identifier, verbose = 0):
         """
-        connects to the server and get registered shared objects such as
-        job_q, result_q, fail_q, const_arg
+            connects to the server and get registered shared objects such as
+            job_q, result_q, fail_q
+            
+            const_arg will be deep copied from the manager and therefore live
+            as non shared object in local memory
         """
         class ServerQueueManager(SyncManager):
             pass
@@ -866,10 +875,9 @@ class JobManager_Client(object):
         ServerQueueManager.register('get_job_q')
         ServerQueueManager.register('get_result_q')
         ServerQueueManager.register('get_fail_q')
-        ServerQueueManager.register('get_const_arg', exposed="__iter__")
+        ServerQueueManager.register('get_const_arg')
     
         manager = ServerQueueManager(address=(server, port), authkey=authkey)
-
             
         try:
             manager.connect()
@@ -897,11 +905,9 @@ class JobManager_Client(object):
             
         result_q = manager.get_result_q()
         fail_q = manager.get_fail_q()
-        const_arg = manager.get_const_arg()
-        print("manager:", type(const_arg))
-        if copy_const_arg:
-            const_arg = copy.deepcopy(const_arg)
-            print("copied :", type(const_arg))
+        # deep copy const_arg from manager -> non shared object in local memory
+        const_arg = copy.deepcopy(manager.get_const_arg())
+
             
         return job_q, result_q, fail_q, const_arg
         
