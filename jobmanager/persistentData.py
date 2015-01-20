@@ -25,6 +25,7 @@ class PersistentDataStructure(object):
         implement your own pickle behavior without the need of dictionaries.   
     """
     def __init__(self, name, path="./", verbose=1):
+        self._open = False
         self._name = name
         self._path = abspath(path)
         if not exists(self._path):
@@ -52,6 +53,8 @@ class PersistentDataStructure(object):
             self.sub_data_keys = set()
             
     def _consistency_check(self):
+        self.need_open()
+        
         c = 0
         
         for key in self.db:
@@ -78,20 +81,17 @@ class PersistentDataStructure(object):
         if self.verbose > 1:
             print("open db                {} in {}".format(self._name, self._dir_name))             
         self.db = sqd.SqliteDict(filename = self._filename, autocommit=False)
+        self._open = True
         
     def is_open(self):
-        """
-            assume the sqligtedict and therefore the SQL database
-             to be opened when self.db[KEY_COUNTER] is accessible
-        """
-        try:
-            self.db[KEY_COUNTER]
-            return True
-        except:
-            return False
+        return self._open
         
     def is_closed(self):
-        return not self.is_open()
+        return not self._open
+    
+    def need_open(self):
+        if self.is_closed():
+            raise RuntimeError("PersistentDataStructure needs to be open")
         
     def close(self):
         """
@@ -99,6 +99,7 @@ class PersistentDataStructure(object):
         """
         try:
             self.db.close()
+            self._open = False
             if self.verbose > 1:
                 print("closed db              {} in {}".format(self._name, self._dir_name))
         except:
@@ -166,6 +167,7 @@ class PersistentDataStructure(object):
             return False
     
     def has_key(self, key):
+        self.need_open()
         return (key in self.db)
         
     def setData(self, key, value, overwrite=False):
@@ -176,6 +178,7 @@ class PersistentDataStructure(object):
             set True in oder to update the data for
             that key in the database 
         """
+        self.need_open()
         if not self.__check_key(key):
             return False
         
@@ -197,6 +200,7 @@ class PersistentDataStructure(object):
             file where the filename is internally
             managed (simple increasing number)   
         """
+        self.need_open()
         if not key in self.db:
             self.counter += 1
             self.sub_data_keys.add(key)
@@ -218,6 +222,7 @@ class PersistentDataStructure(object):
             raise RuntimeError("can NOT create new SubData, key already found!")
         
     def getData(self, key, create_sub_data = False):
+        self.need_open()
         if key in self.db:
             if self.verbose > 1:
                 print("getData key exists")
@@ -245,7 +250,7 @@ class PersistentDataStructure(object):
             this means copying the appropirate file to the right place
             and rename them
         """
-        
+        self.need_open()
         self.__check_key(key)                                       # see if key is valid
         if (key in self.db) and (self.__is_sub_data(self.db[key])): # check if key points to existing PDS
             value = self.db[key]
@@ -263,10 +268,12 @@ class PersistentDataStructure(object):
         os.rename(src=os.path.join(dir_name, subData._name+'.db'), dst=os.path.join(dir_name, name+'.db'))
 
     def __len__(self):
+        self.need_open()
         return len(self.db) - 2
             
     # implements the iterator
     def __iter__(self):
+        self.need_open()
         db_iter = self.db.__iter__()
         while True:
             next_item = db_iter.__next__()
@@ -276,15 +283,18 @@ class PersistentDataStructure(object):
     
     # implements the 'in' statement 
     def __contains__(self, key):
+        self.need_open()
         return (key in self.db)
             
     # implements '[]' operator getter
     def __getitem__(self, key):
+        self.need_open()
         self.__check_key(key)
         return self.getData(key, create_sub_data=False)
     
     # implements '[]' operator setter
     def __setitem__(self, key, value):
+        self.need_open()
         self.__check_key(key)
 #         if key in self.db:
 #             if self.__is_sub_data(self.db[key]):
@@ -303,6 +313,7 @@ class PersistentDataStructure(object):
         
     # implements '[]' operator deletion
     def __delitem__(self, key):
+        self.need_open()
         self.__check_key(key)
         value = self.db[key]
         if self.__is_sub_data(value):

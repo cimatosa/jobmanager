@@ -235,7 +235,7 @@ def test_from_existing_sub_data():
             assert sub_data[100] == "sub2:t1"  
             assert sub_data[200] == "sub2:t2"                
 
-    base_data._consistency_check()
+        base_data._consistency_check()
             
     base_data.erase()
     
@@ -274,10 +274,10 @@ def test_remove_sub_data_and_check_len():
 if __name__ == "__main__":
 #     test_reserved_key_catch()
 #     test_pd()
-#     test_pd_bytes()
+    test_pd_bytes()
 #     test_directory_removal()
 #     test_mp_read_from_sqlite()
 #     test_dict_dump()
-#     test_from_existing_sub_data()
+    test_from_existing_sub_data()
     test_remove_sub_data_and_check_len()
     
