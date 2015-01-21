@@ -657,7 +657,10 @@ class Progress(Loop):
                 self.prepend.append('')
             else:
                 try:
-                    # assume list of prepend 
+                    # assume list of prepend, (needs to be a sequence)
+                    # except if prepend is an instance of string
+                    # the assert will cause the except to be executed
+                    assert not isinstance(prepend, str)
                     self.prepend.append(prepend[i])
                 except:
                     # list fails -> assume single prepend for all 
