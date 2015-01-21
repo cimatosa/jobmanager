@@ -8,9 +8,6 @@ from warnings import warn
 name='jobmanager'
 
 
-
-
-
 try:
     import sys
     import os
