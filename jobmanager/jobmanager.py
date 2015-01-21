@@ -844,7 +844,8 @@ class JobManager_Client(object):
             self.nproc = nproc
         else:
             self.nproc = mp.cpu_count() + nproc
-            assert self.nproc > 0
+            if self.nproc <= 0:
+                raise RuntimeError("Invalid Number of Processes\ncan not spawn {} processes (cores found: {}, cores NOT to use: {} = -nproc)".format(self.nproc, mp.cpu_count(), abs(nproc)))
 
         self.procs = []
         
