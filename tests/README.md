@@ -1,5 +1,5 @@
-Test Scripts
-============
+### Test Scripts
+
 
 This will run all tests:
 
@@ -10,27 +10,26 @@ Beautiful html output is possible with (Unix, package `aha` required)
     ./runtests_html.sh
 
 
-Running single tests
---------------------
+### Running single tests
 
 Directly execute the scripts, e.g.
 
 
-Client
-......
+#### Client
+
 
     python test_clients.py
 
 
-Progress
-........
+#### Progress
+
 
     python test_progress.py
 
 
 
-Jobmanager Server-Client
-........................
+#### Jobmanager Server-Client
+
 
 Server:
 
