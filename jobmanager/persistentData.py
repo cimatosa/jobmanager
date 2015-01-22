@@ -1,8 +1,21 @@
 import sqlitedict as sqd
 from os.path import abspath, join, exists
 import os
+import sys
 import shutil
 import traceback
+
+if sys.version_info[0] == 2:
+    # fixes keyword problems with python 2.x
+    os_remove = os.remove
+    def new_remove(path):
+        os_remove(path)
+    os.remove = new_remove
+    
+    os_rmdir = os.rmdir
+    def new_rmdir(path):
+        os_rmdir(path)
+    os.rmdir = new_rmdir
 
 MAGIC_SIGN = 0xff4a87
 
