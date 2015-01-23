@@ -15,6 +15,14 @@ from jobmanager.persistentData import PersistentDataStructure as PDS
 
 VERBOSE = 1
 
+if sys.version_info[0] == 2:
+    # fixes keyword problems with python 2.x
+    old_open = open
+    def new_open(file, mode):
+        old_open(name = file, mode = mode)
+    open = new_open
+    
+
 def test_pd():
     with PDS(name='test_data', verbose=VERBOSE) as data:
         key = 'a'

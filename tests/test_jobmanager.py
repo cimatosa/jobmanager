@@ -139,7 +139,9 @@ def start_client(verbose=1):
                                              port    = PORT, 
                                              nproc   = 0,
                                              verbose = verbose)
-    jm_client.start()    
+    jm_client.start()
+    if verbose > 1:
+        print("jm_client returned")    
 
 def test_jobmanager_basic():
     """
@@ -247,18 +249,29 @@ def test_shutdown_server_while_client_running():
     
     time.sleep(1)
     
-    p_client = mp.Process(target=start_client)
+    p_client = mp.Process(target=start_client, args=(2,))
     p_client.start()
     
     time.sleep(2)
     
     os.kill(p_server.pid, signal.SIGTERM)
     
-    p_server.join(15)
-    p_client.join(15)
+    p_server.join(200)
+    p_client.join(200)
     
-    assert not p_server.is_alive()
-    assert not p_client.is_alive()
+    try:
+        assert not p_server.is_alive()
+    except:
+        p_server.terminate()
+        raise
+    
+    try:
+        assert not p_client.is_alive()
+    except:
+        p_client.terminate()
+        raise
+        
+    
     
     fname = 'jobmanager.dump'
     with open(fname, 'rb') as f:
@@ -688,10 +701,10 @@ if __name__ == "__main__":
 #         test_Signal_to_SIG_IGN,
 #         test_Signal_to_sys_exit,
 #         test_Signal_to_terminate_process_list,
-#                
+#                 
 #         test_jobmanager_basic,
 #         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
+        test_shutdown_server_while_client_running,
 #         test_shutdown_client,
 #         test_check_fail,
 #         test_jobmanager_read_old_stat,
@@ -701,7 +714,7 @@ if __name__ == "__main__":
 #         test_jobmanager_local,
 #         test_start_server_on_used_port,
 #         test_shared_const_arg,
-          test_digest_rejected,
+#         test_digest_rejected,
 
         lambda : print("END")
         ]
