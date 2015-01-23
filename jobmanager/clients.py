@@ -53,7 +53,8 @@ def merge_arg_and_const_arg(arg, const_arg):
     kwargs.update(const_arg)
     kwargs.update(arg)
     # remove args as they have been constructed explicitly
-    kwargs.pop('args')
+    if 'args' in kwargs:
+        kwargs.pop('args')
     
     return args_dgl, kwargs
 
