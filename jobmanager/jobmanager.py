@@ -458,7 +458,7 @@ class JobManager_Server(object):
             self.manager.start(setup_SIG_handler_manager)
         except EOFError as e:
             print("{}: can not start {} on {}:{}".format(progress.ESC_RED + self._identifier, self.__class__.__name__, self.hostname, self.port))
-            print("{}: this is usually the case when the port used in not available!".format(progress.ESC_RED + self._identifier))
+            print("{}: this is usually the case when the port used is not available!".format(progress.ESC_RED + self._identifier))
             
             manager_proc = self.manager._process
             manager_identifier = progress.get_identifier(name='SyncManager')
@@ -1138,8 +1138,8 @@ class JobManager_Client(object):
             except:
                 pass
         if verbose > 1:
-            print("{}: JobManager_Client.__worker_func terminates".format(identifier))
-        
+            print("{}: JobManager_Client.__worker_func terminates PID {}".format(identifier, os.getpid()))
+            
 
     def start(self):
         """
@@ -1214,7 +1214,22 @@ class JobManager_Client(object):
             
         
             for p in self.procs:
-                p.join()
+                if self.verbose > 1:
+                    print("{}: join {} PID {}".format(self._identifier, p, p.pid))
+                while p.is_alive():
+                    if self.verbose > 1:
+                        print("{}: still alive {} PID {}".format(self._identifier, p, p.pid))
+                    p.join(timeout=1)
+
+                if self.verbose > 1:
+                    print("{}: process {} PID {} was joined".format(self._identifier, p, p.pid))
+                    
+                    
+            if self.verbose > 1:
+                print("{}: still in progressBar context".format(self._identifier))                    
+                                        
+        if self.verbose > 1:
+            print("{}: progressBar context has been left".format(self._identifier))
 
 class JobManager_Local(JobManager_Server):
     def __init__(self,
