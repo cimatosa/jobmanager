@@ -19,4 +19,4 @@ Running an example
    
 Running tests
 
-    python tests/runtests.py
+    python setup.py test
