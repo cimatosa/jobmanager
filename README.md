@@ -11,7 +11,7 @@ After cloning into jobmanager, create a virtual environment
 
 Install all dependencies
 
-    python setupy.py develop
+    python setup.py develop
     
 Running an example
 
@@ -19,4 +19,4 @@ Running an example
    
 Running tests
 
-    python tests/runtests.py
+    python setup.py test

@@ -49,13 +49,14 @@ and python module multiprocessing for local
 parallelism.""",
     install_requires=["sqlitedict", "NumPy>=1.5.1"],
     # tests: psutil
-    keywords=["multiprocessing", "queue", "parallel",
-              "progress", "manager", "job"],
+    keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
+              "progress", "manager", "job", "persistent data"],
     classifiers= [
         'Operating System :: OS Independent',
         #'Programming Language :: Python :: 2.7', #Todo
-        'Programming Language :: Python :: 3.2',
-        'Programming Language :: Python :: 3.3',
+        #'Programming Language :: Python :: 3.2', # also not very well tested
+        #'Programming Language :: Python :: 3.3', # also not very well tested
+        'Programming Language :: Python :: 3.4',
         'Intended Audience :: Science/Research'
                  ],
     platforms=['ALL'],
