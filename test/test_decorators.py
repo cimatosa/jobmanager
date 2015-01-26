@@ -61,9 +61,35 @@ def test_decorator():
     m = progress.UnsignedIntValue(val=100)
     my_func(c=c, m=m)
     my_func(c, m)
+    
+
+def my_func_ProgressBarOverrideCount(c = None, m = None):
+    maxVal = 100
+    if m is not None:
+        m.value = maxVal
+        
+    for i in range(maxVal):
+        time.sleep(0.03)
+        if c is not None:
+            c.value = i 
+        
+    
+def test_ProgressBarOverrideCount():
+    print("normal call -> no decoration")
+    my_func_ProgressBarOverrideCount()
+    print("done!")
+    print()
+    
+    my_func_ProgressBarOverrideCount_dec = decorators.ProgressBarOverrideCount(my_func_ProgressBarOverrideCount)
+    print("with decorator")
+    my_func_ProgressBarOverrideCount_dec()
+    print("done!")
         
 if __name__ == "__main__":
     test_ProgressBar()
     test_decorator()
+    test_ProgressBarOverrideCount()
+    
+    
 
         
