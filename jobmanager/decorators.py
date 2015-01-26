@@ -13,7 +13,7 @@ from . import progress
 
 from .jobmanager import getCountKwargs, validCountKwargs
 
-__all__ = ["ProgressBar"]
+__all__ = ["ProgressBar", "ProgressBarOverrideCount"]
 
 
 class ProgressBar(object):
@@ -191,3 +191,50 @@ def decorate_module_ProgressBar(module, **kwargs):
                                                   module.__name__, key))
 
 
+class ProgressBarOverrideCount(ProgressBar):
+    def __call__(self, *args, **kwargs):
+        """ Calls `func` - previously defined in `__init__`.
+        
+        same as in ProgressBar class except that the default
+        value `None` of count and max_count will cause
+        count to be set to `UnsignedIntValue(val=0)`
+        and max_count to `UnsignedIntValue(val=1)`.
+        
+        So even if the function to be decorated
+        will be called with arguments c = None and m = None
+        the actual call due to the modification of the decorator
+        will be with arguments c = UIV(0) and m = UIV(1).
+        
+        Parameters
+        ----------
+        *args : list
+            Arguments for `func`.
+        **kwargs : dict
+            Keyword-arguments for `func`.
+            
+        Example
+        -------
+        
+        see tests/test_decorators.py
+        """
+        
+        # Bind the args and kwds to the argument names of self.func
+        callargs = getcallargs(self.func, *args, **kwargs)
+        
+        count = callargs[self.cm[0]]
+        if count is None:
+            count = progress.UnsignedIntValue(val=0)
+            callargs[self.cm[0]] = count
+        
+        max_count = callargs[self.cm[1]]
+        if max_count is None:
+            max_count = progress.UnsignedIntValue(val=1)
+            callargs[self.cm[1]] = max_count
+         
+        with progress.ProgressBar(count     = count, 
+                                  max_count = max_count,
+                                  prepend   = "{} ".format(self.__name__),
+                                  **self.kwargs) as pb:
+            pb.start()
+            return self.func(**callargs)    
+    
