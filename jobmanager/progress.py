@@ -107,6 +107,9 @@ def remove_ESC_SEQ_from_string(s):
     for esc_seq in ESC_SEQ_SET:
         s = s.replace(esc_seq, '')
     return s
+
+def len_string_without_ESC(s):
+    return len(remove_ESC_SEQ_from_string(s))
             
 
 def humanize_time(secs):
@@ -604,7 +607,8 @@ class Progress(Loop):
         
         verbose, sigint, sigterm -> see loop class  
         """
-        
+        self._PRE_PREPEND = ESC_RED
+        self._POST_PREPEND = ESC_BOLD + ESC_GREEN
         try:
             for c in count:
                 assert isinstance(c, mp.sharedctypes.Synchronized), "each element of 'count' must be if the type multiprocessing.sharedctypes.Synchronized"
@@ -654,17 +658,17 @@ class Progress(Loop):
             self.start_time.append(FloatValue(val=time.time()))
             if prepend is None:
                 # no prepend given
-                self.prepend.append('')
+                self.prepend.append(self._POST_PREPEND)
             else:
                 try:
                     # assume list of prepend, (needs to be a sequence)
                     # except if prepend is an instance of string
                     # the assert will cause the except to be executed
                     assert not isinstance(prepend, str)
-                    self.prepend.append(prepend[i])
+                    self.prepend.append(self._PRE_PREPEND + prepend[i]+self._POST_PREPEND)
                 except:
                     # list fails -> assume single prepend for all 
-                    self.prepend.append(prepend)
+                    self.prepend.append(self._PRE_PREPEND + prepend+self._POST_PREPEND)
                                                        
         self.max_count = max_count  # list of multiprocessing value type
         self.count = count          # list of multiprocessing value type
@@ -745,8 +749,8 @@ class Progress(Loop):
         """
             call the static method show_stat_wrapper for each process
         """
-        print(ESC_BOLD + ESC_GREEN, end='')
-        sys.stdout.flush()
+#         print(ESC_BOLD, end='')
+#         sys.stdout.flush()
         for i in range(len_):
             Progress.show_stat_wrapper(count[i], 
                                        last_count[i], 
@@ -964,7 +968,7 @@ class ProgressBar(Progress):
                
             s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
             
-            l = len(s1) + len(s3)
+            l = len_string_without_ESC(s1+s3)
             
             
             if max_count_value != 0:
@@ -1116,7 +1120,7 @@ class ProgressBarCounter(Progress):
                    
                 s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
                 
-                l = len(s1) + len(s3) + len(s_c)
+                l = len_string_without_ESC(s1 + s3 + s_c)
                 l2 = width - l - 1
                 
                 a = int(l2 * count_value / max_count_value)
@@ -1125,7 +1129,7 @@ class ProgressBarCounter(Progress):
                 s_c = s_c+s1+s2+s3
         
                 
-        print(s_c + ' '*(width - len(s_c)))
+        print(s_c + ' '*(width - len_string_without_ESC(s_c)))
             
 class ProgressSilentDummy(Progress):
     def __init__(self, **kwargs):
