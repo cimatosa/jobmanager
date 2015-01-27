@@ -47,12 +47,12 @@ class PersistentDataStructure(object):
         self.verbose = verbose
         
         # create directory to hold sub structures
-        self._dir_name = join(self._path, "__" + self._name)
-        if not exists(self._dir_name):
-            os.mkdir(self._dir_name)
+        self._dirname = join(self._path, "__" + self._name)
+        if not exists(self._dirname):
+            os.mkdir(self._dirname)
         
         # open actual sqltedict
-        self._filename = join(self._dir_name, self._name + '.db')
+        self._filename = join(self._dirname, self._name + '.db')
         self.open()
         
         if KEY_COUNTER in self.db:
@@ -83,7 +83,7 @@ class PersistentDataStructure(object):
     
     def __exit__(self, exc_type, exc_value, traceback):
         if self.verbose > 1:
-            print("exit called for        {} in {}".format(self._name, self._dir_name))
+            print("exit called for        {} in {}".format(self._name, self._dirname))
         self.close()
         
     def open(self):
@@ -92,7 +92,7 @@ class PersistentDataStructure(object):
             as sqlitedict
         """
         if self.verbose > 1:
-            print("open db                {} in {}".format(self._name, self._dir_name))             
+            print("open db                {} in {}".format(self._name, self._dirname))             
         self.db = sqd.SqliteDict(filename = self._filename, autocommit=False)
         self._open = True
         
@@ -114,10 +114,10 @@ class PersistentDataStructure(object):
             self.db.close()
             self._open = False
             if self.verbose > 1:
-                print("closed db              {} in {}".format(self._name, self._dir_name))
+                print("closed db              {} in {}".format(self._name, self._dirname))
         except:
             if self.verbose > 1:
-                print("db seem already closed {} in {}".format(self._name, self._dir_name))
+                print("db seem already closed {} in {}".format(self._name, self._dirname))
             
     def erase(self):
         """
@@ -126,7 +126,7 @@ class PersistentDataStructure(object):
             this is called recursively for all sub PersistentDataStructure
         """
         if self.verbose > 1:
-            print("erase db               {} in {}".format(self._name, self._dir_name))        
+            print("erase db               {} in {}".format(self._name, self._dirname))        
 
         if self.is_closed():
             self.open()
@@ -147,7 +147,7 @@ class PersistentDataStructure(object):
 
         os.remove(path = self._filename)
         try:
-            os.rmdir(path = self._dir_name)
+            os.rmdir(path = self._dirname)
         except OSError as e:
             if self.verbose > 0:
                 print("Warning: directory structure can not be deleted")
@@ -267,7 +267,7 @@ class PersistentDataStructure(object):
             self.db.commit()
 
             kwargs.pop('magic')
-            return PersistentDataStructure(name = new_name, path = os.path.join(self._dir_name) , verbose = self.verbose)
+            return PersistentDataStructure(name = new_name, path = os.path.join(self._dirname) , verbose = self.verbose)
         else:
             raise RuntimeError("can NOT create new SubData, key already found!")
         
@@ -280,7 +280,7 @@ class PersistentDataStructure(object):
             if self.__is_sub_data(value):
                 if self.verbose > 1:
                     print("return subData stored as key", key, "using name", value['name'])
-                return PersistentDataStructure(name = value['name'], path = os.path.join(self._dir_name) , verbose = self.verbose)
+                return PersistentDataStructure(name = value['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
             else:
                 if self.verbose > 1:
                     print("return normal value")
@@ -306,15 +306,15 @@ class PersistentDataStructure(object):
             value = self.db[key]
             with self[key] as pds:                                  #
                 name = pds._name                                    #    remember its name
-                dir_name = pds._dir_name                            #    and the directory where it's in     
+                dir_name = pds._dirname                            #    and the directory where it's in     
                 pds.erase()                                         #    remove the existing subData from hdd  
         else:
             with self.newSubData(key) as new_sub_data:              #    create a new subData
                 name = new_sub_data._name                           #    and remember name and directory
-                dir_name = new_sub_data._dir_name
+                dir_name = new_sub_data._dirname
                 new_sub_data.erase()
         
-        shutil.copytree(src=subData._dir_name, dst=dir_name)
+        shutil.copytree(src=subData._dirname, dst=dir_name)
         os.rename(src=os.path.join(dir_name, subData._name+'.db'), dst=os.path.join(dir_name, name+'.db'))
 
     def __len__(self):
@@ -367,7 +367,7 @@ class PersistentDataStructure(object):
         self.__check_key(key)
         value = self.db[key]
         if self.__is_sub_data(value):
-            with PersistentDataStructure(name = value['name'], path = os.path.join(self._dir_name) , verbose = self.verbose) as pds:
+            with PersistentDataStructure(name = value['name'], path = os.path.join(self._dirname) , verbose = self.verbose) as pds:
                 pds.erase()
             
             self.sub_data_keys.remove(key)
