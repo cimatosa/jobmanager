@@ -479,7 +479,7 @@ if __name__ == "__main__":
 #     test_progress_bar_counter,
 #     test_progress_bar_counter_non_max,
 #     test_progress_bar_counter_hide_bar,
-    test_progress_bar_slow_change,
+#     test_progress_bar_slow_change,
     lambda: print("END")
     ]
     

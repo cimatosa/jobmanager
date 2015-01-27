@@ -1,13 +1,24 @@
 #!/usr/bin/env python
 # To create a distribution package for pip or easy-install:
 # python setup.py sdist
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Command
 from os.path import join, dirname, realpath
 from warnings import warn
 
 name='jobmanager'
 
+class PyTest(Command):
+    user_options = []
+    def initialize_options(self):
+        pass
 
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        import sys,subprocess
+        errno = subprocess.call([sys.executable, 'tests/runtests.py'])
+        raise SystemExit(errno)
 
 
 
@@ -38,16 +49,18 @@ and python module multiprocessing for local
 parallelism.""",
     install_requires=["sqlitedict", "NumPy>=1.5.1"],
     # tests: psutil
-    keywords=["multiprocessing", "queue", "parallel",
-              "progress", "manager", "job"],
+    keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
+              "progress", "manager", "job", "persistent data"],
     classifiers= [
         'Operating System :: OS Independent',
         #'Programming Language :: Python :: 2.7', #Todo
-        'Programming Language :: Python :: 3.2',
-        'Programming Language :: Python :: 3.3',
+        #'Programming Language :: Python :: 3.2', # also not very well tested
+        #'Programming Language :: Python :: 3.3', # also not very well tested
+        'Programming Language :: Python :: 3.4',
         'Intended Audience :: Science/Research'
                  ],
-    platforms=['ALL']
+    platforms=['ALL'],
+    cmdclass = {'test': PyTest},
     )
 
 
