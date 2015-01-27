@@ -137,14 +137,14 @@ def test_directory_removal():
         with data.newSubData('s1') as s1:
             s1['bla'] = 9
             
-        f = open(file=data._dir_name + '/other_file', mode='w')
+        f = open(file=data._dirname + '/other_file', mode='w')
         f.close()
         
         data.erase()
         
-    assert exists(data._dir_name)
-    remove(data._dir_name + '/other_file')
-    rmdir(data._dir_name)
+    assert exists(data._dirname)
+    remove(data._dirname + '/other_file')
+    rmdir(data._dirname)
     
 def test_mp_read_from_sqlite():
     import sqlitedict as sqd
@@ -277,15 +277,48 @@ def test_remove_sub_data_and_check_len():
         base_data._consistency_check()
     
     base_data.erase()
+    
+def test_show_stat():
+    with PDS(name='test_data', verbose=VERBOSE) as data:
+        key = 'a'
+        value = 1
+        data.setData(key=key, value=value)
+        assert data.getData(key) == value
+        
+        
+        key_sub = 'zz'
+        with data.getData(key_sub, create_sub_data=True) as sub_data:
+            sub_data.setData(key=key, value=3)
+            assert sub_data.getData(key) == 3
+            assert data.getData(key) == 1
             
+            
+            key_sub_bin = pickle.dumps(key_sub, protocol=2)
+            with sub_data.getData(key_sub_bin, create_sub_data=True) as sub_sub_data:
+                sub_sub_data.setData(key=key, value=4)
+                assert sub_sub_data.getData(key) == 4
+                assert sub_data.getData(key) == 3
+                assert data.getData(key) == 1
+                
+            with sub_data.getData(key_sub_bin, create_sub_data=True) as sub_sub_data:
+                assert sub_sub_data.getData(key) == 4
+                assert sub_data.getData(key) == 3
+                assert data.getData(key) == 1
+
+        data._consistency_check()
+        
+        data.show_stat(recursive=True)
+    
+    data.erase()            
       
 if __name__ == "__main__":
-#     test_reserved_key_catch()
-#     test_pd()
+    test_reserved_key_catch()
+    test_pd()
     test_pd_bytes()
-#     test_directory_removal()
-#     test_mp_read_from_sqlite()
-#     test_dict_dump()
+    test_directory_removal()
+    test_mp_read_from_sqlite()
+    test_dict_dump()
     test_from_existing_sub_data()
     test_remove_sub_data_and_check_len()
+    test_show_stat()
     

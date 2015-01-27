@@ -153,6 +153,24 @@ class PersistentDataStructure(object):
             if self.verbose > 0:
                 print("Warning: directory structure can not be deleted")
                 print("         {}".format(e))
+                
+    def clear(self):
+        """
+            delete all entries from the db
+        """
+        self.need_open()
+        
+        # delete all sub data
+        for k in self.sub_data_keys:
+            with self[k] as sub_data:
+                sub_data.erase()
+                
+        self.db.clear()
+        self.sub_data_keys = set()
+        self.counter = 0
+        
+        
+        
 
     def show_stat(self, recursive = False, prepend = ""):
         prepend += self._name
@@ -184,8 +202,11 @@ class PersistentDataStructure(object):
         if recursive:
             for k in self.sub_data_keys:
                 if isinstance(k, bytes):
-                    k = pickle.loads(k)
-                print("show stat for subdata with key {}".format(k))
+                    k_from_bytes = pickle.loads(k)
+                    print("show stat for subdata with key (from bytes) {}".format(k_from_bytes))
+                else:
+                    print("show stat for subdata with key {}".format(k))
+                sys.stdout.flush()
                     
                             
                 with self.getData(k) as subdata:
@@ -283,15 +304,17 @@ class PersistentDataStructure(object):
         if key in self.db:
             if self.verbose > 1:
                 print("getData key exists")
-            value = self.db[key]
-            if self.__is_sub_data(value):
+ 
+            if self.is_subdata(key): 
+                sub_db_name = self.db[key]['name']
+            
                 if self.verbose > 1:
-                    print("return subData stored as key", key, "using name", value['name'])
-                return PersistentDataStructure(name = value['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
+                    print("return subData stored as key", key, "using name", sub_db_name)
+                return PersistentDataStructure(name = sub_db_name, path = os.path.join(self._dirname) , verbose = self.verbose)
             else:
                 if self.verbose > 1:
                     print("return normal value")
-                return value 
+                return self.db[key] 
         else:
             if not create_sub_data:
                 raise KeyError("key '{}' not found".format(key))
@@ -304,16 +327,15 @@ class PersistentDataStructure(object):
         """
             set an entry of the PDS with data from an other PDS
             
-            this means copying the appropirate file to the right place
+            this means copying the appropriate file to the right place
             and rename them
         """
         self.need_open()
         self.__check_key(key)                                       # see if key is valid
-        if (key in self.db) and (self.__is_sub_data(self.db[key])): # check if key points to existing PDS
-            value = self.db[key]
+        if self.is_subdata(key):                                    # check if key points to existing PDS 
             with self[key] as pds:                                  #
                 name = pds._name                                    #    remember its name
-                dir_name = pds._dirname                            #    and the directory where it's in     
+                dir_name = pds._dirname                             #    and the directory where it's in     
                 pds.erase()                                         #    remove the existing subData from hdd  
         else:
             with self.newSubData(key) as new_sub_data:              #    create a new subData
@@ -372,9 +394,9 @@ class PersistentDataStructure(object):
     def __delitem__(self, key):
         self.need_open()
         self.__check_key(key)
-        value = self.db[key]
-        if self.__is_sub_data(value):
-            with PersistentDataStructure(name = value['name'], path = os.path.join(self._dirname) , verbose = self.verbose) as pds:
+        
+        if self.is_subdata(key):
+            with self[key] as pds:
                 pds.erase()
             
             self.sub_data_keys.remove(key)
