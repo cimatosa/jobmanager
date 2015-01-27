@@ -91,4 +91,7 @@ class PersistentData_Server(JobManager_Server):
         a_bin = data_as_binary_key(a)
         if self.overwrite or (not a_bin in self.pds):
             JobManager_Server.put_arg(self, a)
+            return True
+        
+        return False
         

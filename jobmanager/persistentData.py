@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 import traceback
+import pickle
 
 if sys.version_info[0] == 2:
     # fixes keyword problems with python 2.x
@@ -182,6 +183,11 @@ class PersistentDataStructure(object):
         sys.stdout.flush()
         if recursive:
             for k in self.sub_data_keys:
+                if isinstance(k, bytes):
+                    k = pickle.loads(k)
+                print("show stat for subdata with key {}".format(k))
+                    
+                            
                 with self.getData(k) as subdata:
                     subdata.show_stat(recursive = recursive,
                                       prepend = prepend + "->")
