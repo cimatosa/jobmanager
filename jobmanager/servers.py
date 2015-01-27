@@ -79,7 +79,10 @@ class PersistentData_Server(JobManager_Server):
         self.pds = persistent_data_structure
         self.overwrite = overwrite
         if self.verbose > 1:
-            print("{}: overwriting existing data was enabled".format(self._identifier))
+            if self.overwrite:
+                print("{}: overwriting existing data is ENABLED".format(self._identifier))
+            else:
+                print("{}: overwriting existing data is DISABLED".format(self._identifier))
          
     def process_new_result(self, arg, result):
         self.pds[data_as_binary_key(arg)] = result
