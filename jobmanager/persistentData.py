@@ -152,6 +152,39 @@ class PersistentDataStructure(object):
             if self.verbose > 0:
                 print("Warning: directory structure can not be deleted")
                 print("         {}".format(e))
+
+    def show_stat(self, recursive = False, prepend = ""):
+        prepend += self._name
+        print("{}: I'm a pds called {}".format(prepend, self._name))
+        print("{}:     dirname  :{}".format(prepend, self._dirname))
+        print("{}:     filename :{}".format(prepend, self._filename))
+        
+        self.need_open()
+        
+        str_key = 0
+        bin_key = 0
+        oth_key = 0
+        
+        for k in self:
+            if isinstance(k, str):
+                str_key += 1
+            elif isinstance(k, bytes):
+                bin_key += 1
+            else:
+                oth_key += 1
+                
+        print("{}:     number of string keys:".format(prepend, str_key))
+        print("{}:     number of byte   keys:".format(prepend, bin_key))
+        if oth_key > 0:
+            print("{}:     number of other  keys:".format(prepend, oth_key))
+        print("{}:     number of subdata: {}".format(prepend, len(self.sub_data_keys)))
+        
+        if recursive:
+            for k in self.sub_data_keys:
+                with self.getData(k) as subdata:
+                    subdata.show_stat(recursive = recursive,
+                                      prepend = prepend + "->")
+            
        
     def __check_key(self, key):
         """
@@ -184,7 +217,8 @@ class PersistentDataStructure(object):
         return (key in self.db)
     
     def is_subdata(self, key):
-        return self.__is_sub_data(self.db[key])
+        return key in self.sub_data_keys
+        # return self.__is_sub_data(self.db[key])
         
     def setData(self, key, value, overwrite=False):
         """
