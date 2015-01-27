@@ -173,12 +173,13 @@ class PersistentDataStructure(object):
             else:
                 oth_key += 1
                 
-        print("{}:     number of string keys:".format(prepend, str_key))
-        print("{}:     number of byte   keys:".format(prepend, bin_key))
+        print("{}:     number of string keys: {}".format(prepend, str_key))
+        print("{}:     number of byte   keys: {}".format(prepend, bin_key))
         if oth_key > 0:
-            print("{}:     number of other  keys:".format(prepend, oth_key))
+            print("{}:     number of other  keys: {}".format(prepend, oth_key))
         print("{}:     number of subdata: {}".format(prepend, len(self.sub_data_keys)))
-        
+        print()
+        sys.stdout.flush()
         if recursive:
             for k in self.sub_data_keys:
                 with self.getData(k) as subdata:
