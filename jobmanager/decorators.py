@@ -156,41 +156,6 @@ class ProgressBar(object):
             return self.func(**callargs)
 
 
-
-def decorate_module_ProgressBar(module, **kwargs):
-    """ Decorates all decoratable functions in a module with a
-    ProgressBar.
-    
-    You can prevent wrapping of a function by not specifying the keyword
-    arguments as defined in `jobmanager.jobmanager.validCountKwargs` or
-    by defining a function `_jm_decorate_{func}".
-    
-    **kwargs are keyword arguments for ProgressBar
-    
-    Note that decorating all functions in a module might lead to
-    strange behavior of the progress bar for nested functions.
-    """
-    vdict = module.__dict__
-    for key in list(vdict.keys()):
-        if hasattr(vdict[key], "__call__"):
-            if getCountKwargs(vdict[key]) is not None:
-                newid = "_jm_decorate_{}".format(key)
-                if hasattr(module, newid):
-                    warings.warn("Wrapping of {} prevented by module.".
-                                 format(key))
-                else:
-                    # copy old function
-                    setattr(module, newid, vdict[key])
-                    # create new function
-                    wrapper = ProgressBar(getattr(module, newid), **kwargs)
-                    # set new function
-                    setattr(module, key, wrapper)
-                    if (kwargs.has_key("verbose") and
-                        kwargs["verbose"] > 0):
-                        print("Jobmanager wrapped {}.{}".format(
-                                                  module.__name__, key))
-
-
 class ProgressBarOverrideCount(ProgressBar):
     def __call__(self, *args, **kwargs):
         """ Calls `func` - previously defined in `__init__`.
@@ -237,4 +202,53 @@ class ProgressBarOverrideCount(ProgressBar):
                                   **self.kwargs) as pb:
             pb.start()
             return self.func(**callargs)    
+
     
+    
+def decorate_module_ProgressBar(module, override_count=False, **kwargs):
+    """ Decorates all decoratable functions in a module with a
+    ProgressBar.
+    
+    You can prevent wrapping of a function by not specifying the keyword
+    arguments as defined in `jobmanager.jobmanager.validCountKwargs` or
+    by defining a function `_jm_decorate_{func}".
+
+    Parameters
+    ----------
+    module : Python module
+        The module whose functions should be decorated.
+    override_count : bool
+        Override the default "count values" of the functions. If this
+        is set to `True`, then `decorators.ProgressBarOverrideCount` 
+        will be used instead of `decorators.ProgressBar`.
+    **kwargs : dict
+        Keyword arguments to the ProgressBar.
+    
+    Notes
+    -----
+    Decorating nested functions in a module might lead to unexpected
+    behavior.
+    """
+    vdict = module.__dict__
+    for key in list(vdict.keys()):
+        if hasattr(vdict[key], "__call__"):
+            if getCountKwargs(vdict[key]) is not None:
+                newid = "_jm_decorate_{}".format(key)
+                if hasattr(module, newid):
+                    warings.warn("Wrapping of {} prevented by module.".
+                                 format(key))
+                else:
+                    # copy old function
+                    setattr(module, newid, vdict[key])
+                    # create new function
+                    if override_count:
+                        wrapper = ProgressBarOverrideCount(getattr(module, newid), **kwargs)
+                    else:    
+                        wrapper = ProgressBar(getattr(module, newid), **kwargs)
+                    # set new function
+                    setattr(module, key, wrapper)
+                    if (kwargs.has_key("verbose") and
+                        kwargs["verbose"] > 0):
+                        print("Jobmanager wrapped {}.{}".format(
+                                                  module.__name__, key))
+
