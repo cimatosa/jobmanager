@@ -182,6 +182,9 @@ class PersistentDataStructure(object):
     def has_key(self, key):
         self.need_open()
         return (key in self.db)
+    
+    def is_subdata(self, key):
+        return self.__is_sub_data(self.db[key])
         
     def setData(self, key, value, overwrite=False):
         """
