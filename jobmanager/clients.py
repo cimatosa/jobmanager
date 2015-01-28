@@ -42,6 +42,19 @@ def merge_arg_and_const_arg(arg, const_arg):
         from the 'arg' dictionary. 
     """
     
+    # allows arg to be a namedtuple (or any other object that
+    # can be converted to a dict)
+    # the purpose is that dicts are not allowed as keys for
+    # the persistent data structure, where as namedtupled are
+    # and therefore arg as a neamedtuple may be used to identify
+    # the result of this calculation in the database
+    if hasattr(arg, '_asdict'):
+        arg = arg._asdict()
+        
+    # same for const_arg, as a reason of consistency
+    if hasattr(const_arg, '_asdict'):
+        const_arg = const_arg._asdict() 
+    
     # extract the args keyword from arg and const_arg
     args_dgl = tuple()
     if 'args' in arg:
@@ -109,19 +122,7 @@ class Integration_Client_CPLX(JobManager_Client):
         
     @staticmethod
     def func(arg, const_arg, c, m):
-        # allows arg to be a namedtuple (or any other object that
-        # can be converted to a dict)
-        # the purpose is that dicts are not allowed as keys for
-        # the persistent data structure, where as namedtupled are
-        # and therefore arg as a neamedtuple may be used to identify
-        # the result of this calculation in the database
-        if hasattr(arg, '_asdict'):
-            arg = arg._asdict()
-            
-        # same for const_arg, as a reason of consistency
-        if hasattr(const_arg, '_asdict'):
-            const_arg = const_arg._asdict()
-            
+        # named tupled to dict conversion moved to merge_arg_and_const_arg
         args_dgl, kwargs = merge_arg_and_const_arg(arg, const_arg)
         m.value = kwargs['N']
        
@@ -143,19 +144,7 @@ class Integration_Client_REAL(JobManager_Client):
         
     @staticmethod
     def func(arg, const_arg, c, m):
-        # allows arg to be a namedtuple (or any other object that
-        # can be converted to a dict)
-        # the purpose is that dicts are not allowed as keys for
-        # the persistent data structure, where as namedtupled are
-        # and therefore arg as a neamedtuple may be used to identify
-        # the result of this calculation in the database
-        if hasattr(arg, '_asdict'):
-            arg = arg._asdict()
-            
-        # same for const_arg, as a reason of consistency
-        if hasattr(const_arg, '_asdict'):
-            const_arg = const_arg._asdict()        
-        
+        # named tupled to dict conversion moved to merge_arg_and_const_arg
         args_dgl, kwargs = merge_arg_and_const_arg(arg, const_arg)
         m.value = kwargs['N']
         
