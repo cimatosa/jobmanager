@@ -189,7 +189,7 @@ def setup_SIG_handler_manager():
     Since the SIGINT signal will be passed to all child processes, the default
     handling would make the SyncManger halt on KeyboardInterrupt Exception.
     
-    As we want to shout down the SyncManager at the last stage of cleanup
+    As we want to shut down the SyncManager at the last stage of cleanup
     we have to prevent this default signal handling by passing this functions
     to the SyncManager start routine.
     """
@@ -310,7 +310,7 @@ class JobManager_Server(object):
     will will then be handle in the try except clause.
     
     SystemExit and KeyboardInterrupt exceptions are not considered as failure. They are
-    rather methods to shout down the Server gracefully. Therefore in such cases no
+    rather methods to shut down the Server gracefully. Therefore in such cases no
     traceback will be printed.
     
     All other exceptions are probably due to some failure in function. A traceback
@@ -493,14 +493,14 @@ class JobManager_Server(object):
             if self.verbose > 0:
                 print("{}: normal shutdown".format(self._identifier))
             # bring everything down, dump status to file 
-            self.shoutdown()
+            self.shutdown()
             # no exception traceback will be printed
             return True
         else:
             if self.verbose > 0:
                 print("{}: shutdown due to exception '{}'".format(progress.ESC_RED + self._identifier, err.__name__))
             # bring everything down, dump status to file 
-            self.shoutdown()
+            self.shutdown()
             # causes exception traceback to be printed
             return False
              
@@ -521,7 +521,7 @@ class JobManager_Server(object):
     def numresults(self, numresults):
         self._numresults.value = numresults
 
-    def shoutdown(self):
+    def shutdown(self):
         """"stop all spawned processes and clean up
         
         - call process_final_result to handle all collected result
@@ -558,7 +558,7 @@ class JobManager_Server(object):
             if self.verbose > 0:
                 print("{}: fname_dump == None, ignore dumping current state!".format(self._identifier))
         
-        print("{}: JobManager_Server was successfully shout down".format(self._identifier))
+        print("{}: JobManager_Server was successfully shut down".format(self._identifier))
         
     def show_statistics(self):
         if self.verbose > 0:
@@ -702,7 +702,7 @@ class JobManager_Server(object):
         """
         starts to loop over incoming results
         
-        When finished, or on exception call stop() afterwards to shout down gracefully.
+        When finished, or on exception call stop() afterwards to shut down gracefully.
         """
         
         if not self.__start_SyncManager():
@@ -1002,7 +1002,7 @@ class JobManager_Client(object):
             
         
         
-        # supposed to catch SystemExit, which will shout the client down quietly 
+        # supposed to catch SystemExit, which will shut the client down quietly 
         try:
             
             # the main loop, exit loop when: 
