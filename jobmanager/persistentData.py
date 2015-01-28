@@ -5,6 +5,7 @@ import sys
 import shutil
 import traceback
 import pickle
+import warnings
 
 if sys.version_info[0] == 2:
     # fixes keyword problems with python 2.x
@@ -56,15 +57,19 @@ class PersistentDataStructure(object):
         self._filename = join(self._dirname, self._name + '.db')
         self.open()
         
-        if KEY_COUNTER in self.db:
-           self.counter = self.db[KEY_COUNTER] 
-        else:
-            self.counter = 0
+        
+        
+        if KEY_COUNTER not in self.db:
+            self.db[KEY_COUNTER] = 0 
+           
+        if KEY_SUB_DATA_KEYS not in self.db:
+            self.db[KEY_SUB_DATA_KEYS] = set()
             
-        if KEY_SUB_DATA_KEYS in self.db:
-            self.sub_data_keys = self.db[KEY_SUB_DATA_KEYS]
-        else:
-            self.sub_data_keys = set()
+        self.db.commit()
+            
+        self.counter = self.db[KEY_COUNTER]
+        self.sub_data_keys = self.db[KEY_SUB_DATA_KEYS]
+
             
     def _consistency_check(self):
         self.need_open()
@@ -151,8 +156,7 @@ class PersistentDataStructure(object):
             os.rmdir(path = self._dirname)
         except OSError as e:
             if self.verbose > 0:
-                print("Warning: directory structure can not be deleted")
-                print("         {}".format(e))
+                warnings.warn("directory structure can not be deleted\n{}".format(e))
                 
     def clear(self):
         """
@@ -164,13 +168,15 @@ class PersistentDataStructure(object):
         for k in self.sub_data_keys:
             with self[k] as sub_data:
                 sub_data.erase()
-                
+                        
         self.db.clear()
+        
+        self.db[KEY_COUNTER] = 0 
+        self.db[KEY_SUB_DATA_KEYS] = set()
+        self.db.commit()
+        
         self.sub_data_keys = set()
-        self.counter = 0
-        
-        
-        
+        self.counter = 0        
 
     def show_stat(self, recursive = False, prepend = ""):
         prepend += self._name
@@ -220,7 +226,7 @@ class PersistentDataStructure(object):
             
             otherwise a RuntimeError will be raised
         """
-        if key in RESERVED_KEYS:
+        if str(key) in RESERVED_KEYS:
             raise RuntimeError("key must not be in {} (reserved key)".format(RESERVED_KEYS))
         
         return True
