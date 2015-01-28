@@ -5,7 +5,13 @@ from __future__ import division, print_function
 import multiprocessing as mp
 import numpy as np
 import os
-import psutil
+import warnings
+
+try:
+    import psutil
+except ImportError:
+    warnings.warn("can not import 'psutil' -> some tests will not work")
+    
 import signal
 import sys
 import time
@@ -18,6 +24,14 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 from jobmanager import progress
 
+def _safe_assert_not_loop_is_alive(loop):
+    try:
+        assert not loop.is_alive()
+    except AssertionError:
+        os.kill(loop.getpid(), signal.SIGKILL)
+        raise
+    
+
 def test_loop_basic():
     """
     run function f in loop
@@ -28,13 +42,17 @@ def test_loop_basic():
     f = lambda: print("        I'm process {}".format(os.getpid()))
     loop = progress.Loop(func=f, interval=0.8, verbose=2)
     loop.start()
-    pid = loop.getpid()    
+    
     time.sleep(1)
+
     assert loop.is_alive()
     print("[+] loop started")
+    
     time.sleep(1)
+    
     loop.stop()
-    assert not loop.is_alive()
+    
+    _safe_assert_not_loop_is_alive(loop)  
     print("[+] loop stopped")
 
 def test_loop_signals():
@@ -50,7 +68,7 @@ def test_loop_signals():
     print("    send SIGINT")
     os.kill(pid, signal.SIGINT)
     time.sleep(1)
-    assert not loop.is_alive()
+    _safe_assert_not_loop_is_alive(loop)
     print("[+] loop stopped running")
 
     print("## stop on SIGTERM ##")    
@@ -60,7 +78,7 @@ def test_loop_signals():
     print("    send SIGTERM")
     os.kill(pid, signal.SIGTERM)
     time.sleep(1)
-    assert not loop.is_alive()
+    _safe_assert_not_loop_is_alive(loop)
     print("[+] loop stopped running")
     
     print("## ignore SIGINT ##")
@@ -114,43 +132,46 @@ def long_sleep_function():
     time.sleep(60*60*12*356*7)
     
 def test_loop_normal_stop():
-    with progress.Loop(func=normal_function, 
-                         verbose=2,
-                         name='loop') as loop:
+    with progress.Loop(func    = normal_function, 
+                       verbose = 2,
+                       name    = 'loop') as loop:
         loop.start()
         time.sleep(0.1)
         assert loop.is_alive()
         print("[+] normal loop running")
-        
-    assert not loop.is_alive()
+    
+    _safe_assert_not_loop_is_alive(loop)
     print("[+] normal loop stopped")
     
 def test_loop_need_sigterm_to_stop():
-    with progress.Loop(func=long_sleep_function, 
-                         verbose=2,
-                         name='loop') as loop:
+    with progress.Loop(func    = long_sleep_function, 
+                       verbose = 2,
+                       name    = 'loop') as loop:
         loop.start()
         time.sleep(0.1)
         assert loop.is_alive()
         print("[+] sleepy loop running")
         
-    assert not loop.is_alive()
+    _safe_assert_not_loop_is_alive(loop)
     print("[+] sleepy loop stopped")
     
 def test_loop_need_sigkill_to_stop():
-    with progress.Loop(func=non_stopping_function, 
-                         verbose=2,
-                         name='loop',
-                         auto_kill_on_last_resort=True) as loop:
+    with progress.Loop(func                     = non_stopping_function, 
+                       verbose                  = 2,
+                       name                     = 'loop',
+                       auto_kill_on_last_resort = True) as loop:
         loop.start()
         time.sleep(0.1)
         assert loop.is_alive()
         print("[+] NON stopping loop running")
 
-    assert not loop.is_alive()
+    _safe_assert_not_loop_is_alive(loop)
     print("[+] NON stopping loop stopped")
         
 def test_why_with_statement():
+    """
+        here we demonstrate why you should use the with statement
+    """
     class ErrorLoop(progress.Loop):
         def raise_error(self):
             raise RuntimeError("on purpose error")
@@ -164,14 +185,17 @@ def test_why_with_statement():
         l.raise_error()
         l.stop()
         
-    def t_with():
+    def t_with(shared_mem_pid):
         with ErrorLoop(func=normal_function, verbose=v) as l:
             l.start()
             time.sleep(0.2)
+            shared_mem_pid.value = l.getpid()
             l.raise_error()
             l.stop()
         
     print("## start without with statement ...")
+    
+    # the pid of the loop process, which is spawned inside 't'
     subproc_pid = progress.UnsignedIntValue()
     
     p = mp.Process(target=t, args=(subproc_pid, ))
@@ -180,32 +204,57 @@ def test_why_with_statement():
     print("## now an exception gets raised ... but you don't see it!")
     time.sleep(3)
     print("## ... and the loop is still running so we have to kill the process")
+    
     p.terminate()
-    print("## ... done!")
-    p_sub = psutil.Process(subproc_pid.value)
-    if p_sub.is_running():
-        print("## terminate loop process from extern ...")
-        p_sub.terminate()
+    p.join(1)
+    
+    try:
+        assert not p.is_alive()
+        print("## ... done!")
+        p_sub = psutil.Process(subproc_pid.value)
+        if p_sub.is_running():
+            print("## terminate loop process from extern ...")
+            p_sub.terminate()
         
-    p_sub.wait(1)
-    assert not p_sub.is_running()
-    print("## process with PID {} terminated!".format(subproc_pid.value))
+            p_sub.wait(1)
+            assert not p_sub.is_running()
+            print("## process with PID {} terminated!".format(subproc_pid.value))
+    finally:
+        if p_sub.is_running():
+            os.kill(subproc_pid.value, signal.SIGKILL)        
+        if p.is_alive():
+            os.kill(p.pid, signal.SIGKILL)
+
     
     time.sleep(3)
     
     print("\n##\n## now to the same with the with statement ...")
-    p = mp.Process(target=t_with)
+    p = mp.Process(target=t_with, args=(subproc_pid, ))
     p.start()
     
     time.sleep(3)
     print("## no special care must be taken ... cool eh!")
     
-    print("## ALL DONE! (and now comes some exception, strange!)")
+    print("## ALL DONE! (there is no control when the exception from the loop get printed)")
+    
+    p.join(1)
+    
+    try:
+        assert not p.is_alive()
+    finally:
+        if p.is_alive():
+            # kill loop
+            p_sub = psutil.Process(subproc_pid.value)
+            if p_sub.is_running():
+                os.kill(subproc_pid.value, signal.SIGKILL)    
+            # kill sub process
+            os.kill(p.pid, signal.SIGKILL)
+        
     
     
 def test_progress_bar():
     """
-    deprecated
+    deprecated, due to missing with
     """
     count = progress.UnsignedIntValue()
     max_count = progress.UnsignedIntValue(100)
@@ -217,20 +266,18 @@ def test_progress_bar():
     assert sb.is_alive()
     pid = sb.getpid()
     
+    # call start on already running PB
     sb.start()
     time.sleep(2)
     assert pid == sb.getpid()
     
     sb.stop()
-    assert not sb.is_alive()
+    _safe_assert_not_loop_is_alive(sb)
     
     time.sleep(2)
+    # call stop on not running PB
     sb.stop()
-#     sb._show_stat()
-    
     time.sleep(2)
-    
-    #traceback.print_last()
     
 def test_progress_bar_with_statement():
     count = progress.UnsignedIntValue()
@@ -242,12 +289,13 @@ def test_progress_bar_with_statement():
         time.sleep(0.2)
         assert sb.is_alive()
         pid = sb.getpid()
-    
+        
+        # call start on already running PB
         sb.start()
         time.sleep(0.2)
         assert pid == sb.getpid()
     
-    assert not sb.is_alive()
+    _safe_assert_not_loop_is_alive(sb)
     
     time.sleep(0.2)
     sb.stop()
