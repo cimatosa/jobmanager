@@ -84,11 +84,73 @@ def test_ProgressBarOverrideCount():
     print("with decorator")
     my_func_ProgressBarOverrideCount_dec()
     print("done!")
+    
+def test_extended_PB_get_access_to_progress_bar():
+    def my_func(c, m, **kwargs):
+        for i in range(m.value):
+            c.value = i+1
+            time.sleep(0.1)
+        
+        try: 
+            kwargs['progress_bar'].stop(make_sure_its_down=True) 
+        except:
+            pass
+        
+        print("let me show you something")
+        
+    c = progress.UnsignedIntValue(val=0)
+    m = progress.UnsignedIntValue(val=20)
+    
+    print("call decorated func")
+    my_func_dec = decorators.ProgressBarExtended(my_func)
+    my_func_dec(c=c, m=m)
+    
+    print("call non decorated func")
+    my_func(c, m)
+    
+def test_extended_PB_progress_bar_off():
+    c = progress.UnsignedIntValue(val=0)
+    m = progress.UnsignedIntValue(val=20)
+    
+    @decorators.ProgressBarExtended
+    def my_func_kwargs(c, m, **kwargs):
+        for i in range(m.value):
+            c.value = i+1
+            time.sleep(0.1)
+
+    @decorators.ProgressBarExtended            
+    def my_func_normal(c, m, progress_bar_off=False, **kwargs):
+        for i in range(m.value):
+            c.value = i+1
+            time.sleep(0.1)            
+        
+    print("call with no kwarg -> normal progressBar")
+    my_func_kwargs(c, m)
+    
+    print("call with kwarg 'progress_bar_off = True' -> NO progressBar")
+    my_func_kwargs(c, m, progress_bar_off = True)
+    
+    print("call with kwarg 'progress_bar_off = False' -> normal progressBar")
+    my_func_kwargs(c, m, progress_bar_off = False)
+    
+    print("call with argument 'progress_bar_off = False' -> normal progressBar")
+    my_func_normal(c, m, progress_bar_off = False)
+    
+    print("call with default argument 'progress_bar_off = False' -> normal progressBar")
+    my_func_normal(c, m)
+    
+    print("call with argument 'progress_bar_off = True' -> NO progressBar")
+    my_func_normal(c, m, progress_bar_off = True)
+    
+    
+
         
 if __name__ == "__main__":
-    test_ProgressBar()
-    test_decorator()
-    test_ProgressBarOverrideCount()
+#     test_ProgressBar()
+#     test_decorator()
+#     test_ProgressBarOverrideCount()
+#     test_extended_PB_get_access_to_progress_bar()
+    test_extended_PB_progress_bar_off()
     
     
 

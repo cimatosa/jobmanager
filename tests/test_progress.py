@@ -509,25 +509,59 @@ def test_progress_bar_slow_change():
             time.sleep(1)     
             count.value = i
             
+def test_progress_bar_start_stop():
+    max_count_value = 20
+    
+    count = progress.UnsignedIntValue(0)
+    max_count = progress.UnsignedIntValue(max_count_value)
+    
+    with progress.ProgressBar(count=count,
+                              max_count=max_count,
+                              interval=0.5,
+                              speed_calc_cycles=5,
+                              verbose=1) as sbm:
+    
+        sbm.start()
+        
+        for i in range(max_count_value):
+            time.sleep(0.1)
+            count.value = i+1
+            if i == 10:
+                sbm.stop(make_sure_its_down = True)
+                print("this will not overwrite the progressbar, because we stopped it explicitly")
+                sbm.start()
+        print("this WILL overwrite the progressbar, because we are still inside it's context (still running)")            
+
+    print()
+    print("create a progress bar, but do not start")
+    with progress.ProgressBar(count=count,
+                              max_count=max_count,
+                              interval=0.5,
+                              speed_calc_cycles=5,
+                              verbose=1) as sbm:
+        pass
+    print("this is after progress.__exit__, there should be no prints from the progress")
+            
 if __name__ == "__main__":
     func = [    
-    test_loop_basic,
-    test_loop_signals,
-    test_loop_normal_stop,
-    test_loop_need_sigterm_to_stop,
-    test_loop_need_sigkill_to_stop,
-    test_why_with_statement,
-    test_progress_bar,
-    test_progress_bar_with_statement,
-    test_progress_bar_multi,
-    test_status_counter,
-    test_status_counter_multi,
-    test_intermediate_prints_while_running_progess_bar,
-    test_intermediate_prints_while_running_progess_bar_multi,
-    test_progress_bar_counter,
-    test_progress_bar_counter_non_max,
-    test_progress_bar_counter_hide_bar,
-    test_progress_bar_slow_change,
+#     test_loop_basic,
+#     test_loop_signals,
+#     test_loop_normal_stop,
+#     test_loop_need_sigterm_to_stop,
+#     test_loop_need_sigkill_to_stop,
+#     test_why_with_statement,
+#     test_progress_bar,
+#     test_progress_bar_with_statement,
+#     test_progress_bar_multi,
+#     test_status_counter,
+#     test_status_counter_multi,
+#     test_intermediate_prints_while_running_progess_bar,
+#     test_intermediate_prints_while_running_progess_bar_multi,
+#     test_progress_bar_counter,
+#     test_progress_bar_counter_non_max,
+#     test_progress_bar_counter_hide_bar,
+#     test_progress_bar_slow_change,
+    test_progress_bar_start_stop,
     lambda: print("END")
     ]
     

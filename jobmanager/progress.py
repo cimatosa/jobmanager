@@ -676,6 +676,7 @@ class Progress(Loop):
         self.interval = interval
         self.verbose = verbose
         self.name = name
+        self.show_on_exit = False
         
         self.add_args = {}
             
@@ -709,8 +710,9 @@ class Progress(Loop):
             show a last progress -> see the full 100% on exit
         """
         super(Progress, self).__exit__(*exc_args)
-        self._show_stat()
-        print('\n'*(self.len-1))
+        if self.show_on_exit:
+            self._show_stat()
+            print('\n'*(self.len-1))
         
     def _show_stat(self):
         """
@@ -876,8 +878,12 @@ class Progress(Loop):
             to get readable information in string format)
         """
         raise NotImplementedError
-        
-    def stop(self):
+    
+    def start(self):
+        super(Progress, self).start()
+        self.show_on_exit = True
+    
+    def stop(self, make_sure_its_down = False):
         """
             trigger clean up by hand, needs to be done when not using
             context management via 'with' statement
@@ -885,6 +891,14 @@ class Progress(Loop):
         super(Progress, self).stop()
         self._show_stat()
         print('\n'*(self.len-1))
+        self.show_on_exit = False
+        if make_sure_its_down and (self._proc is not None):
+            check_process_termination(proc                     = self._proc, 
+                                      identifier               = self._identifier,
+                                      timeout                  = 2*self.interval, 
+                                      verbose                  = self.verbose, 
+                                      auto_kill_on_last_resort = True)
+        
         
     def _reset_all(self):
         """
@@ -969,7 +983,6 @@ class ProgressBar(Progress):
             s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
             
             l = len_string_without_ESC(s1+s3)
-            
             
             if max_count_value != 0:
                 l2 = width - l - 1
