@@ -458,7 +458,7 @@ class JobManager_Server(object):
             self.manager.start(setup_SIG_handler_manager)
         except EOFError as e:
             print("{}: can not start {} on {}:{}".format(progress.ESC_RED + self._identifier, self.__class__.__name__, self.hostname, self.port))
-            print("{}: this is usually the case when the port used in not available!".format(progress.ESC_RED + self._identifier))
+            print("{}: this is usually the case when the port used is not available!".format(progress.ESC_RED + self._identifier))
             
             manager_proc = self.manager._process
             manager_identifier = progress.get_identifier(name='SyncManager')
@@ -750,7 +750,7 @@ class JobManager_Server(object):
                 try:
                     arg, result = self.result_q.get(timeout=1)
                     self.args_set.remove(arg)
-                    self.numresults = self.numjobs - (len(self.args_set) - self.fail_q.qsize())
+                    self.numresults = self.numjobs - len(self.args_set)
                     self.process_new_result(arg, result)
                 except queue.Empty:
                     pass
@@ -849,10 +849,21 @@ class JobManager_Client(object):
 
         self.procs = []
         
-        self.manager_objects = self.get_manager_objects()
+        self.manager_objects = None  # will be set via connect()
+        self.connect()               # get shared objects from server
         
         self.pbc = None
         
+    def connect(self):
+        if self.manager_objects is None:
+            self.manager_objects = self.get_manager_objects()
+        else:
+            if self.verbose > 0:
+                print("{}: already connected (at least shared object are available)".format(self._identifier))
+
+    @property
+    def connected(self):
+        return self.manager_objects is not None
        
     def get_manager_objects(self):
         return JobManager_Client._get_manager_objects(self.server, 
@@ -950,13 +961,6 @@ class JobManager_Client(object):
         identifier = progress.get_identifier(name='worker{}'.format(i+1))
         Signal_to_sys_exit(signals=[signal.SIGTERM])
         Signal_to_SIG_IGN(signals=[signal.SIGINT])
-
-        if manager_objects is None:        
-            manager_objects = JobManager_Client._get_manager_objects(server, port, authkey, identifier, verbose)
-            if manager_objects == None:
-                if verbose > 1:
-                    print("{}: no shared object recieved, terminate!".format(identifier))
-                sys.exit(1)
 
         job_q, result_q, fail_q, const_arg = manager_objects 
         
@@ -1134,8 +1138,8 @@ class JobManager_Client(object):
             except:
                 pass
         if verbose > 1:
-            print("{}: JobManager_Client.__worker_func terminates".format(identifier))
-        
+            print("{}: JobManager_Client.__worker_func terminates PID {}".format(identifier, os.getpid()))
+            
 
     def start(self):
         """
@@ -1145,6 +1149,10 @@ class JobManager_Client(object):
         
         retruns when all subprocesses have terminated
         """
+        
+        if not self.connected:
+            raise ConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
+        
         if self.verbose > 1:
             print("{}: start {} processes to work on the remote queue".format(self._identifier, self.nproc))
             
@@ -1206,7 +1214,22 @@ class JobManager_Client(object):
             
         
             for p in self.procs:
-                p.join()
+                if self.verbose > 1:
+                    print("{}: join {} PID {}".format(self._identifier, p, p.pid))
+                while p.is_alive():
+                    if self.verbose > 1:
+                        print("{}: still alive {} PID {}".format(self._identifier, p, p.pid))
+                    p.join(timeout=1)
+
+                if self.verbose > 1:
+                    print("{}: process {} PID {} was joined".format(self._identifier, p, p.pid))
+                    
+                    
+            if self.verbose > 1:
+                print("{}: still in progressBar context".format(self._identifier))                    
+                                        
+        if self.verbose > 1:
+            print("{}: progressBar context has been left".format(self._identifier))
 
 class JobManager_Local(JobManager_Server):
     def __init__(self,
@@ -1234,6 +1257,7 @@ class JobManager_Local(JobManager_Server):
                          speed_calc_cycles=speed_calc_cycles)
         
         self.client_class = client_class
+        self.port = port
         self.nproc = nproc
         self.delay = delay
         self.verbose_client=verbose_client
@@ -1242,7 +1266,8 @@ class JobManager_Local(JobManager_Server):
         self.niceness_clients = niceness_clients
 
     @staticmethod 
-    def _start_client(authkey, 
+    def _start_client(authkey,
+                        port, 
                         client_class,
                         nproc=0, 
                         nice=19, 
@@ -1256,6 +1281,7 @@ class JobManager_Local(JobManager_Server):
         time.sleep(delay)
         client = client_class(server='localhost',
                               authkey=authkey,
+                              port=port,
                               nproc=nproc, 
                               nice=nice,
                               verbose=verbose,
@@ -1267,7 +1293,8 @@ class JobManager_Local(JobManager_Server):
         
     def start(self):
         p_client = mp.Process(target=JobManager_Local._start_client,
-                              args=(self.authkey, 
+                              args=(self.authkey,
+                                    self.port, 
                                     self.client_class, 
                                     self.nproc,
                                     self.niceness_clients, 

@@ -116,6 +116,7 @@ def test_distributed_mathieu():
     
     with jm.JobManager_Local(client_class = jm.clients.Integration_Client_REAL,
                              authkey = authkey,
+                             port = 42525,
                              const_arg = const_arg,
                              nproc=1,
                              verbose_client=2,
@@ -125,7 +126,7 @@ def test_distributed_mathieu():
         for q in q_list:
             arg = jm.hashDict()
             a = mathieu_a(m, q)
-            arg['arg'] = (a, q)
+            arg['args'] = (a, q)
             arg['x0'] = mathieu_cem(m, q, 0) # gives value and its derivative
             jm_int.put_arg(a=arg)        
         
@@ -145,7 +146,7 @@ def test_distributed_mathieu():
         arg = f[0]
         res = f[1]
         
-        a, q = arg['arg']
+        a, q = arg['args']
         t, x_t = f[1]
         
         assert np.max(np.abs(t_ref - t)) < 1e-15
@@ -184,7 +185,7 @@ class MYO(object):
 from collections import namedtuple as nt
 N1 = nt('N1', ['x', 'y'])
 
-def test_tuple_equal():
+def _test_tuple_equal():
 
             
     myo1 = MYO()
@@ -219,7 +220,7 @@ def test_tuple_equal():
     
     import sqlitedict
     
-    d = sqlitedict.SqliteDict(filename='tmp.db', tablename='test', autocommit=True)
+    d = sqlitedict.SqliteDict(filename='./tmp.db', tablename='test', autocommit=True)
     
     hash1 = hash(na)
     
@@ -245,7 +246,9 @@ def test_tuple_equal():
     
     print(d[key_bytes])
     
-def test_namedtuple_as_dict():
+    d.terminate()
+    
+def _test_namedtuple_as_dict():
     from collections import namedtuple
     import copy
     
@@ -267,8 +270,8 @@ def test_namedtuple_as_dict():
     
     
 if __name__ == "__main__":
-#     test_mathiue_dgl(plot=False)
-#     test_distributed_mathieu()
-#     test_tuple_equal()
-    test_namedtuple_as_dict()
+    test_mathiue_dgl(plot=False)
+    test_distributed_mathieu()
+    _test_tuple_equal()
+    _test_namedtuple_as_dict()
 

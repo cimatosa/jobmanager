@@ -4,10 +4,7 @@
 """
 from __future__ import division, print_function
 
-import multiprocessing as mp
-#import time
-from inspect import getcallargs 
-
+from inspect import getcallargs
 
 from . import progress
 
@@ -147,12 +144,78 @@ class ProgressBar(object):
         callargs = getcallargs(self.func, *args, **kwargs)
         
         count = callargs[self.cm[0]]
-        max_count = callargs[self.cm[1]] 
+        max_count = callargs[self.cm[1]]
+         
         with progress.ProgressBar(count     = count, 
                                   max_count = max_count,
                                   prepend   = "{} ".format(self.__name__),
                                   **self.kwargs) as pb:
             pb.start()
+            return self.func(**callargs)
+        
+class ProgressBarExtended(ProgressBar):
+    """
+        extends the ProgressBar such that
+        
+        on can turn of the ProgressBar by giving an extra argument,
+        namely 'progress_bar_off' and set its value to 'True'.
+        
+        further there will be an additional argument passed to the function
+        called 'progress_bar' which allows to stop the progress bar from
+        within the function. note that there will be an function signature error
+        if the function does not accept the extra argument 'progress_bar'. So a
+        general **kwargs at the end of the functions arguments will help.
+        That is also the reason why the extended version comes in an extra class
+        because it might otherwise break compatibility.
+        
+        Example
+        -------
+        
+        >>> import jobmanager as jm
+        
+        >>> c = jm.progress.UnsignedIntValue(val=0)
+        >>> m = jm.progress.UnsignedIntValue(val=20)
+    
+        >>> @jm.decorators.ProgressBarExtended    # choose 'ProgressBarExtended'
+        >>> def my_func_kwargs(c, m, **kwargs):   # simply add '**kwargs' here
+        >>>     for i in range(m.value):
+        >>>         c.value = i+1
+        >>>         time.sleep(0.1)
+        
+        >>> # same as when using ProgressBar
+        >>> my_func_kwargs(c, m)
+        
+        >>> # a simple kwarg will switch the progressBar off
+        >>> my_func_kwargs(c, m, progress_bar_off=True)
+    """
+    def __call__(self, *args, **kwargs):
+        # Bind the args and kwds to the argument names of self.func
+        callargs = getcallargs(self.func, *args, **kwargs)
+        
+        progress_bar_off = False
+        try:
+            progress_bar_off = callargs['progress_bar_off']
+        except KeyError:
+            pass
+    
+        try:
+            progress_bar_off = callargs['kwargs']['progress_bar_off']
+        except KeyError:
+            pass
+                    
+        if progress_bar_off:
+            return self.func(**callargs)
+        
+        
+        count = callargs[self.cm[0]]
+        max_count = callargs[self.cm[1]]
+         
+        with progress.ProgressBar(count     = count, 
+                                  max_count = max_count,
+                                  prepend   = "{} ".format(self.__name__),
+                                  **self.kwargs) as pb:
+            pb.start()
+            callargs['progress_bar'] = pb
             return self.func(**callargs)
 
 

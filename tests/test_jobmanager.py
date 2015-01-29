@@ -16,6 +16,9 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 from jobmanager import jobmanager, progress
 
+PORT = 42525
+AUTHKEY = 'testing'
+
 
 def test_Signal_to_SIG_IGN():
     def f():
@@ -118,11 +121,11 @@ def test_Signal_to_terminate_process_list():
 def start_server(n, read_old_state=False, verbose=1):
     print("START SERVER")
     args = range(1,n)
-    authkey = 'testing'
-    with jobmanager.JobManager_Server(authkey=authkey,
-                                      verbose=verbose,
-                                      msg_interval=1,
-                                      fname_dump='jobmanager.dump') as jm_server:
+    with jobmanager.JobManager_Server(authkey      = AUTHKEY,
+                                      port         = PORT,
+                                      verbose      = verbose,
+                                      msg_interval = 1,
+                                      fname_dump   = 'jobmanager.dump') as jm_server:
         if not read_old_state:
             jm_server.args_from_list(args)
         else:
@@ -131,11 +134,14 @@ def start_server(n, read_old_state=False, verbose=1):
     
 def start_client(verbose=1):
     print("START CLIENT")
-    jm_client = jobmanager.JobManager_Client(server='localhost', 
-                                             authkey='testing', 
-                                             port=42524, 
-                                             nproc=0, verbose=verbose)
-    jm_client.start()    
+    jm_client = jobmanager.JobManager_Client(server = 'localhost', 
+                                             authkey = AUTHKEY, 
+                                             port    = PORT, 
+                                             nproc   = 0,
+                                             verbose = verbose)
+    jm_client.start()
+    if verbose > 1:
+        print("jm_client returned")    
 
 def test_jobmanager_basic():
     """
@@ -243,18 +249,29 @@ def test_shutdown_server_while_client_running():
     
     time.sleep(1)
     
-    p_client = mp.Process(target=start_client)
+    p_client = mp.Process(target=start_client, args=(2,))
     p_client.start()
     
     time.sleep(2)
     
     os.kill(p_server.pid, signal.SIGTERM)
     
-    p_server.join(15)
-    p_client.join(15)
+    p_server.join(200)
+    p_client.join(200)
     
-    assert not p_server.is_alive()
-    assert not p_client.is_alive()
+    try:
+        assert not p_server.is_alive()
+    except:
+        p_server.terminate()
+        raise
+    
+    try:
+        assert not p_client.is_alive()
+    except:
+        p_client.terminate()
+        raise
+        
+    
     
     fname = 'jobmanager.dump'
     with open(fname, 'rb') as f:
@@ -367,16 +384,21 @@ def test_check_fail():
     
     print("START CLIENT")
     jm_client = Client_Random_Error(server='localhost', 
-                                    authkey='testing',
-                                    port=42524, 
+                                    authkey=AUTHKEY,
+                                    port=PORT, 
                                     nproc=0, 
                                     verbose=verbose)
     
     p_client = mp.Process(target=jm_client.start)
     p_client.start()
     
-    assert p_server.is_alive()
-    assert p_client.is_alive()
+    try:
+        assert p_server.is_alive()
+        assert p_client.is_alive()
+    except:
+        p_client.terminate()
+        p_server.terminate()
+        raise
     
     print("[+] server and client running")
     
@@ -537,20 +559,20 @@ def test_client_status():
 
             return os.getpid()
 
-    client = Client_With_Status(server='localhost', 
-                            authkey='testing',
-                            port=42524, 
-                            nproc=4, 
-                            verbose=1)
+    client = Client_With_Status(server = 'localhost', 
+                                authkey = AUTHKEY,
+                                port    = PORT, 
+                                nproc   = 4, 
+                                verbose = 1)
     client.start()
     p_server.join()
     
 def test_jobmanager_local():
     args = range(1,200)
-    authkey = 'testing'
     with jobmanager.JobManager_Local(client_class = jobmanager.JobManager_Client,
-                                     authkey=authkey,
-                                     verbose=1,
+                                     authkey = AUTHKEY,
+                                     port = PORT,
+                                     verbose = 1,
                                      verbose_client=0,
                                      ) as jm_server:
         jm_server.args_from_list(args)
@@ -560,7 +582,8 @@ def test_start_server_on_used_port():
     def start_server():
         const_arg = None
         arg = [10,20,30]
-        with jobmanager.JobManager_Server(authkey='test_shared_const_arg', 
+        with jobmanager.JobManager_Server(authkey = AUTHKEY,
+                                          port    = PORT, 
                                           const_arg=const_arg,
                                           fname_dump=None) as server:
             server.args_from_list(arg)
@@ -569,7 +592,8 @@ def test_start_server_on_used_port():
     def start_server2():
         const_arg = None
         arg = [10,20,30]
-        with jobmanager.JobManager_Server(authkey='test_shared_const_arg', 
+        with jobmanager.JobManager_Server(authkey=AUTHKEY,
+                                          port = PORT, 
                                           const_arg=const_arg,
                                           fname_dump=None) as server:
             server.args_from_list(arg)
@@ -600,7 +624,8 @@ def test_shared_const_arg():
     def start_server():
         const_arg = {1:1, 2:2, 3:3}
         arg = [10,20,30]
-        with jobmanager.JobManager_Server(authkey='test_shared_const_arg', 
+        with jobmanager.JobManager_Server(authkey=AUTHKEY,
+                                          port = PORT, 
                                           const_arg=const_arg,
                                           fname_dump=None) as server:
             server.args_from_list(arg)
@@ -617,7 +642,8 @@ def test_shared_const_arg():
                 return None
             
         client = myClient(server='localhost',
-                          authkey='test_shared_const_arg',
+                          authkey=AUTHKEY,
+                          port = PORT,
                           nproc=1,
                           verbose=2)
         
@@ -637,47 +663,58 @@ def test_shared_const_arg():
     time.sleep(1)
     p1.join()
     
-        
-def _test_interrupt_server():
-    start_server(n = 100)
+def test_digest_rejected():
+    n = 10
+    p_server = mp.Process(target=start_server, args=(n,False,0))
+    p_server.start()
     
-def _test_interrupt_client():
+    time.sleep(1)
     
-    class DoNothing_Client(jobmanager.JobManager_Client):
-        @staticmethod
-        def func(arg, const_arg):
-            while True:
-               time.sleep(10) 
-   
-    c = DoNothing_Client(server='localhost', authkey = 'testing', verbose=2, show_statusbar_for_jobs=True)
-    c.start()
-        
+    class Client_With_Status(jobmanager.JobManager_Client):
+        def func(self, args, const_args, c, m):
+            m.value = 100
+            for i in range(m.value):
+                c.value = i+1
+                time.sleep(0.05)
 
-     
+            return os.getpid()
+
+    client = Client_With_Status(server = 'localhost', 
+                                authkey = AUTHKEY+' not the same',
+                                port    = PORT, 
+                                nproc   = 4, 
+                                verbose = 2)
+    try:
+        client.start()
+    except ConnectionError as e:
+        print("Not an error: caught '{}' with message '{}'".format(e.__class__.__name__, e))
+        p_server.terminate()
+        
+    p_server.join()            
     
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        if sys.argv[1] == 'server':
-            start_server(n = 100)
+        pass
     else:    
         func = [
-    #     test_Signal_to_SIG_IGN,
-    #     test_Signal_to_sys_exit,
-    #     test_Signal_to_terminate_process_list,
-    #           
-    #     test_jobmanager_basic,
-    #     test_jobmanager_server_signals,
-    #     test_shutdown_server_while_client_running,
-    #     test_shutdown_client,
-    #     test_check_fail,
-        test_jobmanager_read_old_stat,
-    #     test_hashDict,
-    #     test_hashedViewOnNumpyArray,
-    #     test_client_status,
-    #     test_jobmanager_local,
+#         test_Signal_to_SIG_IGN,
+#         test_Signal_to_sys_exit,
+#         test_Signal_to_terminate_process_list,
+#                 
+#         test_jobmanager_basic,
+#         test_jobmanager_server_signals,
+        test_shutdown_server_while_client_running,
+#         test_shutdown_client,
+#         test_check_fail,
+#         test_jobmanager_read_old_stat,
+#         test_hashDict,
+#         test_hashedViewOnNumpyArray,
+#         test_client_status,
+#         test_jobmanager_local,
 #         test_start_server_on_used_port,
 #         test_shared_const_arg,
+#         test_digest_rejected,
 
         lambda : print("END")
         ]
