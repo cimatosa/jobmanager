@@ -373,8 +373,23 @@ def test_clear():
             assert dir_content[0] == 'data.db'
     finally:
         data.erase()
+
+def test_not_in():
+    try:
+        with PDS(name='data', verbose=VERBOSE) as data:
+            data['a'] = 1
+            data['b'] = 2
+            with data.newSubData('s1') as s1:
+                s1['bla'] = 9
+                
+            assert ('a' in data)
+            assert ('b' in data)
+            assert ('s1' in data)
             
-        
+            assert ('c' not in data)
+                
+    finally:
+        data.erase()
         
       
 if __name__ == "__main__":
@@ -387,6 +402,6 @@ if __name__ == "__main__":
 #     test_from_existing_sub_data()
 #     test_remove_sub_data_and_check_len()
 #     test_show_stat()
-    test_len()
-    test_clear()
-    
+#     test_len()
+#     test_clear()
+    test_not_in()
