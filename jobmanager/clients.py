@@ -67,7 +67,11 @@ def merge_arg_and_const_arg(arg, const_arg):
     kwargs.update(arg)
     # remove args as they have been constructed explicitly
     if 'args' in kwargs:
-        kwargs.pop('args')
+        del kwargs['args']
+        
+    # remove id, when it comes from the persistentDataServer 
+    if 'id' in kwargs:
+        del kwargs['id']
     
     return args_dgl, kwargs
 

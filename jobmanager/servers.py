@@ -85,10 +85,10 @@ class PersistentData_Server(JobManager_Server):
                 print("{}: overwriting existing data is DISABLED".format(self._identifier))
          
     def process_new_result(self, arg, result):
-        self.pds[data_as_binary_key(arg)] = result
+        self.pds[data_as_binary_key(arg.id)] = (arg, result)
         
     def put_arg(self, a):
-        a_bin = data_as_binary_key(a)
+        a_bin = data_as_binary_key(a.id)
         if self.overwrite or (not a_bin in self.pds):
             JobManager_Server.put_arg(self, a)
             return True
