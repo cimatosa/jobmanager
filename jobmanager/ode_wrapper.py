@@ -46,6 +46,12 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         raise RuntimeError("unknown integrator '{}'".format(integrator))
     
     r = ode(f_)
+    
+    kws = list(kwargs.keys())
+    for kw in kws:
+        if kwargs[kw] is None:
+            del kwargs[kw]
+    
     r.set_integrator(integrator, **kwargs)
     
     # x0_ might be the mapping from C to R^2
@@ -95,6 +101,12 @@ def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         raise RuntimeError("unknown integrator '{}'".format(integrator))
     
     r = ode(f_partial)
+    
+    kws = list(kwargs.keys())
+    for kw in kws:
+        if kwargs[kw] is None:
+            del kwargs[kw]
+    
     r.set_integrator(integrator, **kwargs)
     
     # x0_ might be the mapping from C to R^2
