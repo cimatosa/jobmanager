@@ -186,14 +186,14 @@ def check_process_termination(proc, identifier, timeout, verbose=0, auto_kill_on
             print("{}: send SIGKILL to".format(identifier))
             os.kill(proc.pid, signal.SIGKILL)
             time.sleep(0.1)
-            answer = '_'
             
         if not proc.is_alive():
             print("{}: has stopped running!".format(identifier))
             return True
         else:
             print("{}: still running!".format(identifier))
-        
+
+        answer = '_'        
         while not answer in 'yn':
             print("Do you want to send SIGKILL to '{}'? [y/n]: ".format(identifier), end='')
             sys.stdout.flush()
