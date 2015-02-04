@@ -607,7 +607,7 @@ class Progress(Loop):
         
         verbose, sigint, sigterm -> see loop class  
         """
-        self._PRE_PREPEND = ESC_RED
+        self._PRE_PREPEND = ESC_NO_CHAR_ATTR + ESC_RED
         self._POST_PREPEND = ESC_BOLD + ESC_GREEN
         try:
             for c in count:

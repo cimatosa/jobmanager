@@ -552,7 +552,7 @@ if __name__ == "__main__":
 #     test_why_with_statement,
 #     test_progress_bar,
 #     test_progress_bar_with_statement,
-#     test_progress_bar_multi,
+    test_progress_bar_multi,
 #     test_status_counter,
 #     test_status_counter_multi,
 #     test_intermediate_prints_while_running_progess_bar,
@@ -561,7 +561,7 @@ if __name__ == "__main__":
 #     test_progress_bar_counter_non_max,
 #     test_progress_bar_counter_hide_bar,
 #     test_progress_bar_slow_change,
-    test_progress_bar_start_stop,
+#     test_progress_bar_start_stop,
     lambda: print("END")
     ]
     
