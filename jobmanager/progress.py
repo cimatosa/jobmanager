@@ -2,15 +2,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
+import copy
+import math
 import multiprocessing as mp
+import os
 import time
 import traceback
 import signal
-import sys
-import os
-import math
 import subprocess
-import copy
+import sys
+import warnings
 
 if sys.version_info[0] == 2:
     # Python 2
@@ -737,9 +738,26 @@ class Progress(Loop):
         self.show_on_exit = False
         
         self.add_args = {}
-            
-        # setup loop class
-        super(Progress, self).__init__(func=Progress.show_stat_wrapper_multi, 
+        
+        # before printing any output to stout, we can now check this
+        # variable to see if any other ProgressBar has reserved that
+        # terminal.
+        # all classes that print to stdout go here
+        # TODO: find a better position for this list.
+        printBars = ["ProgressBar", "ProgressBarCounter"]
+        if (self.__class__.__name__ in printBars):
+            self.terminal_reserved = terminal_reserve()
+            if not self.terminal_reserved:
+                warnings.warn("tty reserved, not printing progress!")
+                func = lambda x: None
+            else:
+                func = Progress.show_stat_wrapper_multi
+        else:
+            self.terminal_reserved = False
+
+        
+        # setup loop class with func
+        super(Progress, self).__init__(func=func, 
                          args=(self.count,
                                self.last_count, 
                                self.start_time,
@@ -760,17 +778,6 @@ class Progress(Loop):
                          sigterm=sigterm, 
                          name=name,
                          auto_kill_on_last_resort=True)
-
-
-    def __enter__(self):
-        """ Set things up
-        
-        - reserves terminal
-        """
-        # before printing any output to stout, we can now check this
-        # variable to see if any other ProgressBar has reserved that
-        # terminal.
-        self.terminal_reserved = terminal_reserve()
 
 
     def __exit__(self, *exc_args):
@@ -808,6 +815,7 @@ class Progress(Loop):
                                          self.len, 
                                          self.add_args,
                                          self.lock)
+
 
 
     @staticmethod
@@ -1054,30 +1062,29 @@ class ProgressBar(Progress):
             
     @staticmethod        
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
-        if self.terminal_reserved:
-            if max_count_value is None:
-                # only show current absolute progress as number and estimated speed
-                print("{}{} [{}] #{}    ".format(prepend, humanize_time(tet), humanize_speed(speed), count_value))             
+        if max_count_value is None:
+            # only show current absolute progress as number and estimated speed
+            print("{}{} [{}] #{}    ".format(prepend, humanize_time(tet), humanize_speed(speed), count_value))             
+        else:
+            # deduce relative progress and show as bar on screen
+            if eta is None:
+                s3 = "] ETA --"
             else:
-                # deduce relative progress and show as bar on screen
-                if eta is None:
-                    s3 = "] ETA --"
-                else:
-                    s3 = "] ETA {}".format(humanize_time(eta))
-                   
-                s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
-                
-                l = len_string_without_ESC(s1+s3)
-                
-                if max_count_value != 0:
-                    l2 = width - l - 1
-                    a = int(l2 * count_value / max_count_value)
-                    b = l2 - a
-                    s2 = "="*a + ">" + " "*b
-                else:
-                    s2 = " "*(width - l)
+                s3 = "] ETA {}".format(humanize_time(eta))
+               
+            s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
+            
+            l = len_string_without_ESC(s1+s3)
+            
+            if max_count_value != 0:
+                l2 = width - l - 1
+                a = int(l2 * count_value / max_count_value)
+                b = l2 - a
+                s2 = "="*a + ">" + " "*b
+            else:
+                s2 = " "*(width - l)
 
-                print(s1+s2+s3)
+            print(s1+s2+s3)
         
 # class ProgressCounter(Progress):
 #     """
@@ -1199,37 +1206,36 @@ class ProgressBarCounter(Progress):
         
     @staticmethod
     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
-        if self.terminal_reserved:
-            counter_count = kwargs['counter_count'][i]
-            counter_speed = kwargs['counter_speed'][i]
-            counter_tet = time.time() - kwargs['init_time']
-            
-            s_c = "{}{} [{}] #{}".format(prepend,
-                                        humanize_time(counter_tet),
-                                        humanize_speed(counter_speed.value), 
-                                        counter_count.value)
-            if max_count_value != 0:
-                s_c += ' - '
-            
-                if max_count_value is None:
-                    s_c = "{}{}{} [{}] #{}    ".format(s_c, prepend, humanize_time(tet), humanize_speed(speed), count_value)            
+        counter_count = kwargs['counter_count'][i]
+        counter_speed = kwargs['counter_speed'][i]
+        counter_tet = time.time() - kwargs['init_time']
+        
+        s_c = "{}{} [{}] #{}".format(prepend,
+                                    humanize_time(counter_tet),
+                                    humanize_speed(counter_speed.value), 
+                                    counter_count.value)
+        if max_count_value != 0:
+            s_c += ' - '
+        
+            if max_count_value is None:
+                s_c = "{}{}{} [{}] #{}    ".format(s_c, prepend, humanize_time(tet), humanize_speed(speed), count_value)            
+            else:
+                if eta is None:
+                    s3 = "] ETA --"
                 else:
-                    if eta is None:
-                        s3 = "] ETA --"
-                    else:
-                        s3 = "] ETA {}".format(humanize_time(eta))
-                       
-                    s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
-                    
-                    l = len_string_without_ESC(s1 + s3 + s_c)
-                    l2 = width - l - 1
-                    
-                    a = int(l2 * count_value / max_count_value)
-                    b = l2 - a
-                    s2 = "="*a + ">" + " "*b
-                    s_c = s_c+s1+s2+s3
-            
-            print(s_c + ' '*(width - len_string_without_ESC(s_c)))
+                    s3 = "] ETA {}".format(humanize_time(eta))
+                   
+                s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
+                
+                l = len_string_without_ESC(s1 + s3 + s_c)
+                l2 = width - l - 1
+                
+                a = int(l2 * count_value / max_count_value)
+                b = l2 - a
+                s2 = "="*a + ">" + " "*b
+                s_c = s_c+s1+s2+s3
+        
+        print(s_c + ' '*(width - len_string_without_ESC(s_c)))
 
 
 
