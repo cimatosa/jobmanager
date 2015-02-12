@@ -13,17 +13,19 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 from jobmanager import decorators, progress
 
+
 @decorators.ProgressBar
 def _my_func_1(arg, 
                 kwarg     = "1", 
                 count     = decorators.progress.UnsignedIntValue(val=0), 
-                max_count = decorators.progress.UnsignedIntValue(val=1)):
+                max_count = decorators.progress.UnsignedIntValue(val=1),
+                sleep     = 0.02):
     maxval = 100
     max_count.value = maxval
         
     for i in range(maxval):
         count.value += 1
-        time.sleep(0.02)
+        time.sleep(sleep)
 
     return arg+kwarg
 
@@ -42,25 +44,11 @@ def _my_func_2(arg,
     return arg+kwarg
 
 
-def test_ProgressBar():
-    result1 = _my_func_1("decorated function", kwarg=" 1")
-    print(result1)
-    
-    wrapper = decorators.ProgressBar(_my_func_2, interval=.1)
-    result2 = wrapper("wrapped function", kwarg=" 2")
-    print(result2)
-
 @decorators.ProgressBar
 def my_func(c, m):
     for i in range(m.value):
         c.value = i
         time.sleep(0.02)
-        
-def test_decorator():
-    c = progress.UnsignedIntValue(val=0)
-    m = progress.UnsignedIntValue(val=100)
-    my_func(c=c, m=m)
-    my_func(c, m)
     
 
 def my_func_ProgressBarOverrideCount(c = None, m = None):
@@ -72,18 +60,35 @@ def my_func_ProgressBarOverrideCount(c = None, m = None):
         time.sleep(0.03)
         if c is not None:
             c.value = i 
-        
-    
-def test_ProgressBarOverrideCount():
-    print("normal call -> no decoration")
-    my_func_ProgressBarOverrideCount()
-    print("done!")
-    print()
-    
-    my_func_ProgressBarOverrideCount_dec = decorators.ProgressBarOverrideCount(my_func_ProgressBarOverrideCount)
-    print("with decorator")
-    my_func_ProgressBarOverrideCount_dec()
-    print("done!")
+
+
+@decorators.ProgressBar
+def test_decorated_func_calls_decorated_func(
+                c     = decorators.progress.UnsignedIntValue(val=0), 
+                m     = decorators.progress.UnsignedIntValue(val=1),
+                                ):
+    """ This function calls a function that has been decorated with
+        a progress bar. Only the progressbar of this function here is
+        displayed.
+    """
+    maxval = 10
+    m.value = maxval
+    c.value = 0
+    for i in range(maxval):
+        c.value += 1
+        time.sleep(0.02)
+        # This function is decorated, but because we have implemented
+        # methods for reserving a terminal, the function does not print
+        # anything - which makes the output pretty.
+        _my_func_1(arg=i, kwarg=0, sleep=0.01)
+
+
+def test_decorator():
+    c = progress.UnsignedIntValue(val=0)
+    m = progress.UnsignedIntValue(val=100)
+    my_func(c=c, m=m)
+    my_func(c, m)
+
     
 def test_extended_PB_get_access_to_progress_bar():
     def my_func(c, m, **kwargs):
@@ -107,7 +112,8 @@ def test_extended_PB_get_access_to_progress_bar():
     
     print("call non decorated func")
     my_func(c, m)
-    
+
+
 def test_extended_PB_progress_bar_off():
     c = progress.UnsignedIntValue(val=0)
     m = progress.UnsignedIntValue(val=20)
@@ -141,7 +147,28 @@ def test_extended_PB_progress_bar_off():
     
     print("call with argument 'progress_bar_off = True' -> NO progressBar")
     my_func_normal(c, m, progress_bar_off = True)
+
+
+
+def test_ProgressBar():
+    result1 = _my_func_1("decorated function", kwarg=" 1")
+    print(result1)
     
+    wrapper = decorators.ProgressBar(_my_func_2, interval=.1)
+    result2 = wrapper("wrapped function", kwarg=" 2")
+    print(result2)
+
+
+def test_ProgressBarOverrideCount():
+    print("normal call -> no decoration")
+    my_func_ProgressBarOverrideCount()
+    print("done!")
+    print()
+    
+    my_func_ProgressBarOverrideCount_dec = decorators.ProgressBarOverrideCount(my_func_ProgressBarOverrideCount)
+    print("with decorator")
+    my_func_ProgressBarOverrideCount_dec()
+    print("done!")
     
 
         
