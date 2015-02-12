@@ -152,7 +152,9 @@ class ProgressBar(object):
                                   **self.kwargs) as pb:
             pb.start()
             return self.func(**callargs)
-        
+
+
+
 class ProgressBarExtended(ProgressBar):
     """
         extends the ProgressBar such that
@@ -217,6 +219,7 @@ class ProgressBarExtended(ProgressBar):
             pb.start()
             callargs['progress_bar'] = pb
             return self.func(**callargs)
+
 
 
 class ProgressBarOverrideCount(ProgressBar):

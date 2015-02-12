@@ -280,6 +280,7 @@ def terminal_reserve():
         if not name in TERMINAL_RESERVATION:
             TERMINAL_RESERVATION.append(name)
             reservation = True
+            print(name)
     return reservation
 
 
@@ -743,13 +744,14 @@ class Progress(Loop):
         # variable to see if any other ProgressBar has reserved that
         # terminal.
         # all classes that print to stdout go here
-        # TODO: find a better position for this list.
+        # TODO: find a better lcoation for this list.
         printBars = ["ProgressBar", "ProgressBarCounter"]
         if (self.__class__.__name__ in printBars):
             self.terminal_reserved = terminal_reserve()
             if not self.terminal_reserved:
                 warnings.warn("tty reserved, not printing progress!")
                 func = lambda x: None
+                self.show_on_exit = False
             else:
                 func = Progress.show_stat_wrapper_multi
         else:
@@ -781,19 +783,21 @@ class Progress(Loop):
 
 
     def __exit__(self, *exc_args):
-        """ Teat things down
+        """ Tear things down
         
         - will terminate loop process
         - show a last progress -> see the full 100% on exit
         - releases terminal reservation
         """
         super(Progress, self).__exit__(*exc_args)
-        if self.show_on_exit:
-            self._show_stat()
-            print('\n'*(self.len-1))
-        
         if self.terminal_reserved:
             terminal_unreserve()
+        
+            if self.show_on_exit:
+                self._show_stat()
+                print('\n'*(self.len-1))
+        
+
 
         
     def _show_stat(self):
