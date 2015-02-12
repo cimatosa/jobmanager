@@ -5,7 +5,7 @@ import warnings
 
 try:
     from scipy.integrate import ode
-except ImportError:
+except ImportError as e:
     warnings.warn("Submodule 'ode_wrapper' will not work. Reason: {}.".format(e))
 
 
