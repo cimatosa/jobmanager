@@ -50,7 +50,7 @@ parallelism.""",
     install_requires=["sqlitedict", "NumPy>=1.5.1"],
     tests_require=["psutil"],
     keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
-              "progress", "manager", "job", "persistent data"],
+              "progress", "manager", "job", "persistent data", "scheduler"],
     classifiers= [
         'Operating System :: OS Independent',
         #'Programming Language :: Python :: 2.7', #Todo
