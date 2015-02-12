@@ -464,70 +464,11 @@ class Progress(Loop):
         """
         super(Progress, self).__exit__(*exc_args)
         if self.terminal_reserved:
-            terminal_unreserve()
-        
             if self.show_on_exit:
                 self._show_stat()
                 print('\n'*(self.len-1))
+            terminal_unreserve()
         
-    def _show_stat(self):
-        """
-            convenient functions to call the static show_stat_wrapper_multi with
-            the given class members
-        """
-        Progress.show_stat_wrapper_multi(self.count,
-                                         self.last_count, 
-                                         self.start_time, 
-                                         self.max_count, 
-                                         self.speed_calc_cycles,
-                                         self.width,
-                                         self.q,
-                                         self.last_old_count,
-                                         self.last_old_time,
-                                         self.prepend,
-                                         self.__class__.show_stat,
-                                         self.len, 
-                                         self.add_args,
-                                         self.lock)
-
-    @staticmethod
-    def show_stat_wrapper_multi(count, 
-                                last_count, 
-                                start_time, 
-                                max_count, 
-                                speed_calc_cycles, 
-                                width, 
-                                q, 
-                                last_old_count,
-                                last_old_time,
-                                prepend, 
-                                show_stat_function, 
-                                len_, 
-                                add_args,
-                                lock):
-        """
-            call the static method show_stat_wrapper for each process
-        """
-#         print(ESC_BOLD, end='')
-#         sys.stdout.flush()
-        for i in range(len_):
-            Progress.show_stat_wrapper(count[i], 
-                                       last_count[i], 
-                                       start_time[i], 
-                                       max_count[i], 
-                                       speed_calc_cycles, 
-                                       width, 
-                                       q[i],
-                                       last_old_count[i],
-                                       last_old_time[i],
-                                       prepend[i], 
-                                       show_stat_function, 
-                                       add_args, 
-                                       i, 
-                                       lock[i])
-        print(ESC_MOVE_LINE_UP(len_) + ESC_NO_CHAR_ATTR, end='')
-        sys.stdout.flush()
-
     @staticmethod
     def _calc(count, 
               last_count, 
@@ -586,6 +527,81 @@ class Progress(Loop):
             
         return count_value, max_count_value, speed, tet, eta
 
+    def _reset_all(self):
+        """
+            reset all progress information
+        """
+        for i in range(self.len):
+            self._reset_i(i)
+
+    def _reset_i(self, i):
+        """
+            reset i-th progress information
+        """
+        self.count[i].value=0
+        self.lock[i].acquire()
+        for x in range(self.q[i].qsize()):
+            self.q[i].get()
+        
+        self.lock[i].release()
+        self.start_time[i].value = time.time()
+
+    def _show_stat(self):
+        """
+            convenient functions to call the static show_stat_wrapper_multi with
+            the given class members
+        """
+        Progress.show_stat_wrapper_multi(self.count,
+                                         self.last_count, 
+                                         self.start_time, 
+                                         self.max_count, 
+                                         self.speed_calc_cycles,
+                                         self.width,
+                                         self.q,
+                                         self.last_old_count,
+                                         self.last_old_time,
+                                         self.prepend,
+                                         self.__class__.show_stat,
+                                         self.len, 
+                                         self.add_args,
+                                         self.lock)
+
+    def reset(self, i = None):
+        """
+            convenient function to reset progress information
+            
+            i [None, int] - None: reset all, int: reset process indexed by i 
+        """
+#        super(Progress, self).stop()
+        if i is None:
+            self._reset_all()
+        else:
+            self._reset_i(i)
+#        super(Progress, self).start()
+
+    @staticmethod        
+    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
+        """
+            re implement this function in a subclass
+            
+            count_value - current value of progress
+            
+            max_count_value - maximum value the progress can take
+            
+            prepend - some extra string to be put for example in front of the
+            progress display
+            
+            speed - estimated speed in counts per second (use for example humanize_speed
+            to get readable information in string format)
+            
+            tet - total elapsed time in seconds (use for example humanize_time
+            to get readable information in string format)
+            
+            eta - estimated time of arrival in seconds (use for example humanize_time
+            to get readable information in string format)
+        """
+        raise NotImplementedError
+
     @staticmethod        
     def show_stat_wrapper(count, 
                           last_count, 
@@ -612,28 +628,43 @@ class Progress(Loop):
                                                                         lock) 
         return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, width, i, **add_args)
 
-    @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
+    @staticmethod
+    def show_stat_wrapper_multi(count, 
+                                last_count, 
+                                start_time, 
+                                max_count, 
+                                speed_calc_cycles, 
+                                width, 
+                                q, 
+                                last_old_count,
+                                last_old_time,
+                                prepend, 
+                                show_stat_function, 
+                                len_, 
+                                add_args,
+                                lock):
         """
-            re implement this function in a subclass
-            
-            count_value - current value of progress
-            
-            max_count_value - maximum value the progress can take
-            
-            prepend - some extra string to be put for example in front of the
-            progress display
-            
-            speed - estimated speed in counts per second (use for example humanize_speed
-            to get readable information in string format)
-            
-            tet - total elapsed time in seconds (use for example humanize_time
-            to get readable information in string format)
-            
-            eta - estimated time of arrival in seconds (use for example humanize_time
-            to get readable information in string format)
+            call the static method show_stat_wrapper for each process
         """
-        raise NotImplementedError
+#         print(ESC_BOLD, end='')
+#         sys.stdout.flush()
+        for i in range(len_):
+            Progress.show_stat_wrapper(count[i], 
+                                       last_count[i], 
+                                       start_time[i], 
+                                       max_count[i], 
+                                       speed_calc_cycles, 
+                                       width, 
+                                       q[i],
+                                       last_old_count[i],
+                                       last_old_time[i],
+                                       prepend[i], 
+                                       show_stat_function, 
+                                       add_args, 
+                                       i, 
+                                       lock[i])
+        print(ESC_MOVE_LINE_UP(len_) + ESC_NO_CHAR_ATTR, end='')
+        sys.stdout.flush()
 
     def start(self):
         super(Progress, self).start()
@@ -655,37 +686,9 @@ class Progress(Loop):
                                       verbose                  = self.verbose, 
                                       auto_kill_on_last_resort = True)
         
-    def _reset_all(self):
-        """
-            reset all progress information
-        """
-        for i in range(self.len):
-            self._reset_i(i)
 
-    def _reset_i(self, i):
-        """
-            reset i-th progress information
-        """
-        self.count[i].value=0
-        self.lock[i].acquire()
-        for x in range(self.q[i].qsize()):
-            self.q[i].get()
-        
-        self.lock[i].release()
-        self.start_time[i].value = time.time()
 
-    def reset(self, i = None):
-        """
-            convenient function to reset progress information
-            
-            i [None, int] - None: reset all, int: reset process indexed by i 
-        """
-#        super(Progress, self).stop()
-        if i is None:
-            self._reset_all()
-        else:
-            self._reset_i(i)
-#        super(Progress, self).start()
+
 
 
 class ProgressBar(Progress):
@@ -1144,7 +1147,6 @@ def terminal_reserve():
         if not name in TERMINAL_RESERVATION:
             TERMINAL_RESERVATION.append(name)
             reservation = True
-            print(name)
     return reservation
 
 
