@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import numpy as np
+import warnings
 
 try:
     from scipy.integrate import ode
 except ImportError:
     warnings.warn("Submodule 'ode_wrapper' will not work. Reason: {}.".format(e))
 
-import numpy as np
+
 
 class Dummy_c(object):
     def __init__(self):
