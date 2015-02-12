@@ -10,6 +10,7 @@ from . import clients
 from . import decorators
 from . import progress
 from . import servers
+from . import ode_wrapper
 
 # persistentData requires sqlitedict
 try:
@@ -17,8 +18,3 @@ try:
 except ImportError as e:
     warnings.warn("Submodule 'persistentData' is not available. Reason: {}.".format(e))
 
-# ode_wrapper requires scipy
-try:
-    from . import ode_wrapper
-except ImportError:
-    warnings.warn("Submodule 'ode_wrapper' is not available. Reason: {}.".format(e))
