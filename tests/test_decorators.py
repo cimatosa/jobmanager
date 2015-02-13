@@ -20,7 +20,7 @@ def _my_func_1(arg,
                 count     = decorators.progress.UnsignedIntValue(val=0), 
                 max_count = decorators.progress.UnsignedIntValue(val=1),
                 sleep     = 0.01):
-    maxval = 100
+    maxval = 50
     max_count.value = maxval
         
     for i in range(maxval):
@@ -34,7 +34,7 @@ def _my_func_2(arg,
                 c     = decorators.progress.UnsignedIntValue(val=0), 
                 m     = decorators.progress.UnsignedIntValue(val=1), 
                 kwarg = "2"):
-    maxval = 100
+    maxval = 50
     m.value += maxval
         
     for i in range(maxval):
@@ -154,7 +154,7 @@ def test_ProgressBar():
     result1 = _my_func_1("decorated function", kwarg=" 1")
     print(result1)
     
-    wrapper = decorators.ProgressBar(_my_func_2, interval=.01)
+    wrapper = decorators.ProgressBar(_my_func_2, interval=.1)
     result2 = wrapper("wrapped function", kwarg=" 2")
     print(result2)
 
@@ -173,10 +173,10 @@ def test_ProgressBarOverrideCount():
 
         
 if __name__ == "__main__":
-#     test_ProgressBar()
-#     test_decorator()
-#     test_ProgressBarOverrideCount()
-#     test_extended_PB_get_access_to_progress_bar()
+    test_ProgressBar()
+    test_decorator()
+    test_ProgressBarOverrideCount()
+    test_extended_PB_get_access_to_progress_bar()
     test_extended_PB_progress_bar_off()
     
     

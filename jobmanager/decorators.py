@@ -7,7 +7,6 @@ from __future__ import division, print_function
 from inspect import getcallargs
 
 from . import progress
-
 from .jobmanager import getCountKwargs, validCountKwargs
 
 __all__ = ["ProgressBar", "ProgressBarOverrideCount"]
