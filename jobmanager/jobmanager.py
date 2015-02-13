@@ -134,6 +134,8 @@ class JobManager_Client(object):
             negative integer or zero: run until there are no more jobs
             
             positive integer: run only njobs number of jobs per nproc
+                              The total number of jobs this client will
+                              run is njobs*nproc.
         
         nice [integer] - niceness of the subprocesses
         
