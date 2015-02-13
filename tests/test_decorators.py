@@ -19,7 +19,7 @@ def _my_func_1(arg,
                 kwarg     = "1", 
                 count     = decorators.progress.UnsignedIntValue(val=0), 
                 max_count = decorators.progress.UnsignedIntValue(val=1),
-                sleep     = 0.02):
+                sleep     = 0.01):
     maxval = 100
     max_count.value = maxval
         
@@ -39,7 +39,7 @@ def _my_func_2(arg,
         
     for i in range(maxval):
         c.value += 1
-        time.sleep(0.02)
+        time.sleep(0.01)
 
     return arg+kwarg
 
@@ -48,7 +48,7 @@ def _my_func_2(arg,
 def my_func(c, m):
     for i in range(m.value):
         c.value = i
-        time.sleep(0.02)
+        time.sleep(0.01)
     
 
 def my_func_ProgressBarOverrideCount(c = None, m = None):
@@ -57,7 +57,7 @@ def my_func_ProgressBarOverrideCount(c = None, m = None):
         m.value = maxVal
         
     for i in range(maxVal):
-        time.sleep(0.03)
+        time.sleep(0.01)
         if c is not None:
             c.value = i 
 
@@ -76,11 +76,11 @@ def test_decorated_func_calls_decorated_func(
     c.value = 0
     for i in range(maxval):
         c.value += 1
-        time.sleep(0.02)
+        time.sleep(0.01)
         # This function is decorated, but because we have implemented
         # methods for reserving a terminal, the function does not print
         # anything - which makes the output pretty.
-        _my_func_1(arg=i, kwarg=0, sleep=0.01)
+        _my_func_1(arg=i, kwarg=0, sleep=0.005)
 
 
 def test_decorator():
@@ -94,7 +94,7 @@ def test_extended_PB_get_access_to_progress_bar():
     def my_func(c, m, **kwargs):
         for i in range(m.value):
             c.value = i+1
-            time.sleep(0.1)
+            time.sleep(0.05)
         
         try: 
             kwargs['progress_bar'].stop(make_sure_its_down=True) 
@@ -122,13 +122,13 @@ def test_extended_PB_progress_bar_off():
     def my_func_kwargs(c, m, **kwargs):
         for i in range(m.value):
             c.value = i+1
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     @decorators.ProgressBarExtended            
     def my_func_normal(c, m, progress_bar_off=False, **kwargs):
         for i in range(m.value):
             c.value = i+1
-            time.sleep(0.1)            
+            time.sleep(0.05)            
         
     print("call with no kwarg -> normal progressBar")
     my_func_kwargs(c, m)
@@ -154,7 +154,7 @@ def test_ProgressBar():
     result1 = _my_func_1("decorated function", kwarg=" 1")
     print(result1)
     
-    wrapper = decorators.ProgressBar(_my_func_2, interval=.1)
+    wrapper = decorators.ProgressBar(_my_func_2, interval=.01)
     result2 = wrapper("wrapped function", kwarg=" 2")
     print(result2)
 
