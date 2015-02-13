@@ -687,10 +687,6 @@ class Progress(Loop):
                                       auto_kill_on_last_resort = True)
         
 
-
-
-
-
 class ProgressBar(Progress):
     """
     Implements a Progress bar (progress par) similar to the one known from 'wget'
