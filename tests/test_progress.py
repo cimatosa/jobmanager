@@ -219,9 +219,12 @@ def test_why_with_statement():
             p_sub.wait(1)
             assert not p_sub.is_running()
             print("## process with PID {} terminated!".format(subproc_pid.value))
-    finally:
+    except:
+        pass
+    else:
         if p_sub.is_running():
             os.kill(subproc_pid.value, signal.SIGKILL)        
+    finally:
         if p.is_alive():
             os.kill(p.pid, signal.SIGKILL)
 
