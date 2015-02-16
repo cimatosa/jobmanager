@@ -17,8 +17,6 @@ try:
     from matplotlib import cm
     import matplotlib.pyplot as plt
 except ImportError:
-    import IPython
-    IPython.embed()
     warnings.warn("Plotting options not available."+\
                   " Reason: {}.".format(sys.exc_info()[1]))
 
