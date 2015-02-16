@@ -47,7 +47,7 @@ setup(
 class SyncManager for remote communication
 and python module multiprocessing for local
 parallelism.""",
-    install_requires=["sqlitedict", "NumPy>=1.5.1"],
+    install_requires=["sqlitedict>=1.2.0", "NumPy>=1.5.1"],
     tests_require=["psutil"],
     keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
               "progress", "manager", "job", "persistent data", "scheduler"],
