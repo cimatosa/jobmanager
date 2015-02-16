@@ -320,7 +320,7 @@ def test_progress_bar_multi():
                               interval=0.2,
                               speed_calc_cycles=10,
                               width='auto',
-                              verbose=0,
+                              verbose=2,
                               sigint='stop',
                               sigterm='stop',
                               name='sb multi',

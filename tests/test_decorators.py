@@ -71,7 +71,7 @@ def test_decorated_func_calls_decorated_func(
         a progress bar. Only the progressbar of this function here is
         displayed.
     """
-    maxval = 10
+    maxval = 3
     m.value = maxval
     c.value = 0
     for i in range(maxval):
@@ -81,7 +81,6 @@ def test_decorated_func_calls_decorated_func(
         # methods for reserving a terminal, the function does not print
         # anything - which makes the output pretty.
         _my_func_1(arg=i, kwarg=0, sleep=0.005)
-
 
 def test_decorator():
     c = progress.UnsignedIntValue(val=0)
@@ -173,12 +172,12 @@ def test_ProgressBarOverrideCount():
 
         
 if __name__ == "__main__":
-    test_ProgressBar()
-    test_decorator()
-    test_ProgressBarOverrideCount()
-    test_extended_PB_get_access_to_progress_bar()
-    test_extended_PB_progress_bar_off()
-    
-    
+#     test_ProgressBar()
+#     test_decorator()
+#     test_ProgressBarOverrideCount()
+#     test_extended_PB_get_access_to_progress_bar()
+#     test_extended_PB_progress_bar_off()
+    test_decorated_func_calls_decorated_func()
+
 
         

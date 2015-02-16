@@ -13,12 +13,25 @@ import subprocess
 import sys
 import warnings
 
-if sys.version_info[0] == 2:
-    # Python 2
-    import Queue as queue
-else:
-    # Python 3
-    import queue
+# if sys.version_info[0] == 2:
+#     # Python 2
+#     import Queue as queue
+#     
+# else:
+#     # Python 3
+#     import queue
+
+try:
+    from shutil import get_terminal_size
+    
+except ImportError:
+    def get_terminal_size():
+        try:
+            out = subprocess.check_output(["tput", "cols"], stderr = sp.DEVNULL)
+            width = int(out.decode("utf-8").strip())
+            return width
+        except: 
+            return 80, None
 
 
 class Loop(object):
@@ -155,7 +168,7 @@ class Loop(object):
                     quit_loop = func(*args)
                 except:
                     err, val, trb = sys.exc_info()
-                    print('\033[0m', end='')
+                    print(ESC_NO_CHAR_ATTR, end='')
                     sys.stdout.flush()
                     if verbose > 0:
                         print("{}: error {} occurred in Loop class calling 'func(*args)'".format(identifier, err))
@@ -425,8 +438,7 @@ class Progress(Loop):
             self.terminal_reserved = terminal_reserve()
             if not self.terminal_reserved:
                 warnings.warn("tty reserved, not printing progress!")
-                func = lambda x: None
-                self.show_on_exit = False
+                func = lambda *x: None
             else:
                 func = Progress.show_stat_wrapper_multi
         else:
@@ -463,11 +475,17 @@ class Progress(Loop):
         - releases terminal reservation
         """
         super(Progress, self).__exit__(*exc_args)
+        
         if self.terminal_reserved:
             if self.show_on_exit:
                 self._show_stat()
                 print('\n'*(self.len-1))
+#             print("reserved __exit__", remove_ESC_SEQ_from_string(self._identifier))
             terminal_unreserve()
+        else:
+            pass
+#             print("not reserved __exit__", remove_ESC_SEQ_from_string(self._identifier))
+            
         
     @staticmethod
     def _calc(count, 
@@ -1053,21 +1071,11 @@ def get_identifier(name=None, pid=None, bold=True):
 
     
 def get_terminal_width(default=80, name=None, verbose=0):
-    identifier = get_identifier(name=name)
-    try:
-        out = subprocess.check_output(["tput", "cols"])
-        width = int(out.decode("utf-8").strip())
-        if verbose > 1:
-            print("{}: determined terminal width to {}".format(identifier, width))
-        return width
-    except Exception as e:
-        if verbose > 0:
-            print("{}: failed to determine the width of the terminal".format(identifier))
-        if verbose > 1:
-            if isinstance(e, subprocess.CalledProcessError):
-                print("calling 'tput cols' returned: {}".format(e.output.decode('utf-8')))
-            traceback.print_exc() 
-        return default
+    id = get_identifier(name=name)
+    width = get_terminal_size()[0]
+    if verbose > 1:
+        print("{}: use terminal width {}".format(id, width))
+    return width
 
 
 def humanize_speed(c_per_sec):
@@ -1137,13 +1145,14 @@ def terminal_reserve():
     True if reservation was successfull, false if there already is a
     reservation.
     """
-    reservation = False
-    if sys.stdin.isatty():
-        name = os.ttyname(sys.stdin.fileno())
-        if not name in TERMINAL_RESERVATION:
-            TERMINAL_RESERVATION.append(name)
-            reservation = True
-    return reservation
+    for term in TERMINAL_RESERVATION:
+        if sys.stdout is term:
+            # someone else is using this stdout
+            return False
+    
+    # we have now registered this stdout
+    TERMINAL_RESERVATION.append(sys.stdout)
+    return True
 
 
 def terminal_unreserve():
@@ -1155,10 +1164,11 @@ def terminal_unreserve():
     -------
     None
     """
-    if sys.stdin.isatty():
-        name = os.ttyname(sys.stdin.fileno())    
-        if name in TERMINAL_RESERVATION:
-            TERMINAL_RESERVATION.remove(name)
+    
+    for term in TERMINAL_RESERVATION:
+        if sys.stdout is term:
+            TERMINAL_RESERVATION.remove(term)
+            return None
 
 
 
@@ -1242,6 +1252,6 @@ ESC_SEQ_SET = [ESC_NO_CHAR_ATTR,
                ESC_WHITE]
 
 # terminal reservation list, see terminal_reserve
-TERMINAL_RESERVATION = list()
+TERMINAL_RESERVATION = []
 # these are classes that print progress bars, see terminal_reserve
 TERMINAL_PRINT_LOOP_CLASSES = ["ProgressBar", "ProgressBarCounter"]
