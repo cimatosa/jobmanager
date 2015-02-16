@@ -3,19 +3,31 @@
 import sys
 from os.path import abspath, dirname, split
 
+
+
+import multiprocessing as mp
+import numpy as np
+from scipy.integrate import ode
+from scipy.special import mathieu_sem, mathieu_cem, mathieu_a, mathieu_b
+import time
+import warnings
+
+#from mpl_toolkits.mplot3d import Axes3D
+try:
+    from matplotlib import cm
+    import matplotlib.pyplot as plt
+except ImportError:
+    import IPython
+    IPython.embed()
+    warnings.warn("Plotting options not available."+\
+                  " Reason: {}.".format(sys.exc_info()[1]))
+
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
+
 import jobmanager as jm
 
-from scipy.integrate import ode
-import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
-import matplotlib.pyplot as plt
-from scipy.special import mathieu_sem, mathieu_cem, mathieu_a, mathieu_b
-import multiprocessing as mp
-import time
 
 
 def dgl_mathieu(t, f, a, q):
