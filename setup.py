@@ -20,8 +20,6 @@ class PyTest(Command):
         errno = subprocess.call([sys.executable, 'tests/runtests.py'])
         raise SystemExit(errno)
 
-
-
 try:
     import sys
     import os
