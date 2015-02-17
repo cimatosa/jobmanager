@@ -283,7 +283,7 @@ class JobManager_Client(object):
             traceback.print_exc()
 
     @staticmethod
-    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs=-1):
+    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs):
         """
         the wrapper spawned nproc trimes calling and handling self.func
         """
@@ -338,9 +338,7 @@ class JobManager_Client(object):
             #    c) any queue operation (get, put) fails for what ever reason
             #    d) njobs becomes zero
             while njobs != 0:
-
-                if njobs > 0:
-                    njobs -= 1
+                njobs -= 1
 
                 # try to get an item from the job_q                
                 try:
