@@ -1108,8 +1108,8 @@ def get_terminal_size(defaultw=80):
 
     
 def get_terminal_width(default=80, name=None, verbose=0):
+    id = get_identifier(name=name)
     try:
-        id = get_identifier(name=name)
         width = get_terminal_size(defaultw=default)[0]
     except:
         width = default
