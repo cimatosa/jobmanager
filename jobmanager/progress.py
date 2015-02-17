@@ -9,29 +9,14 @@ import os
 import time
 import traceback
 import signal
-import subprocess
+import subprocess as sp
 import sys
 import warnings
 
-# if sys.version_info[0] == 2:
-#     # Python 2
-#     import Queue as queue
-#     
-# else:
-#     # Python 3
-#     import queue
-
 try:
-    from shutil import get_terminal_size
-    
+    from shutil import get_terminal_size as shutil_get_terminal_size
 except ImportError:
-    def get_terminal_size():
-        try:
-            out = subprocess.check_output(["tput", "cols"], stderr = sp.DEVNULL)
-            width = int(out.decode("utf-8").strip())
-            return width
-        except: 
-            return 80, None
+    shutil_get_terminal_size = None
 
 
 class Loop(object):
@@ -437,7 +422,8 @@ class Progress(Loop):
         if (self.__class__.__name__ in TERMINAL_PRINT_LOOP_CLASSES):
             self.terminal_reserved = terminal_reserve()
             if not self.terminal_reserved:
-                warnings.warn("tty reserved, not printing progress!")
+                if verbose > 1:
+                    warnings.warn("tty reserved, not printing progress!")
                 func = lambda *x: None
             else:
                 func = Progress.show_stat_wrapper_multi
@@ -1069,10 +1055,64 @@ def get_identifier(name=None, pid=None, bold=True):
     else:
         return "{}{} ({}){}".format(esc_bold, name, pid, esc_no_char_attr)
 
+
+def get_terminal_size(defaultw=80):
+    """ Checks various methods to determine the terminal size
+    
+    
+    Methods:
+    - shutil.get_terminal_size (only Python3)
+    - fcntl.ioctl
+    - subprocess.check_output
+    - os.environ
+    
+    Parameters
+    ----------
+    defaultw : int
+        Default width of terminal.
+    
+    
+    Returns
+    -------
+    width, height : int
+        Width and height of the terminal. If one of them could not be
+        found, None is return in its place.
+    
+    """
+    if hasattr(shutil_get_terminal_size, "__call__"):
+        return shutil_get_terminal_size()
+    else:
+        try:
+            import fcntl, termios, struct
+            fd = 0
+            hw = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ,
+                                                                '1234'))
+            return (hw[1], hw[0])
+        except:
+            try:
+                if sys.version_info[0] == 2:
+                    # Python 2
+                    stderr = sp.STDOUT
+                else:
+                    # Python 3
+                    stderr = sp.DEVNULL
+                out = sp.check_output(["tput", "cols"], stderr = stderr)
+                width = int(out.decode("utf-8").strip())
+                return (width, None)
+            except:
+                try:
+                    hw = (os.environ['LINES'], os.environ['COLUMNS'])
+                    return (hw[1], hw[0])
+                except:
+                    return (defaultw, None)
+
     
 def get_terminal_width(default=80, name=None, verbose=0):
-    id = get_identifier(name=name)
-    width = get_terminal_size()[0]
+    try:
+        id = get_identifier(name=name)
+        width = get_terminal_size(defaultw=default)[0]
+    except:
+        width = default
     if verbose > 1:
         print("{}: use terminal width {}".format(id, width))
     return width
