@@ -104,8 +104,9 @@ class JobManager_Client(object):
     def __init__(self, 
                   server, 
                   authkey, 
-                  port = 42524, 
-                  nproc = 0, 
+                  port=42524, 
+                  nproc=0,
+                  njobs=0,
                   nice=19, 
                   no_warnings=False, 
                   verbose=1,
@@ -127,6 +128,14 @@ class JobManager_Client(object):
             zero: number of spawned processes == number cpu cores
             
             negative integer: number of spawned processes == number cpu cores - |nproc|
+        
+        njobs [integer] - total number of jobs to run per process
+        
+            negative integer or zero: run until there are no more jobs
+            
+            positive integer: run only njobs number of jobs per nproc
+                              The total number of jobs this client will
+                              run is njobs*nproc.
         
         nice [integer] - niceness of the subprocesses
         
@@ -163,7 +172,11 @@ class JobManager_Client(object):
             self.nproc = mp.cpu_count() + nproc
             if self.nproc <= 0:
                 raise RuntimeError("Invalid Number of Processes\ncan not spawn {} processes (cores found: {}, cores NOT to use: {} = -nproc)".format(self.nproc, mp.cpu_count(), abs(nproc)))
-
+        # internally, njobs must be negative for infinite jobs
+        if njobs == 0:
+            njobs -= 1
+        self.njobs = njobs
+        
         self.procs = []
         
         self.manager_objects = None  # will be set via connect()
@@ -270,7 +283,7 @@ class JobManager_Client(object):
             traceback.print_exc()
 
     @staticmethod
-    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc):
+    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs):
         """
         the wrapper spawned nproc trimes calling and handling self.func
         """
@@ -291,8 +304,6 @@ class JobManager_Client(object):
         
         tg_1 = tg_0 = tp_1 = tp_0 = tf_1 = tf_0 = 0
         
-        
-
         # check for func definition without status members count, max_count
         #args_of_func = inspect.getfullargspec(func).args
         #if len(args_of_func) == 2:
@@ -325,7 +336,9 @@ class JobManager_Client(object):
             #    a) job_q is empty
             #    b) SystemExit is caught
             #    c) any queue operation (get, put) fails for what ever reason
-            while True:
+            #    d) njobs becomes zero
+            while njobs != 0:
+                njobs -= 1
 
                 # try to get an item from the job_q                
                 try:
@@ -511,7 +524,8 @@ class JobManager_Client(object):
                                                                 self.manager_objects,
                                                                 c[i],
                                                                 m_set_by_function[i],
-                                                                reset_pbc))
+                                                                reset_pbc,
+                                                                self.njobs))
                 self.procs.append(p)
                 p.start()
                 time.sleep(0.3)
