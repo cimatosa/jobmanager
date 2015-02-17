@@ -1090,13 +1090,7 @@ def get_terminal_size(defaultw=80):
             return (hw[1], hw[0])
         except:
             try:
-                if sys.version_info[0] == 2:
-                    # Python 2
-                    stderr = sp.STDOUT
-                else:
-                    # Python 3
-                    stderr = sp.DEVNULL
-                out = sp.check_output(["tput", "cols"], stderr = stderr)
+                out = sp.check_output(["tput", "cols"])
                 width = int(out.decode("utf-8").strip())
                 return (width, None)
             except:
