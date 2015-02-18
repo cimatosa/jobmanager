@@ -505,12 +505,18 @@ class JobManager_Client(object):
         else:
             Progress = progress.ProgressSilentDummy
             
-        with Progress(count=c, 
-                      max_count=m_progress, 
-                      interval=self.interval, 
-                      verbose=self.verbose,
-                      sigint='ign',
-                      sigterm='ign') as self.pbc :
+        prepend = []
+        l = len(str(self.nproc))
+        for i in range(self.nproc):
+            prepend.append("w{0:0{1}}:".format(i, l))
+            
+        with Progress(count     = c, 
+                      max_count = m_progress, 
+                      interval  = self.interval,
+                      prepend   = prepend, 
+                      verbose   = self.verbose,
+                      sigint    = 'ign',
+                      sigterm   = 'ign' ) as self.pbc :
             self.pbc.start()
             for i in range(self.nproc):
                 reset_pbc = lambda: self.pbc.reset(i)
@@ -805,17 +811,10 @@ class JobManager_Server(object):
         """
         # will only be False when _shutdown was started in subprocess
         
-        # start also makes sure that it was not started as subprocess
-        # so at default behavior this assertion will allays be True
-        assert self._pid == os.getpid()
-        
-        self.__stop_SyncManager()
-        
-        self.show_statistics()
-       
         # do user defined final processing
         self.process_final_result()
-        
+        if self.verbose > 1:
+            print("{}: process_final_result done!".format(self._identifier))
         
         # print(self.fname_dump)
         if self.fname_dump is not None:
@@ -828,11 +827,24 @@ class JobManager_Server(object):
                 print("{}: dump current state to '{}'".format(self._identifier, fname))    
             with open(fname, 'wb') as f:
                 self.__dump(f)
-                
+
+            if self.verbose > 1:
+                print("{}:dump state done!".format(self._identifier))
 
         else:
             if self.verbose > 0:
                 print("{}: fname_dump == None, ignore dumping current state!".format(self._identifier))
+        
+        # start also makes sure that it was not started as subprocess
+        # so at default behavior this assertion will allays be True
+        assert self._pid == os.getpid()
+        
+        self.show_statistics()
+        
+        self.__stop_SyncManager()
+        if self.verbose > 1:
+            print("{}: SyncManager stop done!".format(self._identifier))
+        
         
         print("{}: JobManager_Server was successfully shut down".format(self._identifier))
         
