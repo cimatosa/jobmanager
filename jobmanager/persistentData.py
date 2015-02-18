@@ -323,7 +323,11 @@ class PersistentDataStructure(object):
                 return self.db[key] 
         else:
             if not create_sub_data:
-                raise KeyError("key '{}' not found".format(key))
+                if isinstance(key, bytes):
+                    key = pickle.loads(key)
+                print("KEY NOT FOUND:")
+                print(key)
+                raise KeyError("key not found")
             else:
                 if self.verbose > 1:
                     print("getData key does NOT exists -> create subData")
