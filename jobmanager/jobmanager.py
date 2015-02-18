@@ -508,7 +508,7 @@ class JobManager_Client(object):
         prepend = []
         l = len(str(self.nproc))
         for i in range(self.nproc):
-            prepend.append("w{0:0{1}}:".format(i, l))
+            prepend.append("w{0:0{1}}:".format(i+1, l))
             
         with Progress(count     = c, 
                       max_count = m_progress, 
