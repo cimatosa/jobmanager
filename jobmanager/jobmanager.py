@@ -276,10 +276,9 @@ class JobManager_Client(object):
         return os.getpid()
     
     @staticmethod
-    def _handle_unexpected_queue_error(verbose, identifier):
+    def _handle_unexpected_queue_error(e, verbose, identifier):
         if verbose > 0:
-                print("{}: unexpected Error, I guess the server went down, can't do anything, terminate now!".format(identifier))
-        if verbose > 1:
+            print("{}: unexpected Error {}, I guess the server went down, can't do anything, terminate now!".format(e, identifier))
             traceback.print_exc()
 
     @staticmethod
@@ -355,8 +354,8 @@ class JobManager_Client(object):
                 except SystemExit as e:
                     raise e
                 # job_q.get failed -> server down?             
-                except:
-                    JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
+                except Exception as e: 
+                    JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                     break
                 
                 # try to process the retrieved argument
@@ -423,8 +422,8 @@ class JobManager_Client(object):
                     except SystemExit as e:
                         raise e
                     # job_q.get failed -> server down?             
-                    except:
-                        JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
+                    except Exception as e:
+                        JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                         break
                     
                 cnt += 1
@@ -1009,6 +1008,7 @@ class JobManager_Server(object):
             return
         else:
             print("{}: start with {} jobs in queue".format(self._identifier, self.numjobs))
+        print("{}: host:{}, port:{}, authkey:{}".format(self._identifier, self.hostname, self.port, self.authkey))
         
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
