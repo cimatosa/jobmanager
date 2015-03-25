@@ -294,7 +294,11 @@ class JobManager_Client(object):
         job_q, result_q, fail_q, const_arg = manager_objects 
         
         n = os.nice(0)
-        n = os.nice(nice - n)
+        try:
+            n = os.nice(nice - n)
+        except PermissionError:
+            if verbose > 0:
+                print("{}: changing niceness not permitted! run with niceness {}".format(identifier, n))
 
         if verbose > 1:
             print("{}: now alive, niceness {}".format(identifier, n))
