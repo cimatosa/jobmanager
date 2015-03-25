@@ -159,6 +159,7 @@ class JobManager_Client(object):
             warnings.filterwarnings("ignore")
             if self.verbose > 1:
                 print("{}: ignore all warnings".format(self._identifier))
+
         self.server = server
         if isinstance(authkey, bytearray):
             self.authkey = authkey
@@ -466,7 +467,7 @@ class JobManager_Client(object):
             except:
                 pass
         if verbose > 1:
-            print("{}: JobManager_Client.__worker_func terminates PID {}".format(identifier, os.getpid()))
+            print("{}: JobManager_Client.__worker_func at end (PID {})".format(identifier, os.getpid()))
             
 
     def start(self):
@@ -535,11 +536,14 @@ class JobManager_Client(object):
                 p.start()
                 time.sleep(0.3)
             
-            exit_handler = Signal_to_terminate_process_list(process_list=self.procs,
-                                                            signals=[signal.SIGTERM], 
-                                                            verbose=self.verbose,
-                                                            name='worker',
-                                                            timeout=2)
+            exit_handler = Signal_to_terminate_process_list(identifier      = self._identifier,
+                                                            process_list    = self.procs,
+                                                            identifier_list = [progress.get_identifier(name = "worker{}".format(i+1),
+                                                                                                       pid  = p.pid,
+                                                                                                       bold = True) for i, p in enumerate(self.procs)],
+                                                            signals         = [signal.SIGTERM],                                                            
+                                                            verbose         = self.verbose,
+                                                            timeout         = 2)
             
             interrupt_handler = Signal_handler_for_Jobmanager_client(client_object = self,
                                                                      exit_handler=exit_handler,
@@ -547,21 +551,21 @@ class JobManager_Client(object):
                                                                      verbose=self.verbose)
         
             for p in self.procs:
-                if self.verbose > 1:
+                if self.verbose > 2:
                     print("{}: join {} PID {}".format(self._identifier, p, p.pid))
                 while p.is_alive():
-                    if self.verbose > 1:
+                    if self.verbose > 2:
                         print("{}: still alive {} PID {}".format(self._identifier, p, p.pid))
                     p.join(timeout=1)
 
-                if self.verbose > 1:
+                if self.verbose > 2:
                     print("{}: process {} PID {} was joined".format(self._identifier, p, p.pid))
                     
                     
-            if self.verbose > 1:
+            if self.verbose > 2:
                 print("{}: still in progressBar context".format(self._identifier))                    
                                         
-        if self.verbose > 1:
+        if self.verbose > 2:
             print("{}: progressBar context has been left".format(self._identifier))
 
 
@@ -1135,7 +1139,7 @@ class Signal_handler_for_Jobmanager_client(object):
             
     def _handler(self, sig, frame):
         if self.verbose > 0:
-            print("PID {}: received signal {}".format(os.getpid(), progress.signal_dict[sig]))
+            print("{}: received signal {}".format(self.client_object._identifier, progress.signal_dict[sig]))
         
         if self.client_object.pbc is not None:
             self.client_object.pbc.pause()
@@ -1148,9 +1152,9 @@ class Signal_handler_for_Jobmanager_client(object):
         if r == 'i':
             self._show_server_info()
         elif r == 'q':
-            print('PID {}: terminate worker functions'.format(os.getpid()))
+            print('{}: terminate worker functions'.format(self.client_object._identifier))
             self.exit_handler._handler(sig, frame)
-            print('PID {}: call sys.exit -> raise SystemExit'.format(os.getpid()))
+            print('{}: call sys.exit -> raise SystemExit'.format(self.client_object._identifier))
             sys.exit('exit due to user')
         else:
             print("input '{}' ignored".format(r))
@@ -1192,23 +1196,25 @@ class Signal_to_terminate_process_list(object):
     """
     SIGINT and SIGTERM will call terminate for process given in process_list
     """
-    def __init__(self, process_list, signals = [signal.SIGINT, signal.SIGTERM], verbose=0, name='process', timeout=2):
+    def __init__(self, identifier, process_list, identifier_list, signals = [signal.SIGINT, signal.SIGTERM], verbose=0, timeout=2):
+        self.identifier = identifier
         self.process_list = process_list
+        self.identifier_list = identifier_list
         self.verbose = verbose
-        self.name = name
         self.timeout = timeout
+        
         for s in signals:
             signal.signal(s, self._handler)
             
     def _handler(self, signal, frame):
         if self.verbose > 0:
-            print("PID {}: received sig {} -> terminate all given subprocesses".format(os.getpid(), progress.signal_dict[signal]))
+            print(": received sig {} -> terminate all given subprocesses".format(self.identifier, progress.signal_dict[signal]))
         for i, p in enumerate(self.process_list):
             p.terminate()
-            progress.check_process_termination(proc=p, 
-                                               identifier='{} {}'.format(self.name, i), 
-                                               timeout=self.timeout,
-                                               verbose=self.verbose,
+            progress.check_process_termination(proc       = p, 
+                                               identifier = self.identifier_list[i], 
+                                               timeout    = self.timeout,
+                                               verbose    = self.verbose,
                                                auto_kill_on_last_resort=False)
 
 
