@@ -440,6 +440,7 @@ class JobManager_Client(object):
                                 raise FatalConnectionResetError("tried {} time to _connect the result_q to the server\n".format(max_try)+
                                                                 "but always caught 'ConnectionResetError' with message\n"+
                                                                 err_msg)
+
                             tp_0 = time.time()
                             result_q.put((arg, res))
                             tp_1 = time.time()
@@ -467,7 +468,6 @@ class JobManager_Client(object):
                         except Exception as e:
                             JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                             break
-
                     
                 cnt += 1
                 reset_pbc()
@@ -516,6 +516,8 @@ class JobManager_Client(object):
         retruns when all subprocesses have terminated
         """
         
+        print("{}: starting client with connection to server:{} authkey:{} port:{}".format(self._identifier, self.server, self.authkey.decode(), self.port))
+        
         if not self.connected:
             raise ConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
         
@@ -555,7 +557,6 @@ class JobManager_Client(object):
                       sigint    = 'ign',
                       sigterm   = 'ign' ) as self.pbc :
             self.pbc.start()
-            self.pbc.p
             for i in range(self.nproc):
                 reset_pbc = lambda: self.pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
