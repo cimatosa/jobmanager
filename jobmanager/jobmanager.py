@@ -446,9 +446,13 @@ class JobManager_Client(object):
                         # try to reconnect and put again, try couple times
                         # wait some time in between    
                         except ConnectionResetError as e:
+                            if self.vebose > 0:
+                                print("{}: ConnectionResetError ({}) wait {}s and try to reconnect".format(self._identifier,
+                                                                                                           e.args[0],
+                                                                                                           wait))
                             err_msg += "{}\n".format(e.args)
-                            result_q._connect()
                             time.sleep(wait)
+                            result_q._connect()
                             wait *= 2
                             i_try += 1
                             
