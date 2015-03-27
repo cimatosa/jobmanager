@@ -284,9 +284,8 @@ class JobManager_Client(object):
     
     @staticmethod
     def _handle_unexpected_queue_error(verbose, identifier):
+        print("{}: unexpected fatal Error, I guess the server went down, can't do anything, terminate now!".format(identifier))
         if verbose > 0:
-                print("{}: unexpected Error, I guess the server went down, can't do anything, terminate now!".format(identifier))
-        if verbose > 1:
             traceback.print_exc()
 
     @staticmethod
@@ -447,7 +446,7 @@ class JobManager_Client(object):
                         # wait some time in between    
                         except ConnectionResetError as e:
                             if self.vebose > 0:
-                                print("{}: ConnectionResetError ({}) wait {}s and try to reconnect".format(self._identifier,
+                                print("{}: ConnectionResetError ({}) wait {}s and try to reconnect".format(identifier,
                                                                                                            e.args[0],
                                                                                                            wait))
                             err_msg += "{}\n".format(e.args)
@@ -461,7 +460,7 @@ class JobManager_Client(object):
                             raise e
                         
                         except Exception as e:
-                            JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
+                            JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
                             break
                     
                 cnt += 1
@@ -1033,7 +1032,7 @@ class JobManager_Server(object):
             print("{}: WARNING no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q".format(self._identifier))
             return
         else:
-            print("{}: start with {} jobs in queue".format(self._identifier, self.numjobs))
+            print("{}: started (host:{} authkey:{} port:{} jobs:{})".format(self._identifier, self.hostname, self.authkey.decode(), self.port, self.numjobs))
         
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
