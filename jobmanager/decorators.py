@@ -5,6 +5,7 @@
 from __future__ import division, print_function
 
 from inspect import getcallargs
+import warnings
 
 from . import progress
 from .jobmanager import getCountKwargs, validCountKwargs
@@ -270,7 +271,7 @@ class ProgressBarOverrideCount(ProgressBar):
 
     
     
-def decorate_module_ProgressBar(module, override_count=False, **kwargs):
+def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
     """ Decorates all decoratable functions in a module with a
     ProgressBar.
     
@@ -282,10 +283,9 @@ def decorate_module_ProgressBar(module, override_count=False, **kwargs):
     ----------
     module : Python module
         The module whose functions should be decorated.
-    override_count : bool
-        Override the default "count values" of the functions. If this
-        is set to `True`, then `decorators.ProgressBarOverrideCount` 
-        will be used instead of `decorators.ProgressBar`.
+    decorator : bool
+        Specifies a decorator in jobmanager.decorators that should be
+        used.
     **kwargs : dict
         Keyword arguments to the ProgressBar.
     
@@ -294,6 +294,16 @@ def decorate_module_ProgressBar(module, override_count=False, **kwargs):
     Decorating nested functions in a module might lead to unexpected
     behavior.
     """
+    if kwargs.has_key("override_count"):
+        warnings.warn("`override_count` will be removed. Please use "+\
+                  "`decorator=jm.decorators.ProgressBarOverrideCount`.",
+                  FutureWarning)
+        if kwargs["override_count"]:
+            decorator = ProgressBarOverrideCount
+        else:
+            decorator = ProgressBar
+        kwargs.pop("override_count")
+    
     vdict = module.__dict__
     for key in list(vdict.keys()):
         if hasattr(vdict[key], "__call__"):
@@ -306,10 +316,7 @@ def decorate_module_ProgressBar(module, override_count=False, **kwargs):
                     # copy old function
                     setattr(module, newid, vdict[key])
                     # create new function
-                    if override_count:
-                        wrapper = ProgressBarOverrideCount(getattr(module, newid), **kwargs)
-                    else:    
-                        wrapper = ProgressBar(getattr(module, newid), **kwargs)
+                    wrapper = decorator(getattr(module, newid), **kwargs)
                     # set new function
                     setattr(module, key, wrapper)
                     if (kwargs.has_key("verbose") and
