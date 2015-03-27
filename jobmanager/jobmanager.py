@@ -73,7 +73,9 @@ else:
 sys.path.append(os.path.dirname(__file__))
 import progress
 
-
+class FatalConnectionResetError(ConnectionError):
+    pass
+    
 
 class JobManager_Client(object):
     """
@@ -195,7 +197,7 @@ class JobManager_Client(object):
     def connected(self):
         return self.manager_objects is not None
     
-    def dump_result_to_local_storage(self, res):
+    def _dump_result_to_local_storage(self, res):
         pass
        
     def get_manager_objects(self):
@@ -426,8 +428,14 @@ class JobManager_Client(object):
                     wait = 1
                     max_try = 10
                     i_try = 0
-                    while not success and i_try <= max_try:
+                    err_msg = ""
+                    while not success:
                         try:
+                            if i_try > max_try:
+                                # this will be caught by the general Exception handler below
+                                raise FatalConnectionResetError("tried {} time to _connect the result_q to the server\n".format(max_try)+
+                                                                "but always caught 'ConnectionResetError' with message\n"+
+                                                                err_msg)
                             tp_0 = time.time()
                             result_q.put((arg, res))
                             tp_1 = time.time()
@@ -438,19 +446,16 @@ class JobManager_Client(object):
                         # try to reconnect and put again, try couple times
                         # wait some time in between    
                         except ConnectionResetError as e:
+                            err_msg += "{}\n".format(e.args)
                             result_q._connect()
                             time.sleep(wait)
                             wait *= 2
                             i_try += 1
                             
-                            
-                        # job_q.get failed -> server down?                            
-                            
                         # handle SystemExit in outer try ... except
                         except SystemExit as e:
                             raise e
-                        # 
-             
+                        
                         except Exception as e:
                             JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                             break
