@@ -34,7 +34,7 @@ import copy
 import functools
 import inspect
 import multiprocessing as mp
-from multiprocessing.managers import SyncManager
+from multiprocessing.managers import BaseManager
 import numpy as np
 import os
 import pickle
@@ -194,6 +194,9 @@ class JobManager_Client(object):
     @property
     def connected(self):
         return self.manager_objects is not None
+    
+    def dump_result_to_local_storage(self, res):
+        pass
        
     def get_manager_objects(self):
         return JobManager_Client._get_manager_objects(self.server, 
@@ -201,6 +204,8 @@ class JobManager_Client(object):
                                                       self.authkey, 
                                                       self._identifier,
                                                       self.verbose)
+#     @staticmethod
+#     def _get_sync_manager_data(manager):        
        
     @staticmethod
     def _get_manager_objects(server, port, authkey, identifier, verbose = 0):
@@ -211,7 +216,7 @@ class JobManager_Client(object):
             const_arg will be deep copied from the manager and therefore live
             as non shared object in local memory
         """
-        class ServerQueueManager(SyncManager):
+        class ServerQueueManager(BaseManager):
             pass
         
         ServerQueueManager.register('get_job_q')
@@ -251,7 +256,7 @@ class JobManager_Client(object):
         const_arg = copy.deepcopy(manager.get_const_arg())
 
             
-        return job_q, result_q, fail_q, const_arg
+        return job_q, result_q, fail_q, const_arg, manager
         
     @staticmethod
     def func(arg, const_arg):
@@ -291,7 +296,7 @@ class JobManager_Client(object):
         Signal_to_sys_exit(signals=[signal.SIGTERM])
         Signal_to_SIG_IGN(signals=[signal.SIGINT])
 
-        job_q, result_q, fail_q, const_arg = manager_objects 
+        job_q, result_q, fail_q, const_arg, manager = manager_objects 
         
         n = os.nice(0)
         n = os.nice(nice - n)
@@ -345,6 +350,7 @@ class JobManager_Client(object):
                     tg_0 = time.time()
                     arg = job_q.get(block = True, timeout = 0.1)
                     tg_1 = time.time()
+                    time_queue += (tg_1-tg_0)
                  
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
@@ -364,6 +370,7 @@ class JobManager_Client(object):
                     tf_0 = time.time()
                     res = _func(arg, const_arg, c, m)
                     tf_1 = time.time()
+                    time_calc += (tf_1-tf_0)
                 # handle SystemExit in outer try ... except
                 except SystemExit as e:
                     raise e
@@ -415,23 +422,40 @@ class JobManager_Client(object):
                 # processing the retrieved arguments succeeded
                 # - try to send the result back to the server                        
                 else:
-                    try:
-                        tp_0 = time.time()
-                        result_q.put((arg, res))
-                        tp_1 = time.time()
-                    # handle SystemExit in outer try ... except
-                    except SystemExit as e:
-                        raise e
-                    # job_q.get failed -> server down?             
-                    except:
-                        JobManager_Client._handle_unexpected_queue_error(verbose, identifier)
-                        break
+                    success = False
+                    wait = 1
+                    max_try = 10
+                    i_try = 0
+                    while not success and i_try <= max_try:
+                        try:
+                            tp_0 = time.time()
+                            result_q.put((arg, res))
+                            tp_1 = time.time()
+                            time_queue += (tp_1-tp_0)
+                            success = True
+                        # dont know why 'ConnectionResetError: [Errno 104] Connection reset by peer' 
+                        # occurred, but this might be a work around
+                        # try to reconnect and put again, try couple times
+                        # wait some time in between    
+                        except ConnectionResetError as e:
+                            result_q._connect()
+                            time.sleep(wait)
+                            wait *= 2
+                            i_try += 1
+                            
+                            
+                        # job_q.get failed -> server down?                            
+                            
+                        # handle SystemExit in outer try ... except
+                        except SystemExit as e:
+                            raise e
+                        # 
+             
+                        except Exception as e:
+                            JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
+                            break
                     
                 cnt += 1
-                
-                time_queue += (tg_1-tg_0 + tp_1-tp_0)
-                time_calc += (tf_1-tf_0)
-                
                 reset_pbc()
              
         # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
@@ -467,8 +491,7 @@ class JobManager_Client(object):
             except:
                 pass
         if verbose > 1:
-            print("{}: JobManager_Client.__worker_func terminates PID {}".format(identifier, os.getpid()))
-            
+            print("{}: JobManager_Client.__worker_func at end (PID {})".format(identifier, os.getpid()))            
 
     def start(self):
         """
@@ -512,6 +535,7 @@ class JobManager_Client(object):
                       sigint='ign',
                       sigterm='ign') as self.pbc :
             self.pbc.start()
+            self.pbc.p
             for i in range(self.nproc):
                 reset_pbc = lambda: self.pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
@@ -529,12 +553,16 @@ class JobManager_Client(object):
                 self.procs.append(p)
                 p.start()
                 time.sleep(0.3)
-            
-            exit_handler = Signal_to_terminate_process_list(process_list=self.procs,
-                                                            signals=[signal.SIGTERM], 
-                                                            verbose=self.verbose,
-                                                            name='worker',
-                                                            timeout=2)
+
+            time.sleep(self.interval/2)
+            exit_handler = Signal_to_terminate_process_list(identifier      = self._identifier,
+                                                            process_list    = self.procs,
+                                                            identifier_list = [progress.get_identifier(name = "worker{}".format(i+1),
+                                                                                                       pid  = p.pid,
+                                                                                                       bold = True) for i, p in enumerate(self.procs)],
+                                                            signals         = [signal.SIGTERM],                                                            
+                                                            verbose         = self.verbose,
+                                                            timeout         = 2)
             
             interrupt_handler = Signal_handler_for_Jobmanager_client(client_object = self,
                                                                      exit_handler=exit_handler,
@@ -716,7 +744,7 @@ class JobManager_Server(object):
     def __start_SyncManager(self):
         self.__check_bind()
         
-        class JobQueueManager(SyncManager):
+        class JobQueueManager(BaseManager):
             pass
 
         # make job_q, result_q, fail_q, const_arg available via network
