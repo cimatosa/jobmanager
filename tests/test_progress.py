@@ -437,7 +437,9 @@ def test_progress_bar_counter():
     
     t0 = time.time()
     
-    with progress.ProgressBarCounter(count=c, max_count=m, verbose=1, interval=0.2) as sc:
+    pp = ['a ', 'b ']
+    
+    with progress.ProgressBarCounter(count=c, max_count=m, verbose=1, interval=0.2, prepend = pp) as sc:
         sc.start()
         while True:
             i = np.random.randint(0,2)
@@ -545,6 +547,102 @@ def test_progress_bar_start_stop():
         pass
     print("this is after progress.__exit__, there should be no prints from the progress")
             
+def test_progress_bar_fancy():
+    count = progress.UnsignedIntValue()
+    max_count = progress.UnsignedIntValue(100)
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=80) as sb:
+        sb.start()
+        for i in range(100):
+            count.value = i+1
+            time.sleep(0.1)
+ 
+def test_progress_bar_multi_fancy():
+    n = 4
+    max_count_value = 100
+    
+    count = []
+    max_count = []
+    prepend = []
+    for i in range(n):
+        count.append(progress.UnsignedIntValue(0))
+        max_count.append(progress.UnsignedIntValue(max_count_value))
+        prepend.append('_{}_:'.format(i))
+    
+    with progress.ProgressBarFancy(count=count,
+                              max_count=max_count,
+                              interval=0.2,
+                              speed_calc_cycles=10,
+                              width='auto',
+                              verbose=2,
+                              sigint='stop',
+                              sigterm='stop',
+                              name='sb multi',
+                              prepend=prepend) as sbm:
+    
+        sbm.start()
+        
+        for x in range(500):
+            i = np.random.randint(low=0, high=n)
+            with count[i].get_lock():
+                count[i].value += 1
+                
+            if count[i].value > 100:
+                sbm.reset(i)
+                
+            time.sleep(0.02)
+            
+def test_progress_bar_fancy_small():
+    count = progress.UnsignedIntValue()
+    m = 30
+    max_count = progress.UnsignedIntValue(m)
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width='auto') as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)            
+
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=80) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)  
+
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=70) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+            
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=60) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+            
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=50) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+            
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=40) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=30) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=20) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+            
 if __name__ == "__main__":
     func = [    
 #     test_loop_basic,
@@ -558,13 +656,16 @@ if __name__ == "__main__":
 #     test_progress_bar_multi,
 #     test_status_counter,
 #     test_status_counter_multi,
-    test_intermediate_prints_while_running_progess_bar,
-    test_intermediate_prints_while_running_progess_bar_multi,
+#     test_intermediate_prints_while_running_progess_bar,
+#     test_intermediate_prints_while_running_progess_bar_multi,
 #     test_progress_bar_counter,
 #     test_progress_bar_counter_non_max,
 #     test_progress_bar_counter_hide_bar,
 #     test_progress_bar_slow_change,
 #     test_progress_bar_start_stop,
+    test_progress_bar_fancy,
+#     test_progress_bar_multi_fancy,
+#     test_progress_bar_fancy_small,
     lambda: print("END")
     ]
     
