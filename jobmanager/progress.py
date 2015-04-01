@@ -18,6 +18,13 @@ try:
     from shutil import get_terminal_size as shutil_get_terminal_size
 except ImportError:
     shutil_get_terminal_size = None
+    
+if sys.version_info[0] == 2:
+    old_math_ceil = math.ceil 
+    def my_int_ceil(f):
+        return int(old_math_ceil(f))
+    
+    math.ceil = my_int_ceil
 
 
 class Loop(object):
@@ -1001,7 +1008,7 @@ class ProgressBarFancy(Progress):
             if res is not None:
                 s1, s2, d1, d2 = res                
                 s = s1 + ' '*d1 + ps + ' '*d2 + s2
-                   
+
                 s_before = s[:math.ceil(width*p)].replace(' ', repl_ch)
                 if (len(s_before) > 0) and (s_before[-1] == repl_ch):
                     s_before = s_before[:-1] + '>'
