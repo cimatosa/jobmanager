@@ -505,7 +505,7 @@ class JobManager_Client(object):
             m_set_by_function = m_progress
             
         if (self.show_statusbar_for_jobs) and (self.verbose > 0):
-            Progress = progress.ProgressBarCounter
+            Progress = progress.ProgressBarCounterFancy
         else:
             Progress = progress.ProgressSilentDummy
             
@@ -1025,7 +1025,7 @@ class JobManager_Server(object):
             print("{}: start processing incoming results".format(self._identifier))
         
         if self.verbose > 0:
-            Progress = progress.ProgressBar
+            Progress = progress.ProgressBarFancy
         else:
             Progress = progress.ProgressSilentDummy
   

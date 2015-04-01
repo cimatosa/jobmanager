@@ -659,6 +659,79 @@ def test_progress_bar_fancy_small():
             count.value = i+1
             time.sleep(0.1)
             
+def test_progress_bar_counter_fancy():
+    c1 = progress.UnsignedIntValue(val=0)
+    c2 = progress.UnsignedIntValue(val=0)
+    
+    maxc = 30
+    m1 = progress.UnsignedIntValue(val=maxc)
+    m2 = progress.UnsignedIntValue(val=maxc)
+    
+    c = [c1, c2]
+    m = [m1, m2]
+    
+    t0 = time.time()
+    
+    pp = ['a ', 'b ']
+    
+    with progress.ProgressBarCounterFancy(count=c, max_count=m, verbose=1, interval=0.2, prepend = pp) as sc:
+        sc.start()
+        while True:
+            i = np.random.randint(0,2)
+            with c[i].get_lock():
+                c[i].value += 1
+                if c[i].value > maxc:
+                    sc.reset(i)
+                           
+            time.sleep(0.0432)
+            if (time.time() - t0) > 15:
+                break
+
+def test_progress_bar_counter_fancy_non_max():
+    c1 = progress.UnsignedIntValue(val=0)
+    c2 = progress.UnsignedIntValue(val=0)
+    
+    c = [c1, c2]
+    maxc = 30
+    t0 = time.time()
+    
+    with progress.ProgressBarCounterFancy(count=c, verbose=1, interval=0.2) as sc:
+        sc.start()
+        while True:
+            i = np.random.randint(0,2)
+            with c[i].get_lock():
+                c[i].value += 1
+                if c[i].value > maxc:
+                    sc.reset(i)
+                           
+            time.sleep(0.0432)
+            if (time.time() - t0) > 15:
+                break
+            
+def test_progress_bar_counter_fancy_hide_bar():
+    c1 = progress.UnsignedIntValue(val=0)
+    c2 = progress.UnsignedIntValue(val=0)
+    
+    m1 = progress.UnsignedIntValue(val=0)
+    
+    c = [c1, c2]
+    m = [m1, m1]
+    maxc = 30
+    t0 = time.time()
+    
+    with progress.ProgressBarCounterFancy(count=c, max_count=m, verbose=1, interval=0.2) as sc:
+        sc.start()
+        while True:
+            i = np.random.randint(0,2)
+            with c[i].get_lock():
+                c[i].value += 1
+                if c[i].value > maxc:
+                    sc.reset(i)
+                           
+            time.sleep(0.0432)
+            if (time.time() - t0) > 15:
+                break                   
+            
 if __name__ == "__main__":
     func = [    
 #     test_loop_basic,
@@ -679,9 +752,12 @@ if __name__ == "__main__":
 #     test_progress_bar_counter_hide_bar,
 #     test_progress_bar_slow_change,
 #     test_progress_bar_start_stop,
-    test_progress_bar_fancy,
-    test_progress_bar_multi_fancy,
-    test_progress_bar_fancy_small,
+#     test_progress_bar_fancy,
+#     test_progress_bar_multi_fancy,
+#     test_progress_bar_fancy_small,
+    test_progress_bar_counter_fancy,
+    test_progress_bar_counter_fancy_non_max,
+    test_progress_bar_counter_fancy_hide_bar,
     lambda: print("END")
     ]
     

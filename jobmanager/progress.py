@@ -918,20 +918,20 @@ class ProgressBarFancy(Progress):
 
     @staticmethod
     def full_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
-        s1 = "TET {} SPE {:<10} TTG {}".format(tet, speed, ttg)
+        s1 = "TET {} {:>12} TTG {}".format(tet, speed, ttg)
         s2 = "ETA {} ORT {}".format(eta, ort)
         return ProgressBarFancy.get_d(s1, s2, width, lp, lps)
 
 
     @staticmethod
     def full_minor_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
-        s1 = "E {} S {:<10} G {}".format(tet, speed, ttg)
+        s1 = "E {} {:>12} G {}".format(tet, speed, ttg)
         s2 = "A {} O {}".format(eta, ort)
         return ProgressBarFancy.get_d(s1, s2, width, lp, lps)
 
     @staticmethod
     def reduced_1_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
-        s1 = "E {} S {:<10} G {}".format(tet, speed, ttg)
+        s1 = "E {} {:>12} G {}".format(tet, speed, ttg)
         s2 = "O {}".format(ort)
         return ProgressBarFancy.get_d(s1, s2, width, lp, lps)  
 
@@ -955,7 +955,7 @@ class ProgressBarFancy(Progress):
 
     @staticmethod        
     def kw_bold(s, ch_after):
-        kws = ['TET', 'SPE', 'TTG', 'ETA', 'ORT', 'E', 'S', 'G', 'A', 'O']
+        kws = ['TET', 'TTG', 'ETA', 'ORT', 'E', 'G', 'A', 'O']
         for kw in kws:
             for c in ch_after:
                 s = s.replace(kw + c, ESC_BOLD + kw + ESC_RESET_BOLD + c)
@@ -963,10 +963,10 @@ class ProgressBarFancy(Progress):
         return s
 
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
+    def _stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
         if max_count_value is None:
             # only show current absolute progress as number and estimated speed
-            print("{}{} [{}] #{}    ".format(prepend, humanize_time(tet), humanize_speed(speed), count_value))             
+            stat = "{}{} [{}] #{}    ".format(prepend, humanize_time(tet), humanize_speed(speed), count_value) 
         else:
             if width == 'auto':
                 width = get_terminal_width()
@@ -985,7 +985,7 @@ class ProgressBarFancy(Progress):
                 ort = tet + ttg
                 
             tet = humanize_time(tet)
-            speed = humanize_speed(speed)
+            speed = '['+humanize_speed(speed)+']'
             ttg = humanize_time(ttg)
             ort = humanize_time(ort)
             repl_ch = '-'
@@ -1016,16 +1016,48 @@ class ProgressBarFancy(Progress):
                 
                 s_before = ProgressBarFancy.kw_bold(s_before, ch_after=[repl_ch, '>'])
                 s_after = ProgressBarFancy.kw_bold(s_after, ch_after=[' '])
-                print(prepend + ESC_BOLD + '[' + ESC_RESET_BOLD + ESC_LIGHT_GREEN + s_before + ESC_DEFAULT + s_after + ESC_BOLD + ']' + ESC_NO_CHAR_ATTR)
+                stat = prepend + ESC_BOLD + '[' + ESC_RESET_BOLD + ESC_LIGHT_GREEN + s_before + ESC_DEFAULT + s_after + ESC_BOLD + ']' + ESC_NO_CHAR_ATTR
             else:
                 ps = ps.strip()
                 if p == 1:
                     ps = ' '+ps
-                print(prepend + ps)
-            
-            
-                
-            
+                stat = prepend + ps
+        
+        return stat
+
+    @staticmethod        
+    def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
+        stat = ProgressBarFancy._stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs)
+        print(stat)
+
+class ProgressBarCounterFancy(ProgressBarCounter):
+    @staticmethod
+    def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
+        counter_count = kwargs['counter_count'][i]
+        counter_speed = kwargs['counter_speed'][i]
+        counter_tet = time.time() - kwargs['init_time']
+        
+        s_c = "{}{}{}{} {:>12} #{}".format(ESC_RED,
+                                         prepend, 
+                                         ESC_NO_CHAR_ATTR,
+                                         humanize_time(counter_tet),
+                                         '['+humanize_speed(counter_speed.value)+']', 
+                                         counter_count.value)
+
+        if width == 'auto':
+            width = get_terminal_width()        
+        
+        if max_count_value != 0:
+            s_c += ' '
+        
+            if max_count_value is None:
+                s_c = "{}{} {:>12} #{}    ".format(s_c, humanize_time(tet), '['+humanize_speed(speed)+']', count_value)            
+            else:
+                _width = width - len_string_without_ESC(s_c)
+                s_c += ProgressBarFancy._stat(count_value, max_count_value, '', speed, tet, ttg, _width, i)
+
+        print(s_c + ' '*(width - len_string_without_ESC(s_c))) 
+                        
 
 class ProgressSilentDummy(Progress):
     def __init__(self, **kwargs):
