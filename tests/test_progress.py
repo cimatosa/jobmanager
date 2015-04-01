@@ -283,6 +283,7 @@ def test_progress_bar():
     time.sleep(2)
     
 def test_progress_bar_with_statement():
+    print("TERMINAL_RESERVATION", progress.TERMINAL_RESERVATION)
     count = progress.UnsignedIntValue()
     max_count = progress.UnsignedIntValue(100)
     with progress.ProgressBar(count, max_count, verbose=2) as sb:
@@ -304,6 +305,7 @@ def test_progress_bar_with_statement():
     sb.stop()
     
 def test_progress_bar_multi():
+    print("TERMINAL_RESERVATION", progress.TERMINAL_RESERVATION)
     n = 4
     max_count_value = 100
     
@@ -391,7 +393,9 @@ def test_intermediate_prints_while_running_progess_bar():
                     c.value += 1
                     
                 if c.value == 100:
+                    sc.stop()
                     print("intermediate message")
+                    sc.start()
                     
                 if c.value == 400:
                     break
@@ -415,9 +419,9 @@ def test_intermediate_prints_while_running_progess_bar_multi():
                 c[i].value += 1
                 
             if c[0].value == 100:
+                sc.stop()
                 print("intermediate message")
-                with c[i].get_lock():
-                    c[i].value += 1
+                sc.start()
                 
             if c[0].value == 400:
                 break
@@ -550,11 +554,11 @@ def test_progress_bar_start_stop():
 def test_progress_bar_fancy():
     count = progress.UnsignedIntValue()
     max_count = progress.UnsignedIntValue(100)
-    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=80) as sb:
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width='auto') as sb:
         sb.start()
         for i in range(100):
             count.value = i+1
-            time.sleep(0.1)
+            time.sleep(0.3)
  
 def test_progress_bar_multi_fancy():
     n = 4
@@ -593,51 +597,63 @@ def test_progress_bar_multi_fancy():
             
 def test_progress_bar_fancy_small():
     count = progress.UnsignedIntValue()
-    m = 30
+    m = 15
     max_count = progress.UnsignedIntValue(m)
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width='auto') as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
             time.sleep(0.1)            
-
+ 
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=80) as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
             time.sleep(0.1)  
-
+ 
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=70) as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
             time.sleep(0.1)
-            
+             
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=60) as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
             time.sleep(0.1)
-            
+             
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=50) as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
             time.sleep(0.1)
-            
+             
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=40) as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
             time.sleep(0.1)
-
+ 
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=30) as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
             time.sleep(0.1)
-
+ 
     with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=20) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+ 
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=10) as sb:
+        sb.start()
+        for i in range(m):
+            count.value = i+1
+            time.sleep(0.1)
+            
+    with progress.ProgressBarFancy(count, max_count, verbose=1, interval=0.2, width=5) as sb:
         sb.start()
         for i in range(m):
             count.value = i+1
@@ -645,27 +661,27 @@ def test_progress_bar_fancy_small():
             
 if __name__ == "__main__":
     func = [    
-#     test_loop_basic,
-#     test_loop_signals,
-#     test_loop_normal_stop,
-#     test_loop_need_sigterm_to_stop,
-#     test_loop_need_sigkill_to_stop,
-#     test_why_with_statement,
-#     test_progress_bar,
-#     test_progress_bar_with_statement,
-#     test_progress_bar_multi,
-#     test_status_counter,
-#     test_status_counter_multi,
-#     test_intermediate_prints_while_running_progess_bar,
-#     test_intermediate_prints_while_running_progess_bar_multi,
-#     test_progress_bar_counter,
-#     test_progress_bar_counter_non_max,
-#     test_progress_bar_counter_hide_bar,
-#     test_progress_bar_slow_change,
-#     test_progress_bar_start_stop,
+    test_loop_basic,
+    test_loop_signals,
+    test_loop_normal_stop,
+    test_loop_need_sigterm_to_stop,
+    test_loop_need_sigkill_to_stop,
+    test_why_with_statement,
+    test_progress_bar,
+    test_progress_bar_with_statement,
+    test_progress_bar_multi,
+    test_status_counter,
+    test_status_counter_multi,
+    test_intermediate_prints_while_running_progess_bar,
+    test_intermediate_prints_while_running_progess_bar_multi,
+    test_progress_bar_counter,
+    test_progress_bar_counter_non_max,
+    test_progress_bar_counter_hide_bar,
+    test_progress_bar_slow_change,
+    test_progress_bar_start_stop,
     test_progress_bar_fancy,
-#     test_progress_bar_multi_fancy,
-#     test_progress_bar_fancy_small,
+    test_progress_bar_multi_fancy,
+    test_progress_bar_fancy_small,
     lambda: print("END")
     ]
     
