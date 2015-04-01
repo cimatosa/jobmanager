@@ -1030,12 +1030,12 @@ class JobManager_Server(object):
             Progress = progress.ProgressSilentDummy
   
         with Progress(count = self._numresults,
-                       max_count = self._numjobs, 
-                       interval = self.msg_interval,
-                       speed_calc_cycles=self.speed_calc_cycles,
-                       verbose = self.verbose,
-                       sigint='ign',
-                       sigterm='ign') as stat:
+                      max_count = self._numjobs, 
+                      interval = self.msg_interval,
+                      speed_calc_cycles=self.speed_calc_cycles,
+                      verbose = self.verbose,
+                      sigint='ign',
+                      sigterm='ign') as stat:
 
             stat.start()
         
