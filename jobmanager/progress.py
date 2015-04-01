@@ -3,14 +3,15 @@
 from __future__ import division, print_function
 
 import copy
+import datetime
 import math
 import multiprocessing as mp
-import os
-import time
-import traceback
 import signal
 import subprocess as sp
 import sys
+import time
+import traceback
+import os
 import warnings
 
 try:
@@ -92,7 +93,10 @@ class Loop(object):
         self._sigterm = sigterm
         self._name = name
         self._auto_kill_on_last_resort = auto_kill_on_last_resort
-        self._identifier = None
+        
+        if not hasattr(self, '_identifier'):
+            self._identifier = None
+        
  
     def __enter__(self):
         return self
@@ -134,10 +138,14 @@ class Loop(object):
             if self.verbose > 1:
                 print("{}: cleanup successful".format(self._identifier))
             self._proc = None
+            self._identifier = get_identifier(self._name, 'not started')
+        else:
+            raise RuntimeError("{}: cleanup FAILED!".format(self._identifier))
+            
 
     @staticmethod
     def _wrapper_func(func, args, shared_mem_run, shared_mem_pause, interval, verbose, sigint, sigterm, name):
-        """to be executed as a seperate process (that's why this functions is declared static)
+        """to be executed as a separate process (that's why this functions is declared static)
         """
         # implement the process specific signal handler
         identifier = get_identifier(name)
@@ -203,6 +211,7 @@ class Loop(object):
             return
         
         self.__cleanup()
+        
         
     def join(self, timeout):
         """
@@ -275,8 +284,8 @@ class Progress(Loop):
     the progress of ONE process in one line.
     
     When max_count is given (in general as list of shared memory values, a single
-    shared memory value will be mapped to a one element list) the estimates time 
-    of arrival ETA will also be calculated and passed tow show_stat.
+    shared memory value will be mapped to a one element list) the time to go TTG
+    will also be calculated and passed tow show_stat.
     
     Information about the terminal width will be retrieved when setting width='auto'.
     If supported by the terminal emulator the width in characters of the terminal
@@ -330,7 +339,7 @@ class Progress(Loop):
         
         max_count [mp.Value] - shared memory holding the final state, (None, list or single value),
         may be changed by external process without having to explicitly tell this class.
-        If None, no ETA and relative progress can be calculated -> ETA = None 
+        If None, no TTG and relative progress can be calculated -> TTG = None 
         
         prepend [string] - string to put in front of the progress output, (None, single string
         or of list of strings)
@@ -344,8 +353,9 @@ class Progress(Loop):
         
         verbose, sigint, sigterm -> see loop class  
         """
-        self._PRE_PREPEND = ESC_NO_CHAR_ATTR + ESC_RED
-        self._POST_PREPEND = ESC_BOLD + ESC_GREEN
+        self.name = name
+        self._identifier = get_identifier(self.name, pid='not started')
+        
         try:
             for c in count:
                 assert isinstance(c, mp.sharedctypes.Synchronized), "each element of 'count' must be if the type multiprocessing.sharedctypes.Synchronized"
@@ -373,10 +383,7 @@ class Progress(Loop):
         self.start_time = []
         self.speed_calc_cycles = speed_calc_cycles
         
-        if width == 'auto':
-            self.width = get_terminal_width(default=80, name=name, verbose=verbose)
-        else:
-            self.width = width
+        self.width = width
         
         self.q = []
         self.prepend = []
@@ -394,44 +401,29 @@ class Progress(Loop):
             self.start_time.append(FloatValue(val=time.time()))
             if prepend is None:
                 # no prepend given
-                self.prepend.append(self._POST_PREPEND)
+                self.prepend.append('')
             else:
                 try:
                     # assume list of prepend, (needs to be a sequence)
                     # except if prepend is an instance of string
                     # the assert will cause the except to be executed
                     assert not isinstance(prepend, str)
-                    self.prepend.append(self._PRE_PREPEND + prepend[i]+self._POST_PREPEND)
+                    self.prepend.append(prepend[i])
                 except:
                     # list fails -> assume single prepend for all 
-                    self.prepend.append(self._PRE_PREPEND + prepend+self._POST_PREPEND)
+                    self.prepend.append(prepend)
                                                        
         self.max_count = max_count  # list of multiprocessing value type
         self.count = count          # list of multiprocessing value type
         
         self.interval = interval
         self.verbose = verbose
-        self.name = name
+
         self.show_on_exit = False
-        
         self.add_args = {}
         
-        # before printing any output to stout, we can now check this
-        # variable to see if any other ProgressBar has reserved that
-        # terminal.
-        if (self.__class__.__name__ in TERMINAL_PRINT_LOOP_CLASSES):
-            self.terminal_reserved = terminal_reserve()
-            if not self.terminal_reserved:
-                if verbose > 1:
-                    warnings.warn("tty reserved, not printing progress!")
-                func = lambda *x: None
-            else:
-                func = Progress.show_stat_wrapper_multi
-        else:
-            self.terminal_reserved = False
-        
         # setup loop class with func
-        super(Progress, self).__init__(func=func, 
+        super(Progress, self).__init__(func=Progress.show_stat_wrapper_multi, 
                          args=(self.count,
                                self.last_count, 
                                self.start_time,
@@ -454,23 +446,7 @@ class Progress(Loop):
                          auto_kill_on_last_resort=True)
 
     def __exit__(self, *exc_args):
-        """ Tear things down
-        
-        - will terminate loop process
-        - show a last progress -> see the full 100% on exit
-        - releases terminal reservation
-        """
-        super(Progress, self).__exit__(*exc_args)
-        
-        if self.terminal_reserved:
-            if self.show_on_exit:
-                self._show_stat()
-                print('\n'*(self.len-1))
-#             print("reserved __exit__", remove_ESC_SEQ_from_string(self._identifier))
-            terminal_unreserve()
-        else:
-            pass
-#             print("not reserved __exit__", remove_ESC_SEQ_from_string(self._identifier))
+        self.stop()
             
         
     @staticmethod
@@ -484,7 +460,7 @@ class Progress(Loop):
               last_old_time,
               lock):
         """
-            do the pre calculations in order to get TET, speed, ETA
+            do the pre calculations in order to get TET, speed, TTG
             and call the actual display routine show_stat with these arguments
             
             NOTE: show_stat is purely abstract and need to be reimplemented to
@@ -525,11 +501,11 @@ class Progress(Loop):
         tet = (current_time - start_time_value)
         speed = (count_value - old_count_value) / (current_time - old_time)
         if (speed == 0) or (max_count_value is None) or (max_count_value == 0):
-            eta = None
+            ttg = None
         else:
-            eta = math.ceil((max_count_value - count_value) / speed)
+            ttg = math.ceil((max_count_value - count_value) / speed)
             
-        return count_value, max_count_value, speed, tet, eta
+        return count_value, max_count_value, speed, tet, ttg
 
     def _reset_all(self):
         """
@@ -584,7 +560,7 @@ class Progress(Loop):
 #        super(Progress, self).start()
 
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, **kwargs):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, **kwargs):
         """
             re implement this function in a subclass
             
@@ -601,7 +577,7 @@ class Progress(Loop):
             tet - total elapsed time in seconds (use for example humanize_time
             to get readable information in string format)
             
-            eta - estimated time of arrival in seconds (use for example humanize_time
+            ttg - time to go in seconds (use for example humanize_time
             to get readable information in string format)
         """
         raise NotImplementedError
@@ -621,7 +597,7 @@ class Progress(Loop):
                           add_args, 
                           i, 
                           lock):
-        count_value, max_count_value, speed, tet, eta, = Progress._calc(count, 
+        count_value, max_count_value, speed, tet, ttg, = Progress._calc(count, 
                                                                         last_count, 
                                                                         start_time, 
                                                                         max_count, 
@@ -630,7 +606,7 @@ class Progress(Loop):
                                                                         last_old_count,
                                                                         last_old_time, 
                                                                         lock) 
-        return show_stat_function(count_value, max_count_value, prepend, speed, tet, eta, width, i, **add_args)
+        return show_stat_function(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **add_args)
 
     @staticmethod
     def show_stat_wrapper_multi(count, 
@@ -671,6 +647,16 @@ class Progress(Loop):
         sys.stdout.flush()
 
     def start(self):
+        # before printing any output to stout, we can now check this
+        # variable to see if any other ProgressBar has reserved that
+        # terminal.
+        
+        if (self.__class__.__name__ in TERMINAL_PRINT_LOOP_CLASSES):
+            if not terminal_reserve(progress_obj=self, verbose=self.verbose, identifier=self._identifier):
+                if self.verbose > 1:
+                    print("{}: tty already reserved, NOT starting the progress loop!".format(self._identifier))
+                return
+        
         super(Progress, self).start()
         self.show_on_exit = True
 
@@ -678,26 +664,25 @@ class Progress(Loop):
         """
             trigger clean up by hand, needs to be done when not using
             context management via 'with' statement
+        
+            - will terminate loop process
+            - show a last progress -> see the full 100% on exit
+            - releases terminal reservation
         """
+        self._auto_kill_on_last_resort = make_sure_its_down 
+            
         super(Progress, self).stop()
-        self._show_stat()
-        print('\n'*(self.len-1))
+        terminal_unreserve(progress_obj=self, verbose=self.verbose, identifier=self._identifier)
+
+        if self.show_on_exit:
+            self._show_stat()
+            print('\n'*(self.len-1))
         self.show_on_exit = False
-        if make_sure_its_down and (self._proc is not None):
-            check_process_termination(proc                     = self._proc, 
-                                      identifier               = self._identifier,
-                                      timeout                  = 2*self.interval, 
-                                      verbose                  = self.verbose, 
-                                      auto_kill_on_last_resort = True)
         
 
 class ProgressBar(Progress):
     """
-    Implements a Progress bar (progress par) similar to the one known from 'wget'
-    or 'pv'
-    
-    
-    
+    implements a progress bar similar to the one known from 'wget' or 'pv'
     """
     def __init__(self, 
                   count, 
@@ -725,19 +710,32 @@ class ProgressBar(Progress):
                          sigterm=sigterm,
                          name=name)
 
+        self._PRE_PREPEND = ESC_NO_CHAR_ATTR + ESC_RED
+        self._POST_PREPEND = ESC_BOLD + ESC_GREEN
+
     @staticmethod        
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
         if max_count_value is None:
             # only show current absolute progress as number and estimated speed
-            print("{}{} [{}] #{}    ".format(prepend, humanize_time(tet), humanize_speed(speed), count_value))             
+            print("{}{}{}{} [{}] #{}    ".format(ESC_NO_CHAR_ATTR + ESC_RED,
+                                                 prepend, 
+                                                 ESC_BOLD + ESC_GREEN,
+                                                 humanize_time(tet), humanize_speed(speed), count_value))             
         else:
+            if width == 'auto':
+                width = get_terminal_width()
+            
             # deduce relative progress and show as bar on screen
-            if eta is None:
-                s3 = "] ETA --"
+            if ttg is None:
+                s3 = "] TTG --"
             else:
-                s3 = "] ETA {}".format(humanize_time(eta))
+                s3 = "] TTG {}".format(humanize_time(ttg))
                
-            s1 = "{}{} [{}] [".format(prepend, humanize_time(tet), humanize_speed(speed))
+            s1 = "{}{}{}{} [{}] [".format(ESC_NO_CHAR_ATTR + ESC_RED,
+                                          prepend, 
+                                          ESC_BOLD + ESC_GREEN,
+                                          humanize_time(tet),
+                                          humanize_speed(speed))
             
             l = len_string_without_ESC(s1+s3)
             
@@ -831,25 +829,31 @@ class ProgressBarCounter(Progress):
         super(ProgressBarCounter, self)._reset_i(i)
         
     @staticmethod
-    def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
+    def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
         counter_count = kwargs['counter_count'][i]
         counter_speed = kwargs['counter_speed'][i]
         counter_tet = time.time() - kwargs['init_time']
         
-        s_c = "{}{} [{}] #{}".format(prepend,
-                                    humanize_time(counter_tet),
-                                    humanize_speed(counter_speed.value), 
-                                    counter_count.value)
+        s_c = "{}{}{}{} [{}] #{}".format(ESC_NO_CHAR_ATTR + ESC_RED,
+                                     prepend, 
+                                     ESC_BOLD + ESC_GREEN,
+                                     humanize_time(counter_tet),
+                                     humanize_speed(counter_speed.value), 
+                                     counter_count.value)
+
+        if width == 'auto':
+            width = get_terminal_width()        
+        
         if max_count_value != 0:
             s_c += ' - '
         
             if max_count_value is None:
-                s_c = "{}{}{} [{}] #{}    ".format(s_c, prepend, humanize_time(tet), humanize_speed(speed), count_value)            
+                s_c = "{}{} [{}] #{}    ".format(s_c, humanize_time(tet), humanize_speed(speed), count_value)            
             else:
-                if eta is None:
-                    s3 = "] ETA --"
+                if ttg is None:
+                    s3 = "] TTG --"
                 else:
-                    s3 = "] ETA {}".format(humanize_time(eta))
+                    s3 = "] TTG {}".format(humanize_time(ttg))
                    
                 s1 = "{} [{}] [".format(humanize_time(tet), humanize_speed(speed))
                 
@@ -860,9 +864,161 @@ class ProgressBarCounter(Progress):
                 b = l2 - a
                 s2 = "="*a + ">" + " "*b
                 s_c = s_c+s1+s2+s3
-        
+
         print(s_c + ' '*(width - len_string_without_ESC(s_c)))
 
+class ProgressBarFancy(Progress):
+    """
+        implements a progress bar where the color indicates the current status
+        similar to the bars known from 'htop'
+    """
+    def __init__(self, 
+                  count, 
+                  max_count=None,
+                  width='auto',
+                  prepend=None,
+                  speed_calc_cycles=10, 
+                  interval=1, 
+                  verbose=0,
+                  sigint='stop', 
+                  sigterm='stop',
+                  name='progress_bar'):
+        """
+            width [int/'auto'] - the number of characters used to show the Progress bar,
+            use 'auto' to determine width from terminal information -> see _set_width
+        """
+        if not self.__class__.__name__ in TERMINAL_PRINT_LOOP_CLASSES:
+            TERMINAL_PRINT_LOOP_CLASSES.append(self.__class__.__name__)
+            
+        super(ProgressBarFancy, self).__init__(count=count,
+                         max_count=max_count,
+                         prepend=prepend,
+                         speed_calc_cycles=speed_calc_cycles,
+                         width=width,
+                         interval=interval,
+                         verbose = verbose,
+                         sigint=sigint,
+                         sigterm=sigterm,
+                         name=name)
+        
+    @staticmethod        
+    def get_d(s1, s2, width, lp, lps):
+        d = width-len(remove_ESC_SEQ_from_string(s1))-len(remove_ESC_SEQ_from_string(s2))-2-lp-lps
+        if d >= 0:
+            d1 = d // 2
+            d2 = d - d1
+            return s1, s2, d1, d2
+
+    @staticmethod
+    def full_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
+        s1 = "TET {} SPE {:<10} TTG {}".format(tet, speed, ttg)
+        s2 = "ETA {} ORT {}".format(eta, ort)
+        return ProgressBarFancy.get_d(s1, s2, width, lp, lps)
+
+
+    @staticmethod
+    def full_minor_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
+        s1 = "E {} S {:<10} G {}".format(tet, speed, ttg)
+        s2 = "A {} O {}".format(eta, ort)
+        return ProgressBarFancy.get_d(s1, s2, width, lp, lps)
+
+    @staticmethod
+    def reduced_1_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
+        s1 = "E {} S {:<10} G {}".format(tet, speed, ttg)
+        s2 = "O {}".format(ort)
+        return ProgressBarFancy.get_d(s1, s2, width, lp, lps)  
+
+    @staticmethod
+    def reduced_2_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
+        s1 = "E {} G {}".format(tet, ttg)
+        s2 = "O {}".format(ort)
+        return ProgressBarFancy.get_d(s1, s2, width, lp, lps)
+    
+    @staticmethod
+    def reduced_3_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
+        s1 = "E {} G {}".format(tet, ttg)
+        s2 = ''
+        return ProgressBarFancy.get_d(s1, s2, width, lp, lps)
+    
+    @staticmethod
+    def reduced_4_stat(p, tet, speed, ttg, eta, ort, repl_ch, width, lp, lps):
+        s1 = ''
+        s2 = ''
+        return ProgressBarFancy.get_d(s1, s2, width, lp, lps)    
+
+    @staticmethod        
+    def kw_bold(s, ch_after):
+        kws = ['TET', 'SPE', 'TTG', 'ETA', 'ORT', 'E', 'S', 'G', 'A', 'O']
+        for kw in kws:
+            for c in ch_after:
+                s = s.replace(kw + c, ESC_BOLD + kw + ESC_RESET_BOLD + c)
+            
+        return s
+
+    @staticmethod        
+    def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
+        if max_count_value is None:
+            # only show current absolute progress as number and estimated speed
+            print("{}{} [{}] #{}    ".format(prepend, humanize_time(tet), humanize_speed(speed), count_value))             
+        else:
+            if width == 'auto':
+                width = get_terminal_width()
+            # deduce relative progress
+            p = count_value / max_count_value
+            if p < 1:
+                ps = " {:.1%} ".format(p)
+            else:
+                ps = " {:.0%} ".format(p)
+            
+            if ttg is None:
+                eta = '--'
+                ort = None
+            else:
+                eta = datetime.datetime.fromtimestamp(time.time() + ttg).strftime("%Y%m%d_%H:%M:%S")
+                ort = tet + ttg
+                
+            tet = humanize_time(tet)
+            speed = humanize_speed(speed)
+            ttg = humanize_time(ttg)
+            ort = humanize_time(ort)
+            repl_ch = '-'
+            lp = len(prepend)
+            
+            args = p, tet, speed, ttg, eta, ort, repl_ch, width, lp, len(ps)
+            
+            res = ProgressBarFancy.full_stat(*args)
+            if res is None:
+                res = ProgressBarFancy.full_minor_stat(*args)
+                if res is None:
+                    res = ProgressBarFancy.reduced_1_stat(*args)
+                    if res is None:
+                        res = ProgressBarFancy.reduced_2_stat(*args)
+                        if res is None:
+                            res = ProgressBarFancy.reduced_3_stat(*args)
+                            if res is None:
+                                res = ProgressBarFancy.reduced_4_stat(*args)
+                                    
+            if res is not None:
+                s1, s2, d1, d2 = res                
+                s = s1 + ' '*d1 + ps + ' '*d2 + s2
+                   
+                s_before = s[:math.ceil(width*p)].replace(' ', repl_ch)
+                if (len(s_before) > 0) and (s_before[-1] == repl_ch):
+                    s_before = s_before[:-1] + '>'
+                s_after  = s[math.ceil(width*p):]
+                
+                s_before = ProgressBarFancy.kw_bold(s_before, ch_after=[repl_ch, '>'])
+                s_after = ProgressBarFancy.kw_bold(s_after, ch_after=[' '])
+                print(prepend + ESC_BOLD + '[' + ESC_RESET_BOLD + ESC_LIGHT_GREEN + s_before + ESC_DEFAULT + s_after + ESC_BOLD + ']' + ESC_NO_CHAR_ATTR)
+            else:
+                ps = ps.strip()
+                if p == 1:
+                    ps = ' '+ps
+                print(prepend + ps)
+            
+            
+                
+            
 
 class ProgressSilentDummy(Progress):
     def __init__(self, **kwargs):
@@ -959,7 +1115,7 @@ class SIG_handler_Loop(object):
 #                          name=name)
 #         
 #     @staticmethod        
-#     def show_stat(count_value, max_count_value, prepend, speed, tet, eta, width, i, **kwargs):
+#     def show_stat(count_value, max_count_value, prepend, speed, tet, ttg, width, i, **kwargs):
 #         if max_count_value is not None:
 #             max_count_str = "/{}".format(max_count_value)
 #         else:
@@ -1130,9 +1286,13 @@ def humanize_speed(c_per_sec):
 def humanize_time(secs):
     """convert second in to hh:mm:ss format
     """
+    if secs is None:
+        return '--'
+    
     mins, secs = divmod(secs, 60)
     hours, mins = divmod(mins, 60)
     return '{:02d}:{:02d}:{:02d}'.format(int(hours), int(mins), int(secs))
+    
 
 
 def len_string_without_ESC(s):
@@ -1161,13 +1321,12 @@ def remove_ESC_SEQ_from_string(s):
     return s
 
 
-def terminal_reserve():
+def terminal_reserve(progress_obj, terminal_obj=None, verbose=0, identifier=None):
     """ Registers the terminal (stdout) for printing.
     
     Useful to prevent multiple processes from writing progress bars
     to stdout.
     
-    It is currently handled with a simple list.
     One process (server) prints to stdout and a couple of subprocesses
     do not print to the same stdout, because the server has reserved it.
     Of course, the clients have to be nice and check with 
@@ -1176,21 +1335,40 @@ def terminal_reserve():
     
     Returns
     -------
-    True if reservation was successfull, false if there already is a
-    reservation.
+    True if reservation was successful (or if we have already reserved this tty),
+    False if there already is a reservation from another instance.
     """
-    for term in TERMINAL_RESERVATION:
-        if sys.stdout is term:
-            # someone else is using this stdout
-            return False
+    if terminal_obj is None:
+        terminal_obj = sys.stdout
     
-    # we have now registered this stdout
-    TERMINAL_RESERVATION.append(sys.stdout)
-    return True
+    if identifier is None:
+        identifier = ''
+    else:
+        identifier = identifier + ': ' 
+    
+    if terminal_obj in TERMINAL_RESERVATION:    # terminal was already registered
+        if verbose > 1:
+            print("{}this terminal {} has already been added to reservation list".format(identifier, terminal_obj))
+        
+        if TERMINAL_RESERVATION[terminal_obj] is progress_obj:
+            if verbose > 1:
+                print("{}we {} have already reserved this terminal {}".format(identifier, progress_obj, terminal_obj))
+            return True
+        else:
+            if verbose > 1:
+                print("{}someone else {} has already reserved this terminal {}".format(identifier, TERMINAL_RESERVATION[terminal_obj], terminal_obj))
+            return False
+    else:                                       # terminal not yet registered
+        if verbose > 1:
+            print("{}terminal {} was reserved for us {}".format(identifier, terminal_obj, progress_obj))
+        TERMINAL_RESERVATION[terminal_obj] = progress_obj
+        return True
 
 
-def terminal_unreserve():
+def terminal_unreserve(progress_obj, terminal_obj=None, verbose=0, identifier=None):
     """ Unregisters the terminal (stdout) for printing.
+    
+    an instance (progress_obj) can only unreserve the tty (terminal_obj) when it also reserved it
     
     see terminal_reserved for more information
     
@@ -1199,12 +1377,26 @@ def terminal_unreserve():
     None
     """
     
-    for term in TERMINAL_RESERVATION:
-        if sys.stdout is term:
-            TERMINAL_RESERVATION.remove(term)
-            return None
+    if terminal_obj is None:
+        terminal_obj =sys.stdout
 
-
+    if identifier is None:
+        identifier = ''
+    else:
+        identifier = identifier + ': '         
+    
+    po = TERMINAL_RESERVATION.get(terminal_obj)
+    if po is None:
+        if verbose > 1:
+            print("{}terminal {} was not reserved, nothing happens".format(identifier, terminal_obj))
+    else:
+        if po is progress_obj:
+            if verbose > 1:
+                print("{}terminal {} now unreserned".format(identifier, terminal_obj))
+            del TERMINAL_RESERVATION[terminal_obj]
+        else:
+            if verbose > 1:
+                print("{}you {} can NOT unreserve terminal {} be cause it was reserved by {}".format(identifier, progress_obj, terminal_obj, po))
 
 
 myQueue = mp.Queue
@@ -1286,6 +1478,6 @@ ESC_SEQ_SET = [ESC_NO_CHAR_ATTR,
                ESC_WHITE]
 
 # terminal reservation list, see terminal_reserve
-TERMINAL_RESERVATION = []
+TERMINAL_RESERVATION = {}
 # these are classes that print progress bars, see terminal_reserve
 TERMINAL_PRINT_LOOP_CLASSES = ["ProgressBar", "ProgressBarCounter"]
