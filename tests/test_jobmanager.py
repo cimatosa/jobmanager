@@ -9,6 +9,8 @@ import signal
 import multiprocessing as mp
 import numpy as np
 import traceback
+import subprocess
+import signal
 
 from os.path import abspath, dirname, split
 # Add parent directory to beginning of path variable
@@ -692,6 +694,125 @@ def test_digest_rejected():
         
     p_server.join()            
     
+def test_exception():    
+    class MyManager_Client(jobmanager.BaseManager):
+        pass
+        
+    def autoproxy_server(which_python, port, authkey, outfile):
+        if which_python == 2:
+            python_interpreter = "python2.7"
+            python_env = {"PYTHONPATH": "/usr/lib/python2.7"}
+        elif which_python == 3:
+            python_interpreter = "python3.4"
+            python_env = {"PYTHONPATH": "/usr/lib/python3.4"}
+        else:
+            raise ValueError("'which_python' must be 2 or 3")
+            
+        
+        path = dirname(abspath(__file__))
+        cmd = [python_interpreter,
+               "{}/start_autoproxy_server.py".format(path),
+               str(port), 
+               authkey]
+
+        print(cmd)
+        return subprocess.Popen(cmd, env=python_env, stdout=outfile, stderr=subprocess.STDOUT)
+
+    def autoproxy_connect(server, port, authkey):
+        MyManager_Client.register('get_q')
+        
+        m = MyManager_Client(address = (server, port),                              
+                             authkey = bytearray(authkey, encoding='utf8'))
+        
+        jobmanager.call_connect(m.connect, dest = jobmanager.address_authkey_from_manager(m), verbose=1)
+        
+        return m
+        
+    for p_version_server in [2, 3]:
+        port = np.random.randint(20000, 30000)
+        authkey = 'q'
+        with open("ap_server.out", 'w') as outfile:
+            
+            p_server = autoproxy_server(p_version_server, port, authkey, outfile)
+            print("autoproxy server running with PID {}".format(p_server.pid))
+            time.sleep(1)
+            
+            print("running tests ...")
+            print()
+             
+            try:
+                try:
+                    autoproxy_connect(server='localhost', port=port, authkey=authkey)
+                except jobmanager.RemoteValueError:
+                    if (sys.version_info[0] == 3) and (p_version_server == 2):
+                        print("that is ok")      # the occurrence of this Exception is normal
+                        pass
+                    else:                
+                        raise                    # reraise exception
+                except ValueError:
+                    if (sys.version_info[0] == 2) and (p_version_server == 3):
+                        print("that is ok")      # the occurrence of this Exception is normal
+                        pass
+                    else:                
+                        raise                    # reraise exception
+
+                # all the following only for the same python versions
+                if (sys.version_info[0] != p_version_server):
+                    continue
+                    
+                try:
+                    autoproxy_connect(server='localhost', port=port+1, authkey=authkey)
+                except jobmanager.JMConnectionRefusedError:
+                    print("that is ok")
+                except:
+                    raise
+                
+                try:
+                    autoproxy_connect(server='localhost', port=port, authkey=authkey+'_')
+                except jobmanager.AuthenticationError:
+                    print("that is ok")
+                except:
+                    raise
+                
+                m = autoproxy_connect(server='localhost', port=port, authkey=authkey)
+                
+                q = m.get_q()
+                
+                q_get = jobmanager.proxy_operation_decorator_python3(q, 'get')
+                q_put = jobmanager.proxy_operation_decorator_python3(q, 'put')
+                
+                s1 = 'hallo welt'
+                q_put(s1)
+                s2 = q_get()
+                
+                assert s1 == s2
+                
+                
+                
+                
+            finally:
+                print()
+                print("tests done! terminate server ...".format())
+                
+                p_server.send_signal(signal.SIGTERM)
+                
+                t = time.time()
+                timeout = 10
+                r = None
+                while r is None:
+                    r = p_server.poll()
+                    time.sleep(1)
+                    print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
+                    if (time.time() - t) > timeout:
+                        print("timeout exceeded, kill p_server")
+                        print("the managers subprocess will still be running, and needs to be killed by hand")
+                        p_server.send_signal(signal.SIGKILL)
+                        break
+                
+                print("server terminated with exitcode {}".format(r))
+ 
+        
+    
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -714,7 +835,8 @@ if __name__ == "__main__":
 #         test_jobmanager_local,
 #         test_start_server_on_used_port,
 #         test_shared_const_arg,
-        test_digest_rejected,
+#         test_digest_rejected,
+        test_exception,
 
         lambda : print("END")
         ]
@@ -726,5 +848,6 @@ if __name__ == "__main__":
             f()
             time.sleep(1)
     
+
 #         _test_interrupt_client()
     

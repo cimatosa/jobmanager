@@ -66,17 +66,34 @@ if sys.version_info[0] == 2:
                 inspect.getargspec(f)
             self.annotations = getattr(f, '__annotations__', {})
     inspect.getfullargspec = getfullargspec
+    
+    # IOError (socket.error) expection handling 
+    import errno
+    
+    class JMConnectionError(Exception):
+        pass
+    
+    class JMConnectionRefusedError(JMConnectionError):
+        pass
+    
+    class JMConnectionResetError(JMConnectionError):
+        pass
+    
 else:
     # Python 3
     import queue
+    
+    JMConnectionError = ConnectionError
+    JMConnectionRefusedError = ConnectionRefusedError
+    JMConnectionResetError = ConnectionResetError
+    
+
 
 sys.path.append(os.path.dirname(__file__))
-import progress
+from . import progress
 
 myQueue = mp.Queue
-
-class FatalConnectionResetError(ConnectionError):
-    pass
+AuthenticationError = mp.AuthenticationError 
 
 class JobManager_Client(object):
     """
@@ -505,7 +522,7 @@ class JobManager_Client(object):
         """
         
         if not self.connected:
-            raise ConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
+            raise JMConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
 
         print("{}: starting client with connection to server:{} authkey:{} port:{}".format(self._identifier, self.server, self.authkey.decode(), self.port))
         
@@ -1158,6 +1175,9 @@ class JobManager_Local(JobManager_Server):
 class RemoteKeyError(RemoteError):
     pass
 
+class RemoteValueError(RemoteError):
+    pass
+
 class Signal_handler_for_Jobmanager_client(object):
     def __init__(self, client_object, exit_handler, signals=[signal.SIGINT], verbose=0):
         self.client_object = client_object
@@ -1280,7 +1300,7 @@ def address_authkey_from_proxy(proxy):
 def address_authkey_from_manager(manager):
     return manager.address, manager._authkey.decode()
 
-def call_connect(connect, dest, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
+def call_connect_python3(connect, dest, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
     identifier = mod_id(identifier)
     c = 0
     while True:
@@ -1290,46 +1310,78 @@ def call_connect(connect, dest, verbose=1, identifier='', reconnect_wait=2, reco
                 print("{}try connecting to {}".format(identifier, dest))
             connect()
         
-        except ConnectionResetError as e:   # ... when the destination hangs up on us
-            if verbose > 0:                 # during connect this might be due to firewall settings
-                                            # or other TPC connections controlling mechanisms
-                traceback.print_exc(limit=1)                    
-                print("{}connection to {} could not be established due to 'ConnectionResetError'".format(identifier, dest))
-            if verbose > 1:
-                print("during connect this Error might be due to firewall settings\n"+
-                      "or other TPC connections controlling mechanisms!")
-            c += 1
-            if c > reconnect_tries:
-                raise ConnectionError("{}connection to {} FAILED, ".format(identifier, address_authkey_from_proxy(queue_proxy))+
-                                      "{} retries were NOT successfull".format(reconnect_tries))
-            if verbose > 0:
-                traceback.print_exc(limit=1)
-                print("{}try connecting to {} again in {} seconds".format(identifier, dest, reconnect_wait))
-            time.sleep(reconnect_wait)
-        
-        except ConnectionRefusedError as e: # ... when the destination refuses our connection
-                                            # - no matching Manager object instanciated at destination
-                                            #   (eg. wrong port, not running at all)
-            if verbose > 0:
-                print("{}connection to {} could NOT be established due to 'ConnectionRefusedError'".format(identifier, dest))
-            if verbose > 1:
-                print("this usually means that no matching Manager object was instanciated at destination side!")
-            raise e
-                
-        except mp.AuthenticationError as e:    # ... when the destination refuses our connection due
-                                            # authkey missmatch
-            if verbose > 0:
-                print("{}connection to {} could NOT be established due to 'AuthenticationError'".format(identifier, dest))
-            if verbose > 1:
-                print("authkey specified does not match the authkey at destination side!")
-            raise e                
+        except Exception as e:
+            if verbose > 0:   
+                print("{}connection to {} could not be established due to '{}'".format(identifier, dest, type(e)))
+                print(traceback.format_stack()[-3].strip())             
             
+            if type(e) is ConnectionResetError:           # ... when the destination hangs up on us     
+                c = handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose)
+            elif type(e) is ConnectionRefusedError:       # ... when the destination refuses our connection
+                handler_connection_refused(e, identifier, dest, verbose)
+            elif type(e) is AuthenticationError :      # ... when the destination refuses our connection due authkey missmatch
+                handler_authentication_error(e, identifier, dest, verbose)
+            elif type(e) is RemoteError:                  # ... when the destination send us an error message
+                if 'KeyError' in e.args[0]:
+                    handler_remote_key_error(e, verbose, dest)
+                elif 'ValueError: unsupported pickle protocol:' in e.args[0]:
+                    handler_remote_value_error(e, verbose, dest)
+                else:
+                    handler_remote_error(e, verbose, dest)
+            elif type(e) is ValueError:
+                handler_value_error(e, verbose)
+            else:                                   # any other exception
+                handler_unexpected_error(e, verbose)            
+        
         else:                               # no exception
             if verbose > 1:
                 print("{}connection to {} successfully stablished".format(identifier, dest))
-            return True                     # SUCCESS -> return True
+            return True      
 
+def call_connect_python2(connect, dest, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
+    identifier = mod_id(identifier)
+    c = 0
+    while True:
+        try:                                # here we try re establish the connection
+            if verbose > 1:
+                print("{}try connecting to {}".format(identifier, dest))
+            connect()
+        
+        except Exception as e:
+            if verbose > 0:
+                print("{}connection to {} could not be established due to '{}'".format(identifier, dest, type(e)))
+                print(traceback.format_stack()[-3].strip())
+            
+            if type(e) is socket.error:                    # error in socket communication
+                if verbose > 0:
+                    print("{} with args {}".format(type(e), e.args)) 
+                err_code = e.args[0]
+                if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
+                    c = handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose)
+                elif err_code == errno.ECONNREFUSED: # ... when the destination refuses our connection
+                    handler_connection_refused(e, identifier, dest, verbose)
+                else:
+                    handler_unexpected_error(e, verbose)
+            elif type(e) is AuthenticationError :       # ... when the destination refuses our connection due authkey missmatch
+                handler_authentication_error(e, identifier, dest, verbose)
+            elif type(e) is RemoteError:                   # ... when the destination send us an error message
+                if 'KeyError' in e.args[0]:
+                    handler_remote_key_error(e, verbose, dest)
+                elif 'ValueError: unsupported pickle protocol:' in e.args[0]:
+                    handler_remote_value_error(e, verbose, dest)
+                else:
+                    handler_remote_error(e, verbose, dest)
+            elif type(e) is ValueError:
+                handler_value_error(e, verbose)
+            else:                                    # any other exception
+                handler_unexpected_error(e, verbose)            
+        
+        else:                               # no exception
+            if verbose > 1:
+                print("{}connection to {} successfully stablished".format(identifier, dest))
+            return True                     # SUCCESS -> return True            
 
+call_connect = call_connect_python2 if sys.version_info[0] == 2 else call_connect_python3
 
 def copyQueueToList(q):
     res_list = []
@@ -1372,6 +1424,74 @@ def getDateForFileName(includePID = False):
         name += "_{}".format(os.getpid()) 
     return name
 
+def handler_authentication_error(e, identifier, dest, verbose):
+    if verbose > 1:
+        print("authkey specified does not match the authkey at destination side!")
+    raise e
+
+def handler_broken_pipe_error(e, verbose):
+    if verbose > 1:
+        print("this usually means that an established was closed, does not exists anymore")
+        print("the server probably went down")
+    raise e   
+
+def handler_connection_refused(e, identifier, dest, verbose):
+    if verbose > 1:
+        print("this usually means that no matching Manager object was instanciated at destination side!")
+    raise JMConnectionRefusedError(e)
+
+def handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose):
+    if verbose > 1:
+        print("during connect this Error might be due to firewall settings\n"+
+              "or other TPC connections controlling mechanisms!")
+    c += 1
+    if c > reconnect_tries:
+        raise JMConnectionError("{}connection to {} FAILED, ".format(identifier, dest)+
+                                "{} retries were NOT successfull".format(reconnect_tries))
+    if verbose > 0:
+        traceback.print_exc(limit=1)
+        print("{}try connecting to {} again in {} seconds".format(identifier, dest, reconnect_wait))
+    time.sleep(reconnect_wait)
+    return c                
+
+def handler_eof_error(e, verbose):
+    if verbose > 1:
+        print("This usually means that server did not replay, although the connection is still there.")
+        print("This is due to the fact that the connection is in 'timewait' status for about 60s")
+        print("after the server went down. After that time the connection will not exist anymore.")
+    raise e
+
+def handler_remote_error(e, verbose, dest):
+    if verbose > 1:
+        print("the server {} send an RemoteError message!".format(dest))        
+    raise RemoteError(e.args[0])
+
+def handler_remote_key_error(e, verbose, dest):
+    if verbose > 1:
+        print("'KeyError' detected in RemoteError message from server {}!".format(dest))
+        print("This hints to the fact that the actual instace of the shared object on the server")
+        print("side has changed, for example due to a server restart")
+        print("you need to reinstanciate the proxy object")
+    raise RemoteKeyError(e.args[0])
+    
+def handler_remote_value_error(e, verbose, dest):
+    if verbose > 1:
+        print("'ValueError' due to 'unsupported pickle protocol' detected in RemoteError from server {}!".format(dest))
+        print("You might have tried to connect to a SERVER running with an OLDER python version")
+        print("At this stage (and probably for ever) this should be avoided")        
+    raise RemoteValueError(e.args[0])
+
+def handler_value_error(e, verbose):
+    if 'unsupported pickle protocol' in e.args[0]:
+        if verbose > 1:
+            print("'ValueError' due to 'unsupported pickle protocol'!")
+            print("You might have tried to connect to a SERVER running with an NEWER python version")
+            print("At this stage (and probably for ever) this should be avoided")  
+    raise e
+
+def handler_unexpected_error(e, verbose):
+    raise e
+
 def mod_id(identifier):
     if identifier != '':
         identifier = identifier.strip()
@@ -1381,7 +1501,7 @@ def mod_id(identifier):
         
     return identifier
 
-def proxy_operation_decorator(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
+def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
     identifier = mod_id(identifier)
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
@@ -1392,42 +1512,65 @@ def proxy_operation_decorator(proxy, operation, verbose=1, identifier='', reconn
                 if verbose > 1:
                     print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
                 res = o(*args, **kwargs)
-            
-            except ConnectionResetError as e:   # ... when the destination hangs up on us
-                if verbose > 0:
-                    traceback.print_exc(limit=1)
-                    print("{}try to reconnect".format(identifier))
-                call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
-            
-            except BrokenPipeError as e:
-                if verbose > 0:
-                    print("{}operation '{}' -> {} FAILED due to 'BrokenPipeError'".format(identifier, operation, dest))
-                if verbose > 1:
-                    print("this usually means that an established was closed, does not exists anymore")
-                    print("the server probably went down")
-                raise e
-            
-            except EOFError as e:
-                if verbose > 0:
-                    print("{}operation '{}' -> {} FAILED due to 'EOFError'".format(identifier, operation, dest))
-                if verbose > 1:
-                    print("This usually means that server did not replay, although the connection is still there.")
-                    print("This is due to the fact that the connection is in 'timewait' status for about 60s")
-                    print("after the server went down. After that time the connection will not exist anymore.")
-                raise e
-            except RemoteError as e:
-                if verbose > 0:
-                    print("{}operation '{}' -> {} FAILED due to 'RemoteError'".format(identifier, operation, dest))
                 
-                if 'KeyError' in e.args[0]:
-                    if verbose > 1:
-                        print("'KeyError' detected in RemoteError message!")
-                        print("This hints to the fact that actual instace of the shared object on the server")
-                        print("side has changed, for example due to a server restart")
-                        print("you need to reinstanciate the proxy object")
-                    raise RemoteKeyError(e.args[0])
+            except Exception as e:
+                if verbose > 0:
+                    print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
+                    print(traceback.format_stack()[-3].strip())
+                    
+                if e is ConnectionResetError:
+                    if verbose > 0:
+                        traceback.print_exc(limit=1)
+                        print("{}try to reconnect".format(identifier))
+                    call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
+                elif e is BrokenPipeError:
+                    handler_broken_pipe_error(e, verbose)
+                elif e is EOFError:
+                    handler_eof_error(e, verbose)
                 else:
-                    raise e
+                    handler_unexpected_error(e, verbose)
+            else:                               # SUCCESS -> return True  
+                if verbose > 1:
+                    print("{}operation '{}' successfully executed".format(identifier, operation))
+                return res
+            
+    return _operation
+
+def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
+    identifier = mod_id(identifier)
+    o = getattr(proxy, operation)
+    dest = address_authkey_from_proxy(proxy)
+    
+    def _operation(*args, **kwargs):
+        while True:
+            try:                                # here we try to put new data to the queue
+                if verbose > 1:
+                    print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
+                res = o(*args, **kwargs)
+                
+            except Exception as e:
+                if verbose > 0:
+                    print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
+                    print(traceback.format_stack()[-3].strip())
+                    
+                if e is IOError:
+                    if verbose > 0:
+                        print("{} with args {}".format(type(e), e.args))
+                    err_code = e.args[0]
+                    if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
+                        if verbose > 0:
+                            traceback.print_exc(limit=1)
+                            print("{}try to reconnect".format(identifier))
+                        call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
+                    else:
+                        handler_unexpected_error(e, verbose)                    
+                    
+                elif e is BrokenPipeError:
+                    handler_broken_pipe_error(e, verbose)
+                elif e is EOFError:
+                    handler_eof_error(e, verbose)
+                else:
+                    handler_unexpected_error(e, verbose)            
                 
             else:                               # SUCCESS -> return True  
                 if verbose > 1:
@@ -1435,6 +1578,8 @@ def proxy_operation_decorator(proxy, operation, verbose=1, identifier='', reconn
                 return res
             
     return _operation
+
+proxy_operation_decorator = proxy_operation_decorator_python2 if sys.version_info[0] == 2 else proxy_operation_decorator_python3
 
 def setup_SIG_handler_manager():
     """
