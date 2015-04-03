@@ -1,0 +1,239 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>jobmanager.ode_wrapper &mdash; jobmanager 0.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="jobmanager 0.1.0 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for jobmanager.ode_wrapper</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">scipy.integrate</span> <span class="kn">import</span> <span class="n">ode</span>
+<span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;Submodule &#39;ode_wrapper&#39; will not work. Reason: {}.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+
+
+
+<span class="k">class</span> <span class="nc">Dummy_c</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">pass</span>
+
+<span class="k">def</span> <span class="nf">complex_to_real</span><span class="p">(</span><span class="n">vc</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">vc</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">imag</span><span class="p">(</span><span class="n">vc</span><span class="p">)])</span>
+
+<span class="k">def</span> <span class="nf">real_to_complex</span><span class="p">(</span><span class="n">vr</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">vr</span><span class="p">)</span><span class="o">//</span><span class="mi">2</span>
+    <span class="k">return</span> <span class="n">vr</span><span class="p">[:</span><span class="n">n</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1j</span><span class="o">*</span><span class="n">vr</span><span class="p">[</span><span class="n">n</span><span class="p">:]</span>
+
+<div class="viewcode-block" id="wrap_complex_intgeration"><a class="viewcode-back" href="../../index.html#jobmanager.ode_wrapper.wrap_complex_intgeration">[docs]</a><span class="k">def</span> <span class="nf">wrap_complex_intgeration</span><span class="p">(</span><span class="n">f_complex</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    if f: R x C^n -&gt; C^n</span>
+<span class="sd">    then this functions returns the real equivalent</span>
+<span class="sd">    f_prime R x R^n x R^n -&gt; R^n x R^n</span>
+<span class="sd">    </span>
+<span class="sd">    such that a complex vector</span>
+<span class="sd">        cc = [vc_1, ... vc_n]</span>
+<span class="sd">    translates to</span>
+<span class="sd">        cr = [RE(vc_1), ... RE(vc_n), IM(vc_1), ... IM(vc_n)] </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">f_real</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">yr</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">complex_to_real</span><span class="p">(</span> <span class="n">f_complex</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">real_to_complex</span><span class="p">(</span><span class="n">yr</span><span class="p">))</span> <span class="p">)</span> 
+    
+    <span class="k">return</span> <span class="n">f_real</span>
+    
+</div>
+<span class="k">def</span> <span class="nf">integrate_cplx</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">t0</span><span class="p">,</span> <span class="n">t1</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">integrator</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">res_dim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">x_to_res</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">f_partial_complex</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">integrator</span> <span class="o">==</span> <span class="s">&#39;zvode&#39;</span><span class="p">:</span>
+        <span class="c"># define complex derivative</span>
+        <span class="n">f_</span> <span class="o">=</span> <span class="n">f_partial_complex</span>
+        <span class="n">x0_</span> <span class="o">=</span> <span class="n">x0</span>
+    <span class="k">elif</span> <span class="p">(</span><span class="n">integrator</span> <span class="o">==</span> <span class="s">&#39;vode&#39;</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">integrator</span> <span class="o">==</span> <span class="s">&#39;lsoda&#39;</span><span class="p">):</span> 
+        <span class="c"># define real derivative (separation for real and imaginary part)</span>
+        <span class="n">f_</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">wrap_complex_intgeration</span><span class="p">(</span><span class="n">f_partial_complex</span><span class="p">)(</span><span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+        <span class="n">x0_</span> <span class="o">=</span> <span class="n">complex_to_real</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;PERFORMANCE WARNING, avoid using &#39;vode&#39; or &#39;lsoda&#39; for complex ode&#39;s&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;unknown integrator &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">integrator</span><span class="p">))</span>
+    
+    <span class="n">r</span> <span class="o">=</span> <span class="n">ode</span><span class="p">(</span><span class="n">f_</span><span class="p">)</span>
+    
+    <span class="n">kws</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">for</span> <span class="n">kw</span> <span class="ow">in</span> <span class="n">kws</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">kw</span><span class="p">]</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">kw</span><span class="p">]</span>
+    
+    <span class="n">r</span><span class="o">.</span><span class="n">set_integrator</span><span class="p">(</span><span class="n">integrator</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    
+    <span class="c"># x0_ might be the mapping from C to R^2</span>
+    <span class="n">r</span><span class="o">.</span><span class="n">set_initial_value</span><span class="p">(</span><span class="n">x0_</span><span class="p">,</span> <span class="n">t0</span><span class="p">)</span>
+    
+    <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">t0</span><span class="p">,</span> <span class="n">t1</span><span class="p">,</span> <span class="n">N</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">res_dim</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">res_dim</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x0</span><span class="p">),</span> <span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">x_to_res</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">x_to_res</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t_</span><span class="p">,</span> <span class="n">x_</span><span class="p">:</span> <span class="n">x_</span> 
+    
+    <span class="c"># complex array for result</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,)</span> <span class="o">+</span> <span class="n">res_dim</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+    <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">x_to_res</span><span class="p">(</span><span class="n">t0</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+    
+<span class="c">#         print(args.eta._Z)</span>
+    
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>        
+    <span class="k">while</span> <span class="n">r</span><span class="o">.</span><span class="n">successful</span><span class="p">()</span> <span class="ow">and</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">N</span><span class="p">:</span>
+        <span class="n">r</span><span class="o">.</span><span class="n">integrate</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">integrator</span> <span class="o">==</span> <span class="s">&#39;zvode&#39;</span><span class="p">:</span>
+            <span class="c"># complex integration -&gt; yields complex values</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x_to_res</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># real integration -&gt; mapping from R^2 to C needed</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x_to_res</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">real_to_complex</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">y</span><span class="p">))</span>
+            
+        <span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">t</span>
+        <span class="n">c</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">i</span>
+        <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">r</span><span class="o">.</span><span class="n">successful</span><span class="p">():</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;INTEGRATION WARNING, NOT successful!&quot;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span>
+        
+<span class="k">def</span> <span class="nf">integrate_real</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">t0</span><span class="p">,</span> <span class="n">t1</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">integrator</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">res_dim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">x_to_res</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">f_partial</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">integrator</span> <span class="o">==</span> <span class="s">&#39;zvode&#39;</span><span class="p">:</span>
+        <span class="c"># define complex derivative</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;&#39;zvode&#39; can not be used for real integration&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="p">(</span><span class="n">integrator</span> <span class="o">==</span> <span class="s">&#39;vode&#39;</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">integrator</span> <span class="o">==</span> <span class="s">&#39;lsoda&#39;</span><span class="p">):</span> 
+        <span class="k">pass</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;unknown integrator &#39;{}&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">integrator</span><span class="p">))</span>
+    
+    <span class="n">r</span> <span class="o">=</span> <span class="n">ode</span><span class="p">(</span><span class="n">f_partial</span><span class="p">)</span>
+    
+    <span class="n">kws</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">for</span> <span class="n">kw</span> <span class="ow">in</span> <span class="n">kws</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">kw</span><span class="p">]</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">kw</span><span class="p">]</span>
+    
+    <span class="n">r</span><span class="o">.</span><span class="n">set_integrator</span><span class="p">(</span><span class="n">integrator</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    
+    <span class="c"># x0_ might be the mapping from C to R^2</span>
+    <span class="n">r</span><span class="o">.</span><span class="n">set_initial_value</span><span class="p">(</span><span class="n">x0</span><span class="p">,</span> <span class="n">t0</span><span class="p">)</span>
+    
+    <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">t0</span><span class="p">,</span> <span class="n">t1</span><span class="p">,</span> <span class="n">N</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">res_dim</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">res_dim</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x0</span><span class="p">),</span> <span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">x_to_res</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">x_to_res</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t_</span><span class="p">,</span> <span class="n">x_</span><span class="p">:</span> <span class="n">x_</span> 
+    
+    <span class="c"># float array for result</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,)</span> <span class="o">+</span> <span class="n">res_dim</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">x_to_res</span><span class="p">(</span><span class="n">t0</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+    
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>        
+    <span class="k">while</span> <span class="n">r</span><span class="o">.</span><span class="n">successful</span><span class="p">()</span> <span class="ow">and</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">N</span><span class="p">:</span>
+        <span class="n">r</span><span class="o">.</span><span class="n">integrate</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x_to_res</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+        <span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">t</span>
+        <span class="n">c</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">i</span>
+        <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">r</span><span class="o">.</span><span class="n">successful</span><span class="p">():</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;INTEGRATION WARNING, NOT successful!&quot;</span><span class="p">)</span>        
+    <span class="k">return</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Richard Hartmann.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

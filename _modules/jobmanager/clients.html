@@ -1,0 +1,272 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>jobmanager.clients &mdash; jobmanager 0.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="jobmanager 0.1.0 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for jobmanager.clients</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">The clients module</span>
+
+<span class="sd">This module provides special subclasses of the JobManager_Client</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+
+<span class="kn">from</span> <span class="nn">.jobmanager</span> <span class="kn">import</span> <span class="n">JobManager_Client</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">ode_wrapper</span>
+
+
+<div class="viewcode-block" id="merge_arg_and_const_arg"><a class="viewcode-back" href="../../index.html#jobmanager.clients.merge_arg_and_const_arg">[docs]</a><span class="k">def</span> <span class="nf">merge_arg_and_const_arg</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        prepares data from arg and const_arg such that they can be passed</span>
+<span class="sd">        to the general integration routine</span>
+<span class="sd">        </span>
+<span class="sd">        arg and const_arg are both assumed to be dictionaries</span>
+<span class="sd">        </span>
+<span class="sd">        the merge process must not alter arg nor const_arg</span>
+<span class="sd">        in order to be used in the jobmanager context</span>
+<span class="sd">        </span>
+<span class="sd">        returns the arguments passed to the function</span>
+<span class="sd">        defining the derivative such that</span>
+<span class="sd">        args_dgl = arg[&#39;args&#39;] + const_arg[&#39;args&#39;]</span>
+<span class="sd">        where as arg[&#39;args&#39;] and const_arg[&#39;args&#39;] have been assumed to be tuples</span>
+<span class="sd">        </span>
+<span class="sd">        e.g. </span>
+<span class="sd">            arg[&#39;args&#39;] = (2, &#39;low&#39;)</span>
+<span class="sd">            const_arg[&#39;args&#39;] = (15, np.pi)</span>
+<span class="sd">        f will be called with</span>
+<span class="sd">        f(t, x, 2, &#39;low&#39;, 15, np.pi)</span>
+<span class="sd">        </span>
+<span class="sd">        returns further the combined dictionary</span>
+<span class="sd">        arg + const_arg with the keyword &#39;args&#39; removed</span>
+<span class="sd">        </span>
+<span class="sd">        For any duplicate keys the value will be the value</span>
+<span class="sd">        from the &#39;arg&#39; dictionary. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c"># allows arg to be a namedtuple (or any other object that</span>
+    <span class="c"># can be converted to a dict)</span>
+    <span class="c"># the purpose is that dicts are not allowed as keys for</span>
+    <span class="c"># the persistent data structure, where as namedtupled are</span>
+    <span class="c"># and therefore arg as a neamedtuple may be used to identify</span>
+    <span class="c"># the result of this calculation in the database</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="s">&#39;_asdict&#39;</span><span class="p">):</span>
+        <span class="n">arg</span> <span class="o">=</span> <span class="n">arg</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()</span>
+        
+    <span class="c"># same for const_arg, as a reason of consistency</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">const_arg</span><span class="p">,</span> <span class="s">&#39;_asdict&#39;</span><span class="p">):</span>
+        <span class="n">const_arg</span> <span class="o">=</span> <span class="n">const_arg</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()</span> 
+    
+    <span class="c"># extract the args keyword from arg and const_arg</span>
+    <span class="n">args_dgl</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">()</span>
+    <span class="k">if</span> <span class="s">&#39;args&#39;</span> <span class="ow">in</span> <span class="n">arg</span><span class="p">:</span>
+        <span class="n">args_dgl</span> <span class="o">+=</span> <span class="n">arg</span><span class="p">[</span><span class="s">&#39;args&#39;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="s">&#39;args&#39;</span> <span class="ow">in</span> <span class="n">const_arg</span><span class="p">:</span>
+        <span class="n">args_dgl</span> <span class="o">+=</span> <span class="n">const_arg</span><span class="p">[</span><span class="s">&#39;args&#39;</span><span class="p">]</span>
+
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">const_arg</span><span class="p">)</span>
+    <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+    <span class="c"># remove args as they have been constructed explicitly</span>
+    <span class="k">if</span> <span class="s">&#39;args&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;args&#39;</span><span class="p">]</span>
+        
+    <span class="c"># remove id, when it comes from the persistentDataServer </span>
+    <span class="k">if</span> <span class="s">&#39;id&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;id&#39;</span><span class="p">]</span>
+    
+    <span class="k">return</span> <span class="n">args_dgl</span><span class="p">,</span> <span class="n">kwargs</span>
+
+</div>
+<div class="viewcode-block" id="Integration_Client_CPLX"><a class="viewcode-back" href="../../index.html#jobmanager.clients.Integration_Client_CPLX">[docs]</a><span class="k">class</span> <span class="nc">Integration_Client_CPLX</span><span class="p">(</span><span class="n">JobManager_Client</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        A JobManager_Client subclass to integrate a set of complex valued ODE.</span>
+<span class="sd">        </span>
+<span class="sd">        &#39;arg&#39; and &#39;const_arg&#39; are understood as keyword arguments in oder to</span>
+<span class="sd">        call ode_wrapper.integrate_cplx. They are passed to merge_arg_and_const_arg</span>
+<span class="sd">        in order to separate the kwargs needed by ode_wrapper.integrate_cplx</span>
+<span class="sd">        from the args (as tupled) passed to the function calculating derivative of the DGL.</span>
+<span class="sd">        This tuple of parameters itself is passed as a special argument to</span>
+<span class="sd">        ode_wrapper.integrate_cplx namely &#39;args&#39;.</span>
+<span class="sd">        </span>
+<span class="sd">        If &#39;arg&#39; or &#39;const_arg&#39; provide the attribute &#39;_asdict&#39; it will be called</span>
+<span class="sd">        in order to construct dictionaries and use them for further processing.</span>
+<span class="sd">        </span>
+<span class="sd">        The following keys MUST be provided by &#39;arg&#39; or &#39;const_arg&#39;</span>
+<span class="sd">            </span>
+<span class="sd">            t0            : initial time</span>
+<span class="sd">            t1            : final time</span>
+<span class="sd">            N             : number of time steps for the solution x(t)</span>
+<span class="sd">                            t = linspace(t0, t1, N)</span>
+<span class="sd">            f             : function holding the derivatives </span>
+<span class="sd">            args          : additional positional arguments passed to f(t, x, *args)</span>
+<span class="sd">            x0            : initial value</span>
+<span class="sd">            integrator    : type of integration method</span>
+<span class="sd">                              &#39;zvode&#39;: complex version of vode,</span>
+<span class="sd">                                       in case of stiff ode, f needs to be analytic</span>
+<span class="sd">                                       see also scipy.integrate.ode -&gt; &#39;zvode&#39;</span>
+<span class="sd">                                       most efficient for complex ODE</span>
+<span class="sd">                              &#39;vode&#39;, &#39;lsoda&#39;: both do automatic converkwargs.pop(&#39;args&#39;)sion from the</span>
+<span class="sd">                                       complex ODE to the doubly dimensioned real</span>
+<span class="sd">                                       system of ODE, and use the corresponding real</span>
+<span class="sd">                                       integrator methods.</span>
+<span class="sd">                                       Might be of the order of one magnitude slower</span>
+<span class="sd">                                       that &#39;zvode&#39;. Consider using Integration_Client_REAL</span>
+<span class="sd">                                       in the first place.  </span>
+<span class="sd">                                       </span>
+<span class="sd">        optional keys are:</span>
+<span class="sd">            verbose        : default 0</span>
+<span class="sd">            integrator related arguments (see the scipy doc ODE)</span>
+<span class="sd">            </span>
+<span class="sd">        The key &#39;args&#39; itself (should be tuple) will be merged as</span>
+<span class="sd">        kwargs[&#39;args&#39;] = arg[&#39;args&#39;] + const_arg[&#39;args&#39;]  </span>
+<span class="sd">        which means that the call signature of f has to be</span>
+<span class="sd">        f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...). </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Integration_Client_CPLX</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
+        <span class="c"># named tupled to dict conversion moved to merge_arg_and_const_arg</span>
+        <span class="n">args_dgl</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="n">merge_arg_and_const_arg</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">)</span>
+        <span class="n">m</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;N&#39;</span><span class="p">]</span>
+       
+        <span class="c"># t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs</span>
+        <span class="k">return</span> <span class="n">ode_wrapper</span><span class="o">.</span><span class="n">integrate_cplx</span><span class="p">(</span><span class="n">c</span><span class="o">=</span><span class="n">c</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args_dgl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    
+    
+    </div>
+<div class="viewcode-block" id="Integration_Client_REAL"><a class="viewcode-back" href="../../index.html#jobmanager.clients.Integration_Client_REAL">[docs]</a><span class="k">class</span> <span class="nc">Integration_Client_REAL</span><span class="p">(</span><span class="n">JobManager_Client</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        A JobManager_Client subclass to integrate a set of complex real ODE.</span>
+<span class="sd">        </span>
+<span class="sd">        same behavior as described for Integration_Client_CPLX except</span>
+<span class="sd">        that &#39;vode&#39; and &#39;lsoda&#39; do not do any wrapping, so there is no</span>
+<span class="sd">        performance issue and &#39;zvode&#39; is obviously not supported. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Integration_Client_REAL</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
+        <span class="c"># named tupled to dict conversion moved to merge_arg_and_const_arg</span>
+        <span class="n">args_dgl</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="n">merge_arg_and_const_arg</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">)</span>
+        <span class="n">m</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;N&#39;</span><span class="p">]</span>
+        
+        <span class="c"># t0, t1, N, f, args, x0, integrator, verbose, c, **kwargs</span>
+        <span class="k">return</span> <span class="n">ode_wrapper</span><span class="o">.</span><span class="n">integrate_real</span><span class="p">(</span><span class="n">c</span><span class="o">=</span><span class="n">c</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args_dgl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    
+    
+    </div>
+<span class="k">class</span> <span class="nc">FunctionCall_Client</span><span class="p">(</span><span class="n">JobManager_Client</span><span class="p">):</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="s">&#39;_asdict&#39;</span><span class="p">):</span>
+            <span class="n">arg</span> <span class="o">=</span> <span class="n">arg</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">const_arg</span><span class="p">,</span> <span class="s">&#39;_asdict&#39;</span><span class="p">):</span>
+            <span class="n">const_arg</span> <span class="o">=</span> <span class="n">const_arg</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()</span>     
+        
+        <span class="n">f</span> <span class="o">=</span> <span class="n">const_arg</span><span class="p">[</span><span class="s">&#39;f&#39;</span><span class="p">]</span>
+        <span class="n">f_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">f_kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+        <span class="n">f_kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">const_arg</span><span class="p">)</span>
+        <span class="n">f_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s">&#39;f&#39;</span><span class="p">)</span>
+        <span class="n">f_kwargs</span><span class="p">[</span><span class="s">&#39;__c&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span>
+        <span class="n">f_kwargs</span><span class="p">[</span><span class="s">&#39;__m&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span>
+        
+        <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="o">**</span><span class="n">f_kwargs</span><span class="p">)</span>
+        
+        
+    
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Richard Hartmann.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

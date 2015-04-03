@@ -1,0 +1,190 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>jobmanager.servers &mdash; jobmanager 0.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="jobmanager 0.1.0 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for jobmanager.servers</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">from</span> <span class="nn">.jobmanager</span> <span class="kn">import</span> <span class="n">JobManager_Server</span>
+<span class="kn">import</span> <span class="nn">pickle</span> 
+
+<div class="viewcode-block" id="recursive_scan_for_instance"><a class="viewcode-back" href="../../index.html#jobmanager.servers.recursive_scan_for_instance">[docs]</a><span class="k">def</span> <span class="nf">recursive_scan_for_instance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">explicit_exclude</span> <span class="o">=</span> <span class="bp">None</span> <span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        try to do some recursive check to see whether &#39;obj&#39; is of type</span>
+<span class="sd">        &#39;type&#39; or contains items of &#39;type&#39; type.</span>
+<span class="sd">        </span>
+<span class="sd">        if obj is a mapping (like dict) this will only check</span>
+<span class="sd">        for item iterated over via</span>
+<span class="sd">        </span>
+<span class="sd">            for item in obj</span>
+<span class="sd">            </span>
+<span class="sd">        which corresponds to the keys in the dict case.</span>
+<span class="sd">        </span>
+<span class="sd">        The explicit_exclude argument may be a tuple of types for</span>
+<span class="sd">        some explicit checking in the sense that if obj is an</span>
+<span class="sd">        instance of one of the type given by explicit_exclude</span>
+<span class="sd">        we know it is NOT an instance of type. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c"># check this object for type</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="c"># check for some explicit types in order to conclude</span>
+    <span class="c"># that obj is not of type</span>
+    <span class="c"># see dict example</span>
+    <span class="k">if</span> <span class="n">explicit_exclude</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">explicit_exclude</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+
+    <span class="c"># if not of desired type, try to iterate and check each item for type</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">obj</span><span class="p">:</span>
+            <span class="c"># return True, if object is of type or contains type </span>
+            <span class="k">if</span> <span class="n">recursive_scan_for_instance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="o">==</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">True</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+    <span class="c"># either object is not iterable and not of type, or each item is not of type -&gt; return False    </span>
+    <span class="k">return</span> <span class="bp">False</span>
+</div>
+<span class="k">def</span> <span class="nf">recursive_scan_for_dict_instance</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+    <span class="c"># here we explicitly check against the &#39;str&#39; class</span>
+    <span class="c"># as it is iterable, but can not contain an dict as item, only characters</span>
+    <span class="k">return</span> <span class="n">recursive_scan_for_instance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="n">explicit_exclude</span><span class="o">=</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="p">))</span>
+            
+<span class="k">def</span> <span class="nf">data_as_binary_key</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="c"># since the hash value of a string is randomly seeded each time python</span>
+    <span class="c"># is started -&gt; the order of the entries in a dict is not guaranteed</span>
+    <span class="c"># and therefore its binary representation may vary</span>
+    <span class="c"># this forbids to use dicts as a key for persistent data structures</span>
+    <span class="k">if</span> <span class="n">recursive_scan_for_dict_instance</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;data used as &#39;key&#39; must not include dictionaries!&quot;</span><span class="p">)</span>
+    
+    <span class="c"># protocol 2 ensures backwards compatibility </span>
+    <span class="c"># (at least here) down to Python 2.3</span>
+    <span class="k">return</span> <span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">PersistentData_Server</span><span class="p">(</span><span class="n">JobManager_Server</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> 
+                 <span class="n">persistent_data_structure</span><span class="p">,</span>
+                 <span class="n">authkey</span><span class="p">,</span> 
+                 <span class="n">const_arg</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">port</span><span class="o">=</span><span class="mi">42524</span><span class="p">,</span> 
+                 <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> 
+                 <span class="n">msg_interval</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> 
+                 <span class="n">fname_dump</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">speed_calc_cycles</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+                 <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+         
+        <span class="n">JobManager_Server</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">authkey</span><span class="p">,</span> <span class="n">const_arg</span><span class="o">=</span><span class="n">const_arg</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">msg_interval</span><span class="o">=</span><span class="n">msg_interval</span><span class="p">,</span> <span class="n">fname_dump</span><span class="o">=</span><span class="n">fname_dump</span><span class="p">,</span> <span class="n">speed_calc_cycles</span><span class="o">=</span><span class="n">speed_calc_cycles</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pds</span> <span class="o">=</span> <span class="n">persistent_data_structure</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">overwrite</span> <span class="o">=</span> <span class="n">overwrite</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">overwrite</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}: overwriting existing data is ENABLED&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_identifier</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}: overwriting existing data is DISABLED&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_identifier</span><span class="p">))</span>
+         
+    <span class="k">def</span> <span class="nf">process_new_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pds</span><span class="p">[</span><span class="n">data_as_binary_key</span><span class="p">(</span><span class="n">arg</span><span class="o">.</span><span class="n">id</span><span class="p">)]</span> <span class="o">=</span> <span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">put_arg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
+        <span class="n">a_bin</span> <span class="o">=</span> <span class="n">data_as_binary_key</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">overwrite</span> <span class="ow">or</span> <span class="p">(</span><span class="ow">not</span> <span class="n">a_bin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">pds</span><span class="p">):</span>
+            <span class="n">JobManager_Server</span><span class="o">.</span><span class="n">put_arg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        
+        <span class="k">return</span> <span class="bp">False</span>
+        
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Richard Hartmann.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,511 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>jobmanager.persistentData &mdash; jobmanager 0.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="jobmanager 0.1.0 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for jobmanager.persistentData</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">sqlitedict</span> <span class="kn">as</span> <span class="nn">sqd</span>
+<span class="kn">from</span> <span class="nn">os.path</span> <span class="kn">import</span> <span class="n">abspath</span><span class="p">,</span> <span class="n">join</span><span class="p">,</span> <span class="n">exists</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+    <span class="c"># fixes keyword problems with python 2.x</span>
+    <span class="n">os_remove</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">remove</span>
+    <span class="k">def</span> <span class="nf">new_remove</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+        <span class="n">os_remove</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">remove</span> <span class="o">=</span> <span class="n">new_remove</span>
+    
+    <span class="n">os_rmdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">rmdir</span>
+    <span class="k">def</span> <span class="nf">new_rmdir</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+        <span class="n">os_rmdir</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">rmdir</span> <span class="o">=</span> <span class="n">new_rmdir</span>
+
+<span class="n">MAGIC_SIGN</span> <span class="o">=</span> <span class="mh">0xff4a87</span>
+
+<span class="n">KEY_COUNTER</span> <span class="o">=</span> <span class="s">&#39;0&#39;</span>
+<span class="n">KEY_SUB_DATA_KEYS</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+
+<span class="n">RESERVED_KEYS</span> <span class="o">=</span> <span class="p">(</span><span class="n">KEY_COUNTER</span><span class="p">,</span> <span class="n">KEY_SUB_DATA_KEYS</span><span class="p">)</span>
+
+<div class="viewcode-block" id="PersistentDataStructure"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure">[docs]</a><span class="k">class</span> <span class="nc">PersistentDataStructure</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Note: avoid using pickled dictionaries as binary keys! The problem with dicts is</span>
+<span class="sd">        that the order of the keys, when returned as list, depends on the hash value of</span>
+<span class="sd">        the keys. If the keys are strings, the hash value will be randomly seeded for</span>
+<span class="sd">        each python session, which may lead to different binary representations of the</span>
+<span class="sd">        same dict. Therefore the same dict may actually be considered as distinct keys.</span>
+<span class="sd">        </span>
+<span class="sd">        The same hold true when using classes with default pickler routine as binary keys</span>
+<span class="sd">        (because the pickler will essentially pickle the dictionary self.__dict__).</span>
+<span class="sd">        If you want to use &quot;complicated&quot; python objects as binary keys make sure you</span>
+<span class="sd">        implement your own pickle behavior without the need of dictionaries.   </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s">&quot;./&quot;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_open</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_path</span> <span class="o">=</span> <span class="n">abspath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;given path does not exists ({} -&gt; {})&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="p">))</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">=</span> <span class="n">verbose</span>
+        
+        <span class="c"># create directory to hold sub structures</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span> <span class="o">=</span> <span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="p">,</span> <span class="s">&quot;__&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">)</span>
+        
+        <span class="c"># open actual sqltedict</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span> <span class="o">=</span> <span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span> <span class="o">+</span> <span class="s">&#39;.db&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">open</span><span class="p">()</span>
+        
+        
+        
+        <span class="k">if</span> <span class="n">KEY_COUNTER</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_COUNTER</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span> 
+           
+        <span class="k">if</span> <span class="n">KEY_SUB_DATA_KEYS</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_SUB_DATA_KEYS</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">counter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_COUNTER</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_SUB_DATA_KEYS</span><span class="p">]</span>
+
+            
+    <span class="k">def</span> <span class="nf">_consistency_check</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        
+        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+        
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__is_sub_data</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">assert</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span>
+        
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="p">)</span> <span class="o">==</span> <span class="n">c</span>
+        
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span>
+    
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">traceback</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;exit called for        {} in {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        
+<div class="viewcode-block" id="PersistentDataStructure.open"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure.open">[docs]</a>    <span class="k">def</span> <span class="nf">open</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            open the SQL database at self._filename = &lt;path&gt;/__&lt;name&gt;/&lt;name&gt;.db</span>
+<span class="sd">            as sqlitedict</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;open db                {} in {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">))</span>             
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span> <span class="o">=</span> <span class="n">sqd</span><span class="o">.</span><span class="n">SqliteDict</span><span class="p">(</span><span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span><span class="p">,</span> <span class="n">autocommit</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_open</span> <span class="o">=</span> <span class="bp">True</span>
+        </div>
+    <span class="k">def</span> <span class="nf">is_open</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_open</span>
+        
+    <span class="k">def</span> <span class="nf">is_closed</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_open</span>
+    
+    <span class="k">def</span> <span class="nf">need_open</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_closed</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;PersistentDataStructure needs to be open&quot;</span><span class="p">)</span>
+        
+<div class="viewcode-block" id="PersistentDataStructure.close"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            close the sqligtedict ans therefore the SQL database</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_open</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;closed db              {} in {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">))</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;db seem already closed {} in {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">))</span>
+            </div>
+<div class="viewcode-block" id="PersistentDataStructure.erase"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure.erase">[docs]</a>    <span class="k">def</span> <span class="nf">erase</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            removed the database file from the disk</span>
+<span class="sd">            </span>
+<span class="sd">            this is called recursively for all sub PersistentDataStructure</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;erase db               {} in {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">))</span>        
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_closed</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">open</span><span class="p">()</span>
+            
+        <span class="k">try</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;sub_data_keys:&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;call erase for key:&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="s">&quot;on file&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span><span class="p">)</span>
+                <span class="n">sub_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getData</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                <span class="n">sub_data</span><span class="o">.</span><span class="n">erase</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">rmdir</span><span class="p">(</span><span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;directory structure can not be deleted</span><span class="se">\n</span><span class="s">{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                </div>
+<div class="viewcode-block" id="PersistentDataStructure.clear"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure.clear">[docs]</a>    <span class="k">def</span> <span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            delete all entries from the db</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        
+        <span class="c"># delete all sub data</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">as</span> <span class="n">sub_data</span><span class="p">:</span>
+                <span class="n">sub_data</span><span class="o">.</span><span class="n">erase</span><span class="p">()</span>
+                        
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_COUNTER</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_SUB_DATA_KEYS</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">counter</span> <span class="o">=</span> <span class="mi">0</span>        
+</div>
+    <span class="k">def</span> <span class="nf">show_stat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">recursive</span> <span class="o">=</span> <span class="bp">False</span><span class="p">,</span> <span class="n">prepend</span> <span class="o">=</span> <span class="s">&quot;&quot;</span><span class="p">):</span>
+        <span class="n">prepend</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}: I&#39;m a pds called {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prepend</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">))</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}:     dirname  :{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prepend</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">))</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}:     filename :{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prepend</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span><span class="p">))</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        
+        <span class="n">str_key</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">bin_key</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">oth_key</span> <span class="o">=</span> <span class="mi">0</span>
+        
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">str_key</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
+                <span class="n">bin_key</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">oth_key</span> <span class="o">+=</span> <span class="mi">1</span>
+                
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}:     number of string keys: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prepend</span><span class="p">,</span> <span class="n">str_key</span><span class="p">))</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}:     number of byte   keys: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prepend</span><span class="p">,</span> <span class="n">bin_key</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">oth_key</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}:     number of other  keys: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prepend</span><span class="p">,</span> <span class="n">oth_key</span><span class="p">))</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}:     number of subdata: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prepend</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="p">)))</span>
+        <span class="k">print</span><span class="p">()</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">recursive</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
+                    <span class="n">k_from_bytes</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;show stat for subdata with key (from bytes) {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k_from_bytes</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;show stat for subdata with key {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+                    
+                            
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">getData</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">as</span> <span class="n">subdata</span><span class="p">:</span>
+                    <span class="n">subdata</span><span class="o">.</span><span class="n">show_stat</span><span class="p">(</span><span class="n">recursive</span> <span class="o">=</span> <span class="n">recursive</span><span class="p">,</span>
+                                      <span class="n">prepend</span> <span class="o">=</span> <span class="n">prepend</span> <span class="o">+</span> <span class="s">&quot;-&gt;&quot;</span><span class="p">)</span>
+            
+       
+    <span class="k">def</span> <span class="nf">__check_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            returns True if the key does NOT collide with some reserved keys</span>
+<span class="sd">            </span>
+<span class="sd">            otherwise a RuntimeError will be raised</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">in</span> <span class="n">RESERVED_KEYS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;key must not be in {} (reserved key)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">RESERVED_KEYS</span><span class="p">))</span>
+        
+        <span class="k">return</span> <span class="bp">True</span>
+    
+    <span class="k">def</span> <span class="nf">__is_sub_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            determine if the value gotten from the sqlitedict refers</span>
+<span class="sd">            to a sub PersistentDataStructure</span>
+<span class="sd">            </span>
+<span class="sd">            this is considered the case if the value itself has an index &#39;magic&#39;</span>
+<span class="sd">            whose value matches a magic sign defined by MAGIC_SIGN </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">value</span><span class="p">[</span><span class="s">&#39;magic&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">MAGIC_SIGN</span>
+            <span class="n">value</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s">&#39;magic&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+    
+    <span class="k">def</span> <span class="nf">has_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">is_subdata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span>
+        <span class="c"># return self.__is_sub_data(self.db[key])</span>
+        
+<div class="viewcode-block" id="PersistentDataStructure.setData"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure.setData">[docs]</a>    <span class="k">def</span> <span class="nf">setData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            write the key value pair to the data base</span>
+<span class="sd">            </span>
+<span class="sd">            if the key already exists, overwrite must be</span>
+<span class="sd">            set True in oder to update the data for</span>
+<span class="sd">            that key in the database </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">__check_key</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        
+        <span class="k">if</span> <span class="n">overwrite</span> <span class="ow">or</span> <span class="p">(</span><span class="ow">not</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        
+        <span class="k">return</span> <span class="bp">False</span>
+            </div>
+<div class="viewcode-block" id="PersistentDataStructure.newSubData"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure.newSubData">[docs]</a>    <span class="k">def</span> <span class="nf">newSubData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            if key is not in database</span>
+<span class="sd">            create a new database (sqlitedict)</span>
+<span class="sd">            which can be queried from this one</span>
+<span class="sd">            via the key specified </span>
+<span class="sd">            </span>
+<span class="sd">            this will automatically create a new</span>
+<span class="sd">            file where the filename is internally</span>
+<span class="sd">            managed (simple increasing number)   </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">counter</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;new sub_data with key&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;sub_data_keys are now&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="p">)</span>
+
+            <span class="n">new_name</span> <span class="o">=</span> <span class="s">&quot;{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">counter</span><span class="p">)</span>
+            <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;name&#39;</span><span class="p">:</span> <span class="n">new_name</span><span class="p">,</span> <span class="s">&#39;magic&#39;</span><span class="p">:</span> <span class="n">MAGIC_SIGN</span><span class="p">}</span>
+            
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_COUNTER</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">counter</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_SUB_DATA_KEYS</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+            <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s">&#39;magic&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">PersistentDataStructure</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="n">new_name</span><span class="p">,</span> <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">)</span> <span class="p">,</span> <span class="n">verbose</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&quot;can NOT create new SubData, key already found!&quot;</span><span class="p">)</span>
+        </div>
+    <span class="k">def</span> <span class="nf">getData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">create_sub_data</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;getData key exists&quot;</span><span class="p">)</span>
+ 
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_subdata</span><span class="p">(</span><span class="n">key</span><span class="p">):</span> 
+                <span class="n">sub_db_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s">&#39;name&#39;</span><span class="p">]</span>
+            
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;return subData stored as key&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="s">&quot;using name&quot;</span><span class="p">,</span> <span class="n">sub_db_name</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">PersistentDataStructure</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="n">sub_db_name</span><span class="p">,</span> <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dirname</span><span class="p">)</span> <span class="p">,</span> <span class="n">verbose</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;return normal value&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> 
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">create_sub_data</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
+                    <span class="n">key</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+<span class="c">#                 print(&quot;KEY NOT FOUND:&quot;)</span>
+<span class="c">#                 print(key)</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s">&quot;key not found</span><span class="se">\n</span><span class="s">{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;getData key does NOT exists -&gt; create subData&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">newSubData</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            
+<div class="viewcode-block" id="PersistentDataStructure.setDataFromSubData"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure.setDataFromSubData">[docs]</a>    <span class="k">def</span> <span class="nf">setDataFromSubData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">subData</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            set an entry of the PDS with data from an other PDS</span>
+<span class="sd">            </span>
+<span class="sd">            this means copying the appropriate file to the right place</span>
+<span class="sd">            and rename them</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__check_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>                                       <span class="c"># see if key is valid</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_subdata</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>                                    <span class="c"># check if key points to existing PDS </span>
+            <span class="k">with</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">as</span> <span class="n">pds</span><span class="p">:</span>                                  <span class="c">#</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">pds</span><span class="o">.</span><span class="n">_name</span>                                    <span class="c">#    remember its name</span>
+                <span class="n">dir_name</span> <span class="o">=</span> <span class="n">pds</span><span class="o">.</span><span class="n">_dirname</span>                             <span class="c">#    and the directory where it&#39;s in     </span>
+                <span class="n">pds</span><span class="o">.</span><span class="n">erase</span><span class="p">()</span>                                         <span class="c">#    remove the existing subData from hdd  </span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">newSubData</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="k">as</span> <span class="n">new_sub_data</span><span class="p">:</span>              <span class="c">#    create a new subData</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">new_sub_data</span><span class="o">.</span><span class="n">_name</span>                           <span class="c">#    and remember name and directory</span>
+                <span class="n">dir_name</span> <span class="o">=</span> <span class="n">new_sub_data</span><span class="o">.</span><span class="n">_dirname</span>
+                <span class="n">new_sub_data</span><span class="o">.</span><span class="n">erase</span><span class="p">()</span>
+        
+        <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">subData</span><span class="o">.</span><span class="n">_dirname</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dir_name</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dir_name</span><span class="p">,</span> <span class="n">subData</span><span class="o">.</span><span class="n">_name</span><span class="o">+</span><span class="s">&#39;.db&#39;</span><span class="p">),</span> <span class="n">dst</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dir_name</span><span class="p">,</span> <span class="n">name</span><span class="o">+</span><span class="s">&#39;.db&#39;</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">)</span> <span class="o">-</span> <span class="mi">2</span>
+            
+    <span class="c"># implements the iterator</span>
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="n">db_iter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">__iter__</span><span class="p">()</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="n">next_item</span> <span class="o">=</span> <span class="n">db_iter</span><span class="o">.</span><span class="n">__next__</span><span class="p">()</span>
+            <span class="k">while</span> <span class="n">next_item</span> <span class="ow">in</span> <span class="n">RESERVED_KEYS</span><span class="p">:</span> 
+                <span class="n">next_item</span> <span class="o">=</span> <span class="n">db_iter</span><span class="o">.</span><span class="n">__next__</span><span class="p">()</span>
+            <span class="k">yield</span> <span class="n">next_item</span> 
+    
+    <span class="c"># implements the &#39;in&#39; statement </span>
+    <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">)</span>
+            
+    <span class="c"># implements &#39;[]&#39; operator getter</span>
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__check_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">getData</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">create_sub_data</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    
+    <span class="c"># implements &#39;[]&#39; operator setter</span>
+    <span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__check_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+<span class="c">#         if key in self.db:</span>
+<span class="c">#             if self.__is_sub_data(self.db[key]):</span>
+<span class="c">#                 raise RuntimeWarning(&quot;values which hold sub_data structures can not be overwritten!&quot;)</span>
+<span class="c">#                 return None</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;set&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="s">&quot;to&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="s">&quot;in&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span><span class="p">)</span>
+            
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">PersistentDataStructure</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setDataFromSubData</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        
+        
+    <span class="c"># implements &#39;[]&#39; operator deletion</span>
+    <span class="k">def</span> <span class="nf">__delitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">need_open</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__check_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_subdata</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">as</span> <span class="n">pds</span><span class="p">:</span>
+                <span class="n">pds</span><span class="o">.</span><span class="n">erase</span><span class="p">()</span>
+            
+            <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">KEY_SUB_DATA_KEYS</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub_data_keys</span>
+                
+        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+            
+        </div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Richard Hartmann.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

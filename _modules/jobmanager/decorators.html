@@ -1,0 +1,418 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>jobmanager.decorators &mdash; jobmanager 0.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="jobmanager 0.1.0 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for jobmanager.decorators</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot; Implements decorators/wrappers for simple use-cases of jobmanager.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
+
+<span class="kn">from</span> <span class="nn">inspect</span> <span class="kn">import</span> <span class="n">getcallargs</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">progress</span>
+<span class="kn">from</span> <span class="nn">.jobmanager</span> <span class="kn">import</span> <span class="n">getCountKwargs</span><span class="p">,</span> <span class="n">validCountKwargs</span>
+
+<span class="c">#__all__ = [&quot;ProgressBar&quot;, &quot;ProgressBarOverrideCount&quot;]</span>
+
+
+<div class="viewcode-block" id="ProgressBar"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.ProgressBar">[docs]</a><span class="k">class</span> <span class="nc">ProgressBar</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; A wrapper/decorator with a text-based progress bar.</span>
+<span class="sd">    </span>
+<span class="sd">    Methods:</span>
+<span class="sd">    - __init__</span>
+<span class="sd">    - __call__</span>
+<span class="sd">    </span>
+<span class="sd">    The idea is to add a status bar for a regular</span>
+<span class="sd">    function just by wrapping the function via</span>
+<span class="sd">    python&#39;s decorator syntax.</span>
+<span class="sd">    </span>
+<span class="sd">    In order to do so, the function needs to provide some</span>
+<span class="sd">    extra information, namely the current state &#39;count&#39; and</span>
+<span class="sd">    the final state &#39;max_count&#39;. Simply expand your function</span>
+<span class="sd">    by these two additional keyword arguments (or other pairs</span>
+<span class="sd">    specified in jobmanager.validCountKwargs) and set their</span>
+<span class="sd">    values during the calculation (see example 1 below). In that</span>
+<span class="sd">    manner the decorated function as well as the not decorated</span>
+<span class="sd">    function can simple be called as one would not care about</span>
+<span class="sd">    any status information.</span>
+<span class="sd">    </span>
+<span class="sd">    Alternatively one could explicitly set count and max_count</span>
+<span class="sd">    in the function call, which circumvents the need to change</span>
+<span class="sd">    the value of max_count AFTER instantiation of the progressBar.    </span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+<span class="sd">    Example 1</span>
+<span class="sd">    ---------</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; from jobmanager.decorators import ProgressBar</span>
+<span class="sd">    &gt;&gt;&gt; from jobmanager.decorators.progress import UnsignedIntValue</span>
+<span class="sd">    &gt;&gt;&gt; import time</span>
+<span class="sd">    &gt;&gt;&gt; </span>
+<span class="sd">    &gt;&gt;&gt; @ProgressBar</span>
+<span class="sd">    &gt;&gt;&gt; def my_func_1(arg, </span>
+<span class="sd">    &gt;&gt;&gt;               kwarg     = &quot;1&quot;, </span>
+<span class="sd">    &gt;&gt;&gt;               count     = UnsignedIntValue(val=0), </span>
+<span class="sd">    &gt;&gt;&gt;               max_count = UnsignedIntValue(val=1)):</span>
+<span class="sd">    &gt;&gt;&gt;     # max_count should as default always be set to a value &gt; 0 </span>
+<span class="sd">    &gt;&gt;&gt;     maxval = 100</span>
+<span class="sd">    &gt;&gt;&gt;     max_count.value = maxval</span>
+<span class="sd">    &gt;&gt;&gt; </span>
+<span class="sd">    &gt;&gt;&gt;     for i in range(maxval):</span>
+<span class="sd">    &gt;&gt;&gt;         count.value += 1</span>
+<span class="sd">    &gt;&gt;&gt;         time.sleep(0.02)</span>
+<span class="sd">    &gt;&gt;&gt; </span>
+<span class="sd">    &gt;&gt;&gt;     return arg+kwarg</span>
+<span class="sd">    &gt;&gt;&gt; </span>
+<span class="sd">    &gt;&gt;&gt; my_func_1(&quot;one argument&quot;, kwarg=&quot; second argument&quot;)</span>
+<span class="sd">    # The progress of my_func is monitored on stdout.</span>
+<span class="sd">    one argument second argument</span>
+<span class="sd">    </span>
+<span class="sd">    Example 2</span>
+<span class="sd">    ---------</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; from jobmanager.decorators import ProgressBar</span>
+<span class="sd">    &gt;&gt;&gt; from jobmanager.decorators.progress import UnsignedIntValue</span>
+<span class="sd">    &gt;&gt;&gt; import time</span>
+<span class="sd">    &gt;&gt;&gt; </span>
+<span class="sd">    &gt;&gt;&gt; @ProgressBar</span>
+<span class="sd">    &gt;&gt;&gt; def my_func(c, m):</span>
+<span class="sd">    &gt;&gt;&gt;     for i in range(m.value):</span>
+<span class="sd">    &gt;&gt;&gt;         c.value = i</span>
+<span class="sd">    &gt;&gt;&gt;         time.sleep(0.02)</span>
+<span class="sd">    &gt;&gt;&gt;             </span>
+<span class="sd">    &gt;&gt;&gt; c = progress.UnsignedIntValue(val=0)</span>
+<span class="sd">    &gt;&gt;&gt; m = progress.UnsignedIntValue(val=100)</span>
+<span class="sd">    &gt;&gt;&gt; my_func(c, m)</span>
+<span class="sd">    </span>
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    You can also use this class as a wrapper and tune parameters of the</span>
+<span class="sd">    progress bar.</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; wrapper = ProgressBar(my_func, interval=.1)</span>
+<span class="sd">    &gt;&gt;&gt; result = wrapper(&quot;wrapped function&quot;, kwarg=&quot; test&quot;)</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Initiates the wrapper objet.</span>
+<span class="sd">        </span>
+<span class="sd">        A function can be wrapped by decorating it with</span>
+<span class="sd">        `ProgressBar` or by instantiating `ProgressBar` and</span>
+<span class="sd">        subsequently calling it with the arguments for `func`.</span>
+<span class="sd">        </span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        func : callable</span>
+<span class="sd">            The method that is wrapped/decorated. It must accept the</span>
+<span class="sd">            two keyword-arguments `count` and `max_count` (or `c` and</span>
+<span class="sd">            `m`). The method `func` increments `count.value` up to</span>
+<span class="sd">            `max_count.value` (`c.value`, `m.value`).</span>
+<span class="sd">        **kwargs : dict</span>
+<span class="sd">            Keyword-arguments for `jobmanager.ProgressBar`.</span>
+<span class="sd">        </span>
+<span class="sd">        </span>
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        `func` must accept `count` and `max_count` (or `c`, `m`) and </span>
+<span class="sd">        properly set their `.value` properties. This wrapper</span>
+<span class="sd">        automatically creates the necessary `multiprocessing.Value`</span>
+<span class="sd">        objects.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__name__</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">__name__</span> <span class="c"># act like the function</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">func</span> <span class="o">=</span> <span class="n">func</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="c"># Check arguments</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cm</span> <span class="o">=</span> <span class="n">getCountKwargs</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cm</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                  <span class="s">&quot;The wrapped function `{}` &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">func_name</span><span class="p">)</span><span class="o">+</span>
+                  <span class="s">&quot;must accept one of the following pairs of &quot;</span><span class="o">+</span>
+                  <span class="s">&quot;keyword arguments:{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">validCountKwargs</span><span class="p">))</span>
+
+        
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Calls `func` - previously defined in `__init__`.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        *args : list</span>
+<span class="sd">            Arguments for `func`.</span>
+<span class="sd">        **kwargs : dict</span>
+<span class="sd">            Keyword-arguments for `func`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c"># Bind the args and kwds to the argument names of self.func</span>
+        <span class="n">callargs</span> <span class="o">=</span> <span class="n">getcallargs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        
+        <span class="n">count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="n">max_count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+         
+        <span class="k">with</span> <span class="n">progress</span><span class="o">.</span><span class="n">ProgressBar</span><span class="p">(</span><span class="n">count</span>     <span class="o">=</span> <span class="n">count</span><span class="p">,</span> 
+                                  <span class="n">max_count</span> <span class="o">=</span> <span class="n">max_count</span><span class="p">,</span>
+                                  <span class="n">prepend</span>   <span class="o">=</span> <span class="s">&quot;{} &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__name__</span><span class="p">),</span>
+                                  <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">as</span> <span class="n">pb</span><span class="p">:</span>
+            <span class="n">pb</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="o">**</span><span class="n">callargs</span><span class="p">)</span>
+
+
+</div>
+<div class="viewcode-block" id="ProgressBarExtended"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.ProgressBarExtended">[docs]</a><span class="k">class</span> <span class="nc">ProgressBarExtended</span><span class="p">(</span><span class="n">ProgressBar</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        extends the ProgressBar such that</span>
+<span class="sd">        </span>
+<span class="sd">        on can turn of the ProgressBar by giving an extra argument,</span>
+<span class="sd">        namely &#39;progress_bar_off&#39; and set its value to &#39;True&#39;.</span>
+<span class="sd">        </span>
+<span class="sd">        further there will be an additional argument passed to the function</span>
+<span class="sd">        called &#39;progress_bar&#39; which allows to stop the progress bar from</span>
+<span class="sd">        within the function. note that there will be an function signature error</span>
+<span class="sd">        if the function does not accept the extra argument &#39;progress_bar&#39;. So a</span>
+<span class="sd">        general **kwargs at the end of the functions arguments will help.</span>
+<span class="sd">        That is also the reason why the extended version comes in an extra class</span>
+<span class="sd">        because it might otherwise break compatibility.</span>
+<span class="sd">        </span>
+<span class="sd">        Example</span>
+<span class="sd">        -------</span>
+<span class="sd">        </span>
+<span class="sd">        &gt;&gt;&gt; import jobmanager as jm</span>
+<span class="sd">        </span>
+<span class="sd">        &gt;&gt;&gt; c = jm.progress.UnsignedIntValue(val=0)</span>
+<span class="sd">        &gt;&gt;&gt; m = jm.progress.UnsignedIntValue(val=20)</span>
+<span class="sd">    </span>
+<span class="sd">        &gt;&gt;&gt; @jm.decorators.ProgressBarExtended    # choose &#39;ProgressBarExtended&#39;</span>
+<span class="sd">        &gt;&gt;&gt; def my_func_kwargs(c, m, **kwargs):   # simply add &#39;**kwargs&#39; here</span>
+<span class="sd">        &gt;&gt;&gt;     for i in range(m.value):</span>
+<span class="sd">        &gt;&gt;&gt;         c.value = i+1</span>
+<span class="sd">        &gt;&gt;&gt;         time.sleep(0.1)</span>
+<span class="sd">        </span>
+<span class="sd">        &gt;&gt;&gt; # same as when using ProgressBar</span>
+<span class="sd">        &gt;&gt;&gt; my_func_kwargs(c, m)</span>
+<span class="sd">        </span>
+<span class="sd">        &gt;&gt;&gt; # a simple kwarg will switch the progressBar off</span>
+<span class="sd">        &gt;&gt;&gt; my_func_kwargs(c, m, progress_bar_off=True)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c"># Bind the args and kwds to the argument names of self.func</span>
+        <span class="n">callargs</span> <span class="o">=</span> <span class="n">getcallargs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        
+        <span class="n">progress_bar_off</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">progress_bar_off</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="s">&#39;progress_bar_off&#39;</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">pass</span>
+    
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">progress_bar_off</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="s">&#39;kwargs&#39;</span><span class="p">][</span><span class="s">&#39;progress_bar_off&#39;</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">pass</span>
+                    
+        <span class="k">if</span> <span class="n">progress_bar_off</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="o">**</span><span class="n">callargs</span><span class="p">)</span>
+        
+        
+        <span class="n">count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="n">max_count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+         
+        <span class="k">with</span> <span class="n">progress</span><span class="o">.</span><span class="n">ProgressBar</span><span class="p">(</span><span class="n">count</span>     <span class="o">=</span> <span class="n">count</span><span class="p">,</span> 
+                                  <span class="n">max_count</span> <span class="o">=</span> <span class="n">max_count</span><span class="p">,</span>
+                                  <span class="n">prepend</span>   <span class="o">=</span> <span class="s">&quot;{} &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__name__</span><span class="p">),</span>
+                                  <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">as</span> <span class="n">pb</span><span class="p">:</span>
+            <span class="n">pb</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="n">callargs</span><span class="p">[</span><span class="s">&#39;progress_bar&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pb</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="o">**</span><span class="n">callargs</span><span class="p">)</span>
+
+
+</div>
+<span class="k">class</span> <span class="nc">ProgressBarOverrideCount</span><span class="p">(</span><span class="n">ProgressBar</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Calls `func` - previously defined in `__init__`.</span>
+<span class="sd">        </span>
+<span class="sd">        same as in ProgressBar class except that the default</span>
+<span class="sd">        value `None` of count and max_count will cause</span>
+<span class="sd">        count to be set to `UnsignedIntValue(val=0)`</span>
+<span class="sd">        and max_count to `UnsignedIntValue(val=1)`.</span>
+<span class="sd">        </span>
+<span class="sd">        So even if the function to be decorated</span>
+<span class="sd">        will be called with arguments c = None and m = None</span>
+<span class="sd">        the actual call due to the modification of the decorator</span>
+<span class="sd">        will be with arguments c = UIV(0) and m = UIV(1).</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        *args : list</span>
+<span class="sd">            Arguments for `func`.</span>
+<span class="sd">        **kwargs : dict</span>
+<span class="sd">            Keyword-arguments for `func`.</span>
+<span class="sd">            </span>
+<span class="sd">        Example</span>
+<span class="sd">        -------</span>
+<span class="sd">        </span>
+<span class="sd">        see tests/test_decorators.py</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c"># Bind the args and kwds to the argument names of self.func</span>
+        <span class="n">callargs</span> <span class="o">=</span> <span class="n">getcallargs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        
+        <span class="n">count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="n">count</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">count</span> <span class="o">=</span> <span class="n">progress</span><span class="o">.</span><span class="n">UnsignedIntValue</span><span class="p">(</span><span class="n">val</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">count</span>
+        
+        <span class="n">max_count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="n">max_count</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">max_count</span> <span class="o">=</span> <span class="n">progress</span><span class="o">.</span><span class="n">UnsignedIntValue</span><span class="p">(</span><span class="n">val</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">max_count</span>
+         
+        <span class="k">with</span> <span class="n">progress</span><span class="o">.</span><span class="n">ProgressBar</span><span class="p">(</span><span class="n">count</span>     <span class="o">=</span> <span class="n">count</span><span class="p">,</span> 
+                                  <span class="n">max_count</span> <span class="o">=</span> <span class="n">max_count</span><span class="p">,</span>
+                                  <span class="n">prepend</span>   <span class="o">=</span> <span class="s">&quot;{} &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__name__</span><span class="p">),</span>
+                                  <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">as</span> <span class="n">pb</span><span class="p">:</span>
+            <span class="n">pb</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="o">**</span><span class="n">callargs</span><span class="p">)</span>    
+
+    
+    
+<div class="viewcode-block" id="decorate_module_ProgressBar"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.decorate_module_ProgressBar">[docs]</a><span class="k">def</span> <span class="nf">decorate_module_ProgressBar</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">decorator</span><span class="o">=</span><span class="n">ProgressBar</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Decorates all decoratable functions in a module with a</span>
+<span class="sd">    ProgressBar.</span>
+<span class="sd">    </span>
+<span class="sd">    You can prevent wrapping of a function by not specifying the keyword</span>
+<span class="sd">    arguments as defined in `jobmanager.jobmanager.validCountKwargs` or</span>
+<span class="sd">    by defining a function `_jm_decorate_{func}&quot;.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    module : Python module</span>
+<span class="sd">        The module whose functions should be decorated.</span>
+<span class="sd">    decorator : bool</span>
+<span class="sd">        Specifies a decorator in jobmanager.decorators that should be</span>
+<span class="sd">        used.</span>
+<span class="sd">    **kwargs : dict</span>
+<span class="sd">        Keyword arguments to the ProgressBar.</span>
+<span class="sd">    </span>
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Decorating nested functions in a module might lead to unexpected</span>
+<span class="sd">    behavior.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&quot;override_count&quot;</span><span class="p">):</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;`override_count` will be removed. Please use &quot;</span><span class="o">+</span>\
+                  <span class="s">&quot;`decorator=jm.decorators.ProgressBarOverrideCount`.&quot;</span><span class="p">,</span>
+                  <span class="ne">FutureWarning</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;override_count&quot;</span><span class="p">]:</span>
+            <span class="n">decorator</span> <span class="o">=</span> <span class="n">ProgressBarOverrideCount</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">decorator</span> <span class="o">=</span> <span class="n">ProgressBar</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s">&quot;override_count&quot;</span><span class="p">)</span>
+    
+    <span class="n">vdict</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">__dict__</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">vdict</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">vdict</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="s">&quot;__call__&quot;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">getCountKwargs</span><span class="p">(</span><span class="n">vdict</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">newid</span> <span class="o">=</span> <span class="s">&quot;_jm_decorate_{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">newid</span><span class="p">):</span>
+                    <span class="n">warings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;Wrapping of {} prevented by module.&quot;</span><span class="o">.</span>
+                                 <span class="n">format</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c"># copy old function</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">newid</span><span class="p">,</span> <span class="n">vdict</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
+                    <span class="c"># create new function</span>
+                    <span class="n">wrapper</span> <span class="o">=</span> <span class="n">decorator</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">newid</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                    <span class="c"># set new function</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">wrapper</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&quot;verbose&quot;</span><span class="p">)</span> <span class="ow">and</span>
+                        <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;verbose&quot;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+                        <span class="k">print</span><span class="p">(</span><span class="s">&quot;Jobmanager wrapped {}.{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                                                  <span class="n">module</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">key</span><span class="p">))</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">jobmanager 0.1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Richard Hartmann.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
