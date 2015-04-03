@@ -16,7 +16,25 @@ DIR = realpath(dirname(__file__))
 
 longdescription = open(join(DIR, "doc/description.txt"), "r").read().strip()
 
+
+class PyDocGitHub(Command):
+    """ Upload the docs to GitHub gh-pages branch
+    """
+    user_options = []
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        errno = subprocess.call([sys.executable, 'doc/commit_gh-pages.py'])
+        raise SystemExit(errno)
+
+
 class PyTest(Command):
+    """ Perform pytests
+    """
     user_options = []
     def initialize_options(self):
         pass
@@ -63,7 +81,8 @@ setup(
         'Intended Audience :: Science/Research'
                  ],
     platforms=['ALL'],
-    cmdclass = {'test': PyTest},
+    cmdclass = {'test': PyTest
+                'commit_doc': PyDocGitHub},},
     )
 
 
