@@ -10,7 +10,7 @@ import warnings
 from . import progress
 from .jobmanager import getCountKwargs, validCountKwargs
 
-__all__ = ["ProgressBar", "ProgressBarOverrideCount"]
+#__all__ = ["ProgressBar", "ProgressBarOverrideCount"]
 
 
 class ProgressBar(object):
