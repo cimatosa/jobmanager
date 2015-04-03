@@ -6,21 +6,35 @@ import subprocess as sp
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# commit changes of master
-print("Automatically commiting/pushing changes to master")
-sp.check_output(["git", 'commit', '-a', '-m', '"automated commit before doc upload"'])
-sp.check_output(["git", 'push'])
 
-# checkout the gh-pages branch
-sp.check_output(["git", 'checkout', 'gh-pages'])
+def checkout_master():
+    # go back to master
+    sp.check_output(["git", 'checkout', 'master'])
+
+    print("Applying saved stash.")
+    # get last stash
+    sp.check_output(["git", 'stash', 'apply'])
+
+
+def checkout_ghpages():
+    # commit changes of master
+    print("Automatically stashing current changes.")
+    sp.check_output(["git", 'stash'])
+
+    # checkout the gh-pages branch
+    sp.check_output(["git", 'checkout', 'gh-pages'])
+
+checkout_ghpages()
+
 
 # copy built files
-if os.system("cp -r ./build/html/* ../") != 0:
+if os.system("cp -r ./build/sphinx/html/* ../") != 0:
+    checkout_master()
     sys.exit()
 
-for item in os.listdir("./build/html/"):
+for item in os.listdir("./build/sphinx/html/"):
     # Make sure we have added all files from html
-    os.system("git add {}".format(item)
+    os.system("git add {}".format(item))
 
 # commit changes
 if len(sp.check_output(["git", "diff"]).strip()) > 0:
@@ -32,5 +46,4 @@ try:
 except:
     print("Could not push to gh-pages.")
 
-# go back to master
-sp.check_output(["git", 'checkout', 'master'])
+checkout_master()

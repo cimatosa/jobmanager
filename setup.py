@@ -81,8 +81,9 @@ setup(
         'Intended Audience :: Science/Research'
                  ],
     platforms=['ALL'],
-    cmdclass = {'test': PyTest
-                'commit_doc': PyDocGitHub},},
+    cmdclass = {'test': PyTest,
+                'commit_doc': PyDocGitHub,
+                },
     )
 
 
