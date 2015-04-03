@@ -34,10 +34,10 @@ if os.system("cp -r ./build/sphinx/html/* ../") != 0:
 
 for item in os.listdir("./build/sphinx/html/"):
     # Make sure we have added all files from html
-    os.system("git add {}".format(item))
+    os.system("git add ../{}".format(item))
 
 # commit changes
-if len(sp.check_output(["git", "diff"]).strip()) > 0:
+if len(sp.check_output(["git", "diff", "HEAD"]).strip()) > 0:
     sp.check_output(["git", 'commit', '-a', '-m', '"automated doc upload"'])
 
 # push
