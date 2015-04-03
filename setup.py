@@ -58,33 +58,33 @@ except:
     version = "unknown"
 
 
-
-setup(
-    name=name,
-    author=author,
-    url='https://github.com/cimatosa/jobmanager',
-    version=version,
-    packages=[name],
-    package_dir={name: name},
-    license="MIT",
-    description=description,
-    long_description=longdescription,
-    install_requires=["sqlitedict>=1.2.0", "NumPy>=1.5.1"],
-    tests_require=["psutil"],
-    keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
-              "progress", "manager", "job", "persistent data", "scheduler"],
-    classifiers= [
-        'Operating System :: OS Independent',
-        #'Programming Language :: Python :: 2.7', #Todo
-        #'Programming Language :: Python :: 3.2', # also not very well tested
-        #'Programming Language :: Python :: 3.3', # also not very well tested
-        'Programming Language :: Python :: 3.4',
-        'Intended Audience :: Science/Research'
-                 ],
-    platforms=['ALL'],
-    cmdclass = {'test': PyTest,
-                'commit_doc': PyDocGitHub,
-                },
-    )
+if __name__ == "__main__":
+    setup(
+        name=name,
+        author=author,
+        url='https://github.com/cimatosa/jobmanager',
+        version=version,
+        packages=[name],
+        package_dir={name: name},
+        license="MIT",
+        description=description,
+        long_description=longdescription,
+        install_requires=["sqlitedict>=1.2.0", "NumPy>=1.5.1"],
+        tests_require=["psutil"],
+        keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
+                  "progress", "manager", "job", "persistent data", "scheduler"],
+        classifiers= [
+            'Operating System :: OS Independent',
+            #'Programming Language :: Python :: 2.7', #Todo
+            #'Programming Language :: Python :: 3.2', # also not very well tested
+            #'Programming Language :: Python :: 3.3', # also not very well tested
+            'Programming Language :: Python :: 3.4',
+            'Intended Audience :: Science/Research'
+                     ],
+        platforms=['ALL'],
+        cmdclass = {'test': PyTest,
+                    'commit_doc': PyDocGitHub,
+                    },
+        )
 
 
