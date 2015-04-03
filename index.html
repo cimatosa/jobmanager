@@ -71,11 +71,10 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#core-modules">Core modules</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#jobmanager">jobmanager</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#module-jobmanager.jobmanager">clients</a><ul class="simple">
+<li class="toctree-l3"><a class="reference internal" href="#module-jobmanager.jobmanager">jobmanager</a><ul class="simple">
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#id7">clients</a><ul class="simple">
+<li class="toctree-l3"><a class="reference internal" href="#module-jobmanager.clients">clients</a><ul class="simple">
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#module-jobmanager.servers">servers</a></li>
@@ -86,7 +85,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#module-simple_example">simple example</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id10">decorators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id9">decorators</a></li>
 </ul>
 </li>
 </ul>
@@ -122,6 +121,7 @@ and <a class="reference internal" href="#module-jobmanager.clients" title="jobma
 <p>Progress classes are implemented in the <a class="reference internal" href="#module-jobmanager.progress" title="jobmanager.progress"><tt class="xref py py-mod docutils literal"><span class="pre">jobmanager.progress</span></tt></a>
 submodule. Intuitive access to progress bars is facilitated with
 decorators (<a class="reference internal" href="#module-jobmanager.decorators" title="jobmanager.decorators"><tt class="xref py py-mod docutils literal"><span class="pre">jobmanager.decorators</span></tt></a>).</p>
+<p>Fork <a class="reference external" href="https://github.com/cimatosa/jobmanager/">jobmanager on GitHib</a>.</p>
 </div>
 <div class="section" id="module-jobmanager.progress">
 <span id="progress-monitoring"></span><h2>Progress monitoring<a class="headerlink" href="#module-jobmanager.progress" title="Permalink to this headline">¶</a></h2>
@@ -830,11 +830,8 @@ f_prime R x R^n x R^n -&gt; R^n x R^n</p>
 </div>
 <div class="section" id="core-modules">
 <h2>Core modules<a class="headerlink" href="#core-modules" title="Permalink to this headline">¶</a></h2>
-<div class="section" id="jobmanager">
-<h3>jobmanager<a class="headerlink" href="#jobmanager" title="Permalink to this headline">¶</a></h3>
-</div>
 <div class="section" id="module-jobmanager.jobmanager">
-<span id="clients"></span><h3>clients<a class="headerlink" href="#module-jobmanager.jobmanager" title="Permalink to this headline">¶</a></h3>
+<span id="jobmanager"></span><h3>jobmanager<a class="headerlink" href="#module-jobmanager.jobmanager" title="Permalink to this headline">¶</a></h3>
 <p>jobmanager module</p>
 <p>Richard Hartmann 2014</p>
 <p>This module provides an easy way to implement distributed computing
@@ -1089,9 +1086,9 @@ YYYY_MM_DD_hh_mm_ss_pid</p>
 </dd></dl>
 
 </div>
-<div class="section" id="id7">
-<h3>clients<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h3>
-<span class="target" id="module-jobmanager.clients"></span><p>The clients module</p>
+<div class="section" id="module-jobmanager.clients">
+<span id="clients"></span><h3>clients<a class="headerlink" href="#module-jobmanager.clients" title="Permalink to this headline">¶</a></h3>
+<p>The clients module</p>
 <p>This module provides special subclasses of the JobManager_Client</p>
 <dl class="class">
 <dt id="jobmanager.clients.Integration_Client_CPLX">
@@ -1113,7 +1110,7 @@ N             : number of time steps for the solution x(t)</p>
 <blockquote>
 <div>t = linspace(t0, t1, N)</div></blockquote>
 <p>f             : function holding the derivatives 
-args          : additional positional arguments passed to f(t, x, <a href="#id8"><span class="problematic" id="id9">*</span></a>args)
+args          : additional positional arguments passed to f(t, x, <a href="#id7"><span class="problematic" id="id8">*</span></a>args)
 x0            : initial value
 integrator    : type of integration method</p>
 <blockquote>
@@ -1469,8 +1466,8 @@ and rename them</p>
 </pre></div>
 </div>
 </div>
-<div class="section" id="id10">
-<h3>decorators<a class="headerlink" href="#id10" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="id9">
+<h3>decorators<a class="headerlink" href="#id9" title="Permalink to this headline">¶</a></h3>
 <span class="target" id="module-wrapper_example"></span><p>Download: <a class="reference download internal" href="_downloads/wrapper_example.py"><tt class="xref download docutils literal"><span class="pre">../examples/wrapper_example.py</span></tt></a>.</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
 <span class="c"># -*- coding: utf-8 -*-</span>
@@ -1614,11 +1611,10 @@ and rename them</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#core-modules">Core modules</a><ul>
-<li><a class="reference internal" href="#jobmanager">jobmanager</a></li>
-<li><a class="reference internal" href="#module-jobmanager.jobmanager">clients</a><ul>
+<li><a class="reference internal" href="#module-jobmanager.jobmanager">jobmanager</a><ul>
 </ul>
 </li>
-<li><a class="reference internal" href="#id7">clients</a><ul>
+<li><a class="reference internal" href="#module-jobmanager.clients">clients</a><ul>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-jobmanager.servers">servers</a></li>
@@ -1627,7 +1623,7 @@ and rename them</p>
 </li>
 <li><a class="reference internal" href="#examples">Examples</a><ul>
 <li><a class="reference internal" href="#module-simple_example">simple example</a></li>
-<li><a class="reference internal" href="#id10">decorators</a></li>
+<li><a class="reference internal" href="#id9">decorators</a></li>
 </ul>
 </li>
 </ul>

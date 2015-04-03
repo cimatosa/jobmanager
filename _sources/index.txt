@@ -31,7 +31,6 @@ Decorators
 .. automodule:: jobmanager.decorators
    :members:
    
-   
 ODE wrapper
 ~~~~~~~~~~~
 .. automodule:: jobmanager.ode_wrapper
@@ -42,8 +41,6 @@ Core modules
 ------------
 jobmanager
 ~~~~~~~~~~
-clients
-~~~~~~~
 .. automodule:: jobmanager.jobmanager
    :members:
 
@@ -52,12 +49,10 @@ clients
 .. automodule:: jobmanager.clients
    :members:
 
-
 servers
 ~~~~~~~
 .. automodule:: jobmanager.servers
    :members:
-
 
 persistentData
 ~~~~~~~~~~~~~~
