@@ -1,15 +1,52 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 # To create a distribution package for pip or easy-install:
 # python setup.py sdist
-from setuptools import setup, find_packages
 from os.path import join, dirname, realpath
+from setuptools import setup, find_packages, Command
+import subprocess as sp
 from warnings import warn
 
-name='jobmanager'
+author = u"Richard Hartmann"
+authors = [author, u"Paul Müller"]
+name = 'jobmanager'
+description = 'Python job manager for parallel computing.'
+year = "2015"
+
+DIR = realpath(dirname(__file__))
+
+longdescription = open(join(DIR, "doc/description.txt"), "r").read().strip()
 
 
+class PyDocGitHub(Command):
+    """ Upload the docs to GitHub gh-pages branch
+    """
+    user_options = []
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        errno = sp.call([sys.executable, 'doc/commit_gh-pages.py'])
+        raise SystemExit(errno)
 
 
+class PyTest(Command):
+    """ Perform pytests
+    """
+    user_options = []
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        import sys,subprocess
+        errno = sp.call([sys.executable, 'tests/runtests.py'])
+        raise SystemExit(errno)
 
 try:
     import sys
@@ -24,30 +61,30 @@ except:
 
 setup(
     name=name,
-    author='Richard Hartmann',
-    #author_email='richard.hartmann...',
+    author=author,
     url='https://github.com/cimatosa/jobmanager',
     version=version,
     packages=[name],
     package_dir={name: name},
     license="MIT",
-    description='Python job manager for parallel computing.',
-    long_description="""easy distributed computing based on the python
-class SyncManager for remote communication
-and python module multiprocessing for local
-parallelism.""",
-    install_requires=["sqlitedict", "NumPy>=1.5.1"],
-    # tests: psutil
-    keywords=["multiprocessing", "queue", "parallel",
-              "progress", "manager", "job"],
+    description=description,
+    long_description=longdescription,
+    install_requires=["sqlitedict>=1.2.0", "NumPy>=1.5.1"],
+    tests_require=["psutil"],
+    keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
+              "progress", "manager", "job", "persistent data", "scheduler"],
     classifiers= [
         'Operating System :: OS Independent',
         #'Programming Language :: Python :: 2.7', #Todo
-        'Programming Language :: Python :: 3.2',
-        'Programming Language :: Python :: 3.3',
+        #'Programming Language :: Python :: 3.2', # also not very well tested
+        #'Programming Language :: Python :: 3.3', # also not very well tested
+        'Programming Language :: Python :: 3.4',
         'Intended Audience :: Science/Research'
                  ],
-    platforms=['ALL']
+    platforms=['ALL'],
+    cmdclass = {'test': PyTest,
+                'commit_doc': PyDocGitHub,
+                },
     )
 
 

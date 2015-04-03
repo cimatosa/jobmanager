@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-""" How to wrap or decorate a function with a progress bar.
-"""
 from __future__ import division, print_function
+""" How to wrap or decorate a function with a progress bar.
+
+
+"""
+
 
 from os.path import split, dirname, abspath
 import sys

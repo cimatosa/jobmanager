@@ -1,2 +1,11 @@
 __pycache__
 *.trb
+*.dump
+*.egg
+dist
+build
+*.py~
+*.md~
+*.pyc
+*.egg-info
+tests/pytest.html

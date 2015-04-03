@@ -61,6 +61,7 @@ if __name__ == "__main__":
     p_server.join()
     
     
-    
+    import IPython
+    IPython.embed()    
     
     

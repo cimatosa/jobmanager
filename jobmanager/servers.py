@@ -78,12 +78,20 @@ class PersistentData_Server(JobManager_Server):
         JobManager_Server.__init__(self, authkey, const_arg=const_arg, port=port, verbose=verbose, msg_interval=msg_interval, fname_dump=fname_dump, speed_calc_cycles=speed_calc_cycles)
         self.pds = persistent_data_structure
         self.overwrite = overwrite
+        if self.verbose > 1:
+            if self.overwrite:
+                print("{}: overwriting existing data is ENABLED".format(self._identifier))
+            else:
+                print("{}: overwriting existing data is DISABLED".format(self._identifier))
          
     def process_new_result(self, arg, result):
-        self.pds[data_as_binary_key(arg)] = result
+        self.pds[data_as_binary_key(arg.id)] = (arg, result)
         
     def put_arg(self, a):
-        a_bin = data_as_binary_key(a)
+        a_bin = data_as_binary_key(a.id)
         if self.overwrite or (not a_bin in self.pds):
             JobManager_Server.put_arg(self, a)
+            return True
+        
+        return False
         

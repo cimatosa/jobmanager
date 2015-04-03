@@ -3,14 +3,23 @@ jobmanager
 
 Easy distributed computing based on the python class SyncManager for remote communication and python module multiprocessing for local parallelism.
 
-### Testing on Linux
+### Documentation
+The documentation is available at http://cimatosa.github.io/jobmanager/ 
+
+### Developer's note
 After cloning into jobmanager, create a virtual environment
 
     virtualenv --system-site-packages ve_jm
     source ve_jm/bin/activate
 
-Install jobmanager into the environment and run a simple example.   
+Install all dependencies
 
-    python setupy.py install
+    python setup.py develop
+    
+Running an example
+
     python examples/simple_example.py
    
+Running tests
+
+    python setup.py test
