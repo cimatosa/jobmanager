@@ -21,6 +21,9 @@ Progress classes are implemented in the :mod:`jobmanager.progress`
 submodule. Intuitive access to progress bars is facilitated with
 decorators (:mod:`jobmanager.decorators`).
 
+
+Fork `jobmanager on GitHib <https://github.com/cimatosa/jobmanager/>`_.
+
 """
 
 import warnings

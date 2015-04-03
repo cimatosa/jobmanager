@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 # To create a distribution package for pip or easy-install:
 # python setup.py sdist
-from setuptools import setup, find_packages, Command
 from os.path import join, dirname, realpath
+from setuptools import setup, find_packages, Command
+import subprocess as sp
 from warnings import warn
 
 author = u"Richard Hartmann"
@@ -28,7 +29,7 @@ class PyDocGitHub(Command):
         pass
 
     def run(self):
-        errno = subprocess.call([sys.executable, 'doc/commit_gh-pages.py'])
+        errno = sp.call([sys.executable, 'doc/commit_gh-pages.py'])
         raise SystemExit(errno)
 
 
@@ -44,7 +45,7 @@ class PyTest(Command):
 
     def run(self):
         import sys,subprocess
-        errno = subprocess.call([sys.executable, 'tests/runtests.py'])
+        errno = sp.call([sys.executable, 'tests/runtests.py'])
         raise SystemExit(errno)
 
 try:
