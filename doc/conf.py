@@ -24,10 +24,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.abspath(
                     os.path.dirname(__file__)), '../')))
 
-sys.path.append(os.path.abspath('_extensions'))
-
 # include examples
-
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/../examples"))
 
 
@@ -69,7 +66,7 @@ extensions = [
 #             'inheritance_diagram',
 #              'hidden_code_block',
               'sphinx.ext.autosummary',
-#              'sphinx.ext.viewcode',
+              'sphinx.ext.viewcode',
               'numpydoc',
               ]
 

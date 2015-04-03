@@ -43,7 +43,6 @@ except:
 setup(
     name=name,
     author=author,
-    authors=authors,
     url='https://github.com/cimatosa/jobmanager',
     version=version,
     packages=[name],
