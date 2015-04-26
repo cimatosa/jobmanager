@@ -16,10 +16,10 @@ install:
 - conda install --yes 'numpy<1.9.0'
 # final pip installs
 - pip install wheel
-# show packages
-- pip freeze
 # build extensions
 - python setup.py develop
+# show packages
+- pip freeze
 script:
 # Create wheel pacakge
 - python setup.py test
