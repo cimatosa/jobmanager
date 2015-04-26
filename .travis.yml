@@ -20,5 +20,5 @@ install:
 - python --version
 - pip freeze
 script:
-- travis_wait python setup.py test
+- travis_wait sudo python setup.py test
 cache: apt
