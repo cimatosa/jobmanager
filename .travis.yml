@@ -9,13 +9,13 @@ install:
 - which python
 - python --version
 # pip init
-- pip install --upgrade pip
+- sudo pip install --upgrade pip
 # use anaconda
-- pip install conda
-- conda init
-- conda install --yes 'numpy<1.9.0'
+- sudo pip install conda
+- sudo conda init
+- sudo conda install --yes 'numpy<1.9.0'
 # final pip installs
-- pip install wheel
+- sudo pip install wheel
 # build extensions
 - python setup.py develop
 # show packages
