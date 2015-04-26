@@ -1,6 +1,3 @@
-# Mac OS X Python build
-language:
-- objective-c
 python:
 - "3.4"
 # Only build master branch
