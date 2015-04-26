@@ -1,25 +1,21 @@
+language: python
 python:
 - "3.4"
 # Only build master branch
 branches:
   only:
   - master
+before_install:
+- sudo apt-get update -qq
+- wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+- chmod +x miniconda.sh
+- ./miniconda.sh -b
+- export PATH=/home/travis/miniconda/bin:$PATH
+- conda update --yes conda
+- travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy
 install:
-# install python via brew
-- which python
-- python --version
-# pip init
-- sudo pip install --upgrade pip
-# use anaconda
-- sudo pip install conda
-- sudo conda init
-- sudo conda install --yes 'numpy<1.9.0'
-# final pip installs
-- sudo pip install wheel
-# build extensions
-- python setup.py develop
-# show packages
-- pip freeze
+- travis_retry python setup.py develop
 script:
 # Create wheel pacakge
-- python setup.py test
+- travis_wait python setup.py test
+cache: apt
