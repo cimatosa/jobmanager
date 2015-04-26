@@ -9,6 +9,7 @@ before_install:
 # We need to use conda, because virtualenv did not work on travis with 3.4
 - sudo apt-get update -qq
 - sudo apt-get install -qq libatlas-dev libatlas-base-dev liblapack-dev gfortran
+- sudo -s
 - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
 - chmod +x miniconda.sh
 - ./miniconda.sh -b
@@ -20,5 +21,5 @@ install:
 - python --version
 - pip freeze
 script:
-- travis_wait sudo python setup.py test
+- travis_wait python setup.py test
 cache: apt
