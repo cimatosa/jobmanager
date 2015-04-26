@@ -1,4 +1,10 @@
 include examples/*.py
 include examples/advanced/*.py
-include doc/*
 include README.md
+include tests/*.py
+include tests/*.md
+include doc/*.py
+include doc/*.rst
+include doc/*.md
+include doc/*.txt
+include doc/artwork/*
