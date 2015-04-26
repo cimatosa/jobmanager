@@ -5,8 +5,6 @@ python:
 branches:
   only:
   - master
-virtualenv:
-  system_site_packages: true
 before_install:
 - sudo apt-get update -qq
 install:
@@ -16,6 +14,5 @@ install:
 - python --version
 - pip freeze
 script:
-# Create wheel pacakge
 - travis_wait python setup.py test
 cache: apt
