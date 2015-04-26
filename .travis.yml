@@ -5,14 +5,16 @@ python:
 branches:
   only:
   - master
+virtualenv:
+  system_site_packages: true
 before_install:
 - sudo apt-get update -qq
+install:
 - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then sudo apt-get install python-numpy; fi
 - if [[ $TRAVIS_PYTHON_VERSION == "3.4" ]]; then sudo apt-get install python3-numpy; fi
+- travis_retry python setup.py develop
 - python --version
 - pip freeze
-install:
-- travis_retry python setup.py develop
 script:
 # Create wheel pacakge
 - travis_wait python setup.py test
