@@ -118,6 +118,7 @@ class ProgressBar(object):
         objects.
         """
         self.__name__ = func.__name__ # act like the function
+        self.__doc__ = func.__doc__ # copy doc string
         self.func = func
         self.kwargs = kwargs
         # Check arguments
