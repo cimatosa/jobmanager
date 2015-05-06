@@ -26,13 +26,18 @@ class _Pool_Server(JobManager_Server):
         self.final_result = 1
         
     def process_new_result(self, arg, result):
-        """over write final_result with the new incoming result 
-        if the new result is smaller then the final_result""" 
-        print(arg, result)
+        """
+        write the result into a list
+        """ 
+        # TODO
         if self.final_result > result:
             self.final_result = result
             
     def process_final_result(self):
+        """
+        sort return list according to input arguments
+        """
+        # TODO
         print("final_result:", self.final_result)
         
         
@@ -42,11 +47,12 @@ class _Pool_Client(JobManager_Client):
                          authkey=authkey, 
                          verbose=verbose)
 
-    @staticmethod
-    def func(args):
+    def func(self, args, a):
         """simply return the current argument"""
-        print(args)
-        return args
+        return self._func(args)
+    
+    def set_func(self, func):
+        self._func = func
 
 
 class Pool(_mpool.Pool):
@@ -83,10 +89,7 @@ class Pool(_mpool.Pool):
         p_server = mp.Process(target=Pool._run_jm_server, args=(iterable,))
         p_server.start()
        
-        import time
-        time.sleep(1)
-        
-        p_client = mp.Process(target=Pool._run_jm_client)
+        p_client = mp.Process(target=Pool._run_jm_client, args=(func,))
         p_client.start()
     
         #task_batches = _mpool.Pool._get_tasks(func, iterable, chunksize)
@@ -98,11 +101,13 @@ class Pool(_mpool.Pool):
         p_client.join()
         p_server.join()
 
+        # TODO: get final result
+
         
     @staticmethod
-    def _run_jm_client():
-        client = _Pool_Client("localhost", "map", verbose=1)
-        #client.func = self._jm_func
+    def _run_jm_client(func):
+        client = _Pool_Client("localhost", "map", verbose=0)
+        client.set_func(func)
         client.start()
 
     @staticmethod
@@ -111,7 +116,6 @@ class Pool(_mpool.Pool):
         # Create jobmanager server and client
         with _Pool_Server("map") as server:
             for it in iterable:
-                print(it)
                 server.put_arg(it)
             server.start()
     
