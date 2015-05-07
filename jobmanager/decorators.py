@@ -6,6 +6,7 @@ from __future__ import division, print_function
 
 from inspect import getcallargs
 import multiprocessing as mp
+import random
 import multiprocessing.pool as _mpool
 import warnings
 
@@ -21,104 +22,108 @@ class _Pool_Server(JobManager_Server):
     def __init__(self, authkey):
         # server show status information (verbose=1)
         super(_Pool_Server, self).__init__(authkey=authkey,
-                         verbose=1)
-
-        self.final_result = 1
+                         verbose=2)
+        self.results = list()
         
     def process_new_result(self, arg, result):
         """
         write the result into a list
         """ 
-        # TODO
-        if self.final_result > result:
-            self.final_result = result
+        self.results.append(result)
             
     def process_final_result(self):
         """
         sort return list according to input arguments
         """
-        # TODO
-        print("final_result:", self.final_result)
+        self.queue.put(self.results)
+
+    def set_queue(self, q):
+        """ Set the queue that will be used to send the arguments back
+        to the host
+        """
+        self.queue = q
         
         
 class _Pool_Client(JobManager_Client):
-    def __init__(self, server, authkey, verbose):
+    def __init__(self, authkey,):
         super(_Pool_Client, self).__init__(server="localhost", 
-                         authkey=authkey, 
-                         verbose=verbose)
+                                           authkey=authkey, 
+                                           verbose=0)
 
-    def func(self, args, a):
+    def func(self, args, *_):
         """simply return the current argument"""
         return self._func(args)
     
-    def set_func(self, func):
-        self._func = func
-
 
 class Pool(_mpool.Pool):
     """
     A progressbar-decorated version of `multiprocessing.Pool`
+    It is possible to set the `authkey` argument manually. The authkey
+    is saved as the property `Pool().authkey`.
 
     The methods `map` and `map_async` work as expected.
+        
     """
     __doc__ = __doc__ + _mpool.Pool.__doc__
     
     def __init__(self, processes=None, initializer=None, 
-                 initargs=(), maxtasksperchild=None):
+                 initargs=(), maxtasksperchild=None, authkey=None):
         _mpool.Pool.__init__(self, processes, initializer, initargs,
                                maxtasksperchild)
-
+        if authkey is None:
+            authkey = str("map_{}".format(random.random()))
+        self.authkey = authkey
         # the self.map method calls the self.map_async method
         
+    
+    def _map_async(self, *args, **kwargs):
+        return self.map_async(*args, **kwargs)
+    
+    
     def map_async(self, func, iterable, chunksize=None, callback=None):
         '''
         Asynchronous equivalent of `map()` builtin.
+        Note that chunksize and callback have no effect.
         
         '''
         assert self._state == _mpool.RUN
         if not hasattr(iterable, '__len__'):
             iterable = list(iterable)
-
-        if chunksize is None:
-            chunksize, extra = divmod(len(iterable), len(self._pool) * 4)
-            if extra:
-                chunksize += 1
-        if len(iterable) == 0:
-            chunksize = 0
         
-        p_server = mp.Process(target=Pool._run_jm_server, args=(iterable,))
+        warnings.warn("chunksize not supported in jobmanager")
+        warnings.warn("callback not yet implemented")
+    
+        q = mp.Queue()
+        p_server = mp.Process(target=Pool._run_jm_server, args=(q, iterable, self.authkey))
         p_server.start()
        
-        p_client = mp.Process(target=Pool._run_jm_client, args=(func,))
+        p_client = mp.Process(target=Pool._run_jm_client, args=(func, self.authkey))
         p_client.start()
-    
-        #task_batches = _mpool.Pool._get_tasks(func, iterable, chunksize)
-        #result = MapResult(self._cache, chunksize, len(iterable), callback)
-        #
-        #self._taskqueue.put((((result._job, i, mapstar, (x,), {})
-        #                      for i, x in enumerate(task_batches)), None))
-        
+           
         p_client.join()
         p_server.join()
-
-        # TODO: get final result
-
+        
+        # call q.get() to obtain the results    
+        return q
         
     @staticmethod
-    def _run_jm_client(func):
-        client = _Pool_Client("localhost", "map", verbose=0)
-        client.set_func(func)
+    def _run_jm_client(func, authkey):
+        client = _Pool_Client(authkey)
+        client._func = func
         client.start()
 
     @staticmethod
-    def _run_jm_server(iterable):
+    def _run_jm_server(q, iterable, authkey):
         #iterable = self._jm_iterable
         # Create jobmanager server and client
-        with _Pool_Server("map") as server:
+        with _Pool_Server(authkey) as server:
+            server.set_queue(q)
             for it in iterable:
+                if not isinstance(it, tuple):
+                    it = (it,)
                 server.put_arg(it)
             server.start()
-    
+   
 
 class ProgressBar(object):
     """ A wrapper/decorator with a text-based progress bar.

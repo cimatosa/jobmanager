@@ -922,7 +922,10 @@ class JobManager_Server(object):
             print("{}    not queried yet : {}".format(id2, not_queried))
             print("{}len(args_set) : {}".format(id2, len(self.args_set)))
             if (all_not_processed + failed) != len(self.args_set):
-                raise RuntimeWarning("'all_not_processed != len(self.args_set)' something is inconsistent!")
+                raise RuntimeWarning(
+                    "'all_not_processed != len(self.args_set)' "+\
+                    "something is inconsistent! Make sure you did "+\
+                    "not set any duplicate arguments.")
             
 
     @staticmethod
