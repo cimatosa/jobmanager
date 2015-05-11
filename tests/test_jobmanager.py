@@ -18,8 +18,9 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 from jobmanager import jobmanager, progress
 
-PORT = 42525
 AUTHKEY = 'testing'
+PORT = 42525
+SERVER = "0.0.0.0"
 
 
 def test_Signal_to_SIG_IGN():
@@ -136,7 +137,7 @@ def start_server(n, read_old_state=False, verbose=1):
     
 def start_client(verbose=1):
     print("START CLIENT")
-    jm_client = jobmanager.JobManager_Client(server = 'localhost', 
+    jm_client = jobmanager.JobManager_Client(server = SERVER, 
                                              authkey = AUTHKEY, 
                                              port    = PORT, 
                                              nproc   = 0,
@@ -385,7 +386,7 @@ def test_check_fail():
     time.sleep(1)
     
     print("START CLIENT")
-    jm_client = Client_Random_Error(server='localhost', 
+    jm_client = Client_Random_Error(server=SERVER, 
                                     authkey=AUTHKEY,
                                     port=PORT, 
                                     nproc=0, 
@@ -561,7 +562,7 @@ def test_client_status():
 
             return os.getpid()
 
-    client = Client_With_Status(server = 'localhost', 
+    client = Client_With_Status(server = SERVER, 
                                 authkey = AUTHKEY,
                                 port    = PORT, 
                                 nproc   = 4, 
@@ -643,7 +644,7 @@ def test_shared_const_arg():
                 print(os.getpid(), arg, const_arg)
                 return None
             
-        client = myClient(server='localhost',
+        client = myClient(server=SERVER,
                           authkey=AUTHKEY,
                           port = PORT,
                           nproc=1,
@@ -681,7 +682,7 @@ def test_digest_rejected():
 
             return os.getpid()
 
-    client = Client_With_Status(server = 'localhost', 
+    client = Client_With_Status(server = SERVER, 
                                 authkey = AUTHKEY+' not the same',
                                 port    = PORT, 
                                 nproc   = 4, 
@@ -742,7 +743,7 @@ def test_exception():
              
             try:
                 try:
-                    autoproxy_connect(server='localhost', port=port, authkey=authkey)
+                    autoproxy_connect(server=SERVER, port=port, authkey=authkey)
                 except jobmanager.RemoteValueError:
                     if (sys.version_info[0] == 3) and (p_version_server == 2):
                         print("that is ok")      # the occurrence of this Exception is normal
@@ -761,20 +762,20 @@ def test_exception():
                     continue
                     
                 try:
-                    autoproxy_connect(server='localhost', port=port+1, authkey=authkey)
+                    autoproxy_connect(server=SERVER, port=port+1, authkey=authkey)
                 except jobmanager.JMConnectionRefusedError:
                     print("that is ok")
                 except:
                     raise
                 
                 try:
-                    autoproxy_connect(server='localhost', port=port, authkey=authkey+'_')
+                    autoproxy_connect(server=SERVER, port=port, authkey=authkey+'_')
                 except jobmanager.AuthenticationError:
                     print("that is ok")
                 except:
                     raise
                 
-                m = autoproxy_connect(server='localhost', port=port, authkey=authkey)
+                m = autoproxy_connect(server=SERVER, port=port, authkey=authkey)
                 
                 q = m.get_q()
                 
