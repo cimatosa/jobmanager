@@ -126,7 +126,7 @@ def test_distributed_mathieu():
     
     with jm.JobManager_Local(client_class = jm.clients.Integration_Client_REAL,
                              authkey = authkey,
-                             port = 42525,
+                             port = 42520,
                              const_arg = const_arg,
                              nproc=1,
                              verbose_client=2,

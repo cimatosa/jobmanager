@@ -70,7 +70,7 @@ if __name__ == "__main__":
         description=description,
         long_description=longdescription,
         install_requires=["sqlitedict>=1.2.0", "NumPy>=1.5.1"],
-        tests_require=["psutil"],
+        tests_require=["psutil", "scipy"],
         keywords=["multiprocessing", "queue", "parallel", "distributed", "computing",
                   "progress", "manager", "job", "persistent data", "scheduler"],
         classifiers= [
