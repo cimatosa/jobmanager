@@ -12,11 +12,12 @@ before_install:
 - export PATH=/home/travis/miniconda/bin:$PATH
 - conda update --yes conda
 - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy matplotlib
-
 install:
 - travis_retry pip install sqlitedict
 - travis_retry pip install psutil
 - pip freeze
 script:
+- netstat -tulpen
+- lsof -i :42525
 - travis_wait python setup.py test
 
