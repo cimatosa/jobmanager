@@ -25,6 +25,8 @@ SERVER = socket.gethostname()
 
 
 def test_Signal_to_SIG_IGN():
+    global PORT
+    PORT += 1
     def f():
         jobmanager.Signal_to_SIG_IGN()
         print("before sleep")
@@ -58,6 +60,8 @@ def test_Signal_to_SIG_IGN():
     print("[+] terminated")
     
 def test_Signal_to_sys_exit():
+    global PORT
+    PORT += 1
     def f():
         jobmanager.Signal_to_sys_exit()
         while True:
@@ -93,6 +97,8 @@ def test_Signal_to_sys_exit():
     print("[+] terminated")
     
 def test_Signal_to_terminate_process_list():
+    global PORT
+    PORT += 1
     def child_proc():
         jobmanager.Signal_to_sys_exit()
         try:
@@ -153,6 +159,8 @@ def test_jobmanager_basic():
     
     check if all arguments are found in final_result of dump
     """
+    global PORT
+    PORT += 1
     n = 10
     p_server = mp.Process(target=start_server, args=(n,))
     p_server.start()
@@ -185,6 +193,8 @@ def test_jobmanager_basic():
     
     
 def test_jobmanager_server_signals():
+    global PORT
+    PORT += 1
     print("## TEST SIGTERM ##")
     p_server = mp.Process(target=start_server, args=(30,))
     p_server.start()
@@ -208,7 +218,7 @@ def test_jobmanager_server_signals():
     assert len(ref_set - args_set) == 0
     print("[+] args_set from dump contains all arguments")
     
-
+    PORT += 1
     print("## TEST SIGINT ##")    
     p_server = mp.Process(target=start_server, args=(30,))
     p_server.start()
@@ -245,6 +255,8 @@ def test_shutdown_server_while_client_running():
     check if the final_result and the args dump end up to include
     all arguments given 
     """
+    global PORT
+    PORT += 1
     
     n = 1000
     
@@ -253,6 +265,7 @@ def test_shutdown_server_while_client_running():
     
     time.sleep(1)
     
+    PORT += 1
     p_client = mp.Process(target=start_client, args=(2,))
     p_client.start()
     
@@ -315,7 +328,8 @@ def shutdown_client(sig):
     if server does not terminate on time, something must be wrong with args_set
     check if the final_result contain all arguments given 
     """
-    
+    global PORT
+    PORT += 1
     n = 300
     
     print("## terminate client with {} ##".format(progress.signal_dict[sig]))
@@ -368,6 +382,8 @@ def shutdown_client(sig):
     print("[+] all arguments found in final_results")
 
 def test_check_fail():
+    global PORT
+    PORT += 1
     class Client_Random_Error(jobmanager.JobManager_Client):
         def func(self, args, const_args, c, m):
             c.value = 0
@@ -440,6 +456,8 @@ def test_jobmanager_read_old_stat():
     
     check if all arguments are found in final_result of dump
     """
+    global PORT
+    PORT += 1
     n = 100
     p_server = mp.Process(target=start_server, args=(n,))
     p_server.start()
@@ -461,7 +479,7 @@ def test_jobmanager_read_old_stat():
     print("[+] client and server terminated")
     
     time.sleep(2)
-    
+    PORT += 1
     p_server = mp.Process(target=start_server, args=(n,True))
     p_server.start()
     
@@ -548,6 +566,8 @@ def test_hashedViewOnNumpyArray():
     assert bh2 in s
 
 def test_client_status():
+    global PORT
+    PORT += 1
     n = 10
     p_server = mp.Process(target=start_server, args=(n,False,0))
     p_server.start()
@@ -572,6 +592,8 @@ def test_client_status():
     p_server.join()
     
 def test_jobmanager_local():
+    global PORT
+    PORT += 1
     args = range(1,200)
     with jobmanager.JobManager_Local(client_class = jobmanager.JobManager_Client,
                                      authkey = AUTHKEY,
@@ -583,6 +605,8 @@ def test_jobmanager_local():
         jm_server.start()
         
 def test_start_server_on_used_port():
+    global PORT
+    PORT += 1
     def start_server():
         const_arg = None
         arg = [10,20,30]
@@ -625,6 +649,8 @@ def test_start_server_on_used_port():
     assert not other_error
         
 def test_shared_const_arg():
+    global PORT
+    PORT += 1
     def start_server():
         const_arg = {1:1, 2:2, 3:3}
         arg = [10,20,30]
@@ -653,6 +679,7 @@ def test_shared_const_arg():
         
         client.start()
             
+    PORT += 1
     p1 = mp.Process(target=start_server)
     p2 = mp.Process(target=start_client)
     
@@ -668,6 +695,8 @@ def test_shared_const_arg():
     p1.join()
     
 def test_digest_rejected():
+    global PORT
+    PORT += 1
     n = 10
     p_server = mp.Process(target=start_server, args=(n,False,0))
     p_server.start()
