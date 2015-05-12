@@ -1,14 +1,14 @@
 language: python
 python:
 - "3.4"
+virtualenv:
+  system_site_packages: true
 before_install:
-# We need to use conda, because virtualenv did not work on travis with 3.4
 - sudo apt-get update -qq
+- if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then sudo apt-get -y install python-numpy python-scipy python-psutil; fi
+- if [[ $TRAVIS_PYTHON_VERSION == "3.4" ]]; then sudo apt-get -y install python3-numpy python3-scipy python-psutil; fi
 install:
-- if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then sudo apt-get -y install python-numpy python-scipy; fi
-- if [[ $TRAVIS_PYTHON_VERSION == "3.4" ]]; then sudo apt-get -y install python3-numpy python3-scipy; fi
 - pip install sqlitedict
-- pip install psutil
 - pip freeze
 script:
 - travis_wait python setup.py test
