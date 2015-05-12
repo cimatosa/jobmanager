@@ -3,6 +3,12 @@ notifications:
   email: false
 python:
 - "3.4"
+services:
+  - mysql
+  - rabbitmq
+  - mongodb
+  - memcached
+  - redis-server
 before_install:
 - sudo apt-get update -qq
 - sudo apt-get install -qq libatlas-dev libatlas-base-dev liblapack-dev gfortran
