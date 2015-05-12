@@ -725,7 +725,9 @@ def test_digest_rejected():
         
     p_server.join()            
     
-def test_exception():    
+def test_exception():   
+    global PORT
+    PORT += 1 
     class MyManager_Client(jobmanager.BaseManager):
         pass
         
@@ -760,7 +762,8 @@ def test_exception():
         return m
         
     for p_version_server in [2, 3]:
-        port = np.random.randint(20000, 30000)
+        PORT += 10
+        port = PORT
         authkey = 'q'
         with open("ap_server.out", 'w') as outfile:
             
