@@ -3,12 +3,6 @@ notifications:
   email: false
 python:
 - "3.4"
-services:
-  - mysql
-  - rabbitmq
-  - mongodb
-  - memcached
-  - redis-server
 before_install:
 - sudo apt-get update -qq
 - sudo apt-get install -qq libatlas-dev libatlas-base-dev liblapack-dev gfortran
@@ -24,6 +18,5 @@ install:
 - pip freeze
 script:
 - netstat -tulpen
-- lsof -i :42525
 - travis_wait python setup.py test
 

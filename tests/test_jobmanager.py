@@ -9,6 +9,7 @@ import signal
 import multiprocessing as mp
 import numpy as np
 import traceback
+import socket
 import subprocess
 import signal
 
@@ -20,7 +21,7 @@ from jobmanager import jobmanager, progress
 
 AUTHKEY = 'testing'
 PORT = 42525
-SERVER = "0.0.0.0"
+SERVER = socket.gethostname()
 
 
 def test_Signal_to_SIG_IGN():
