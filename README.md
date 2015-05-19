@@ -26,3 +26,5 @@ Running an example
 Running tests
 
     python setup.py test
+    
+[travis test]
