@@ -1460,8 +1460,12 @@ ESC_BLINK         = "\033[5m"
 ESC_INVERTED      = "\033[7m"
 ESC_HIDDEN        = "\033[8m"
 
-ESC_RESET_BOLD       = "\033[21m"
+# not widely supported, use '22' instead 
+# ESC_RESET_BOLD       = "\033[21m"
+
 ESC_RESET_DIM        = "\033[22m"
+ESC_RESET_BOLD       = ESC_RESET_DIM
+
 ESC_RESET_UNDERLINED = "\033[24m"
 ESC_RESET_BLINK      = "\033[25m"
 ESC_RESET_INVERTED   = "\033[27m"
