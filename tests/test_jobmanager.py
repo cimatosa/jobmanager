@@ -748,7 +748,10 @@ def test_exception():
                str(port), 
                authkey]
 
+        print("#"*40)
+        print("start an autoproxy server with command")
         print(cmd)
+        print("#"*40)
         return subprocess.Popen(cmd, env=python_env, stdout=outfile, stderr=subprocess.STDOUT)
 
     def autoproxy_connect(server, port, authkey):
@@ -757,7 +760,7 @@ def test_exception():
         m = MyManager_Client(address = (server, port),                              
                              authkey = bytearray(authkey, encoding='utf8'))
         
-        jobmanager.call_connect(m.connect, dest = jobmanager.address_authkey_from_manager(m), verbose=1)
+        jobmanager.call_connect(m.connect, dest = jobmanager.address_authkey_from_manager(m), verbose=2)
         
         return m
         
@@ -771,44 +774,67 @@ def test_exception():
             print("autoproxy server running with PID {}".format(p_server.pid))
             time.sleep(1)
             
-            print("running tests ...")
+            print("running tests with python {} ...".format(sys.version_info[0]))
             print()
              
             try:
-                try:
-                    autoproxy_connect(server=SERVER, port=port, authkey=authkey)
-                except jobmanager.RemoteValueError:
-                    if (sys.version_info[0] == 3) and (p_version_server == 2):
-                        print("that is ok")      # the occurrence of this Exception is normal
-                        pass
-                    else:                
-                        raise                    # reraise exception
-                except ValueError:
-                    if (sys.version_info[0] == 2) and (p_version_server == 3):
-                        print("that is ok")      # the occurrence of this Exception is normal
-                        pass
-                    else:                
-                        raise                    # reraise exception
+                if sys.version_info[0] == 3:
+                    print("we are using python 3 ... try to connect ...")
+                    try:
+                        autoproxy_connect(server=SERVER, port=port, authkey=authkey)
+                    except jobmanager.RemoteValueError as e:
+                        if p_version_server == 2:
+                            print("that is ok, because the server is running on python2")      # the occurrence of this Exception is normal
+                            print()
+                            pass
+                        else:
+                            print("RemoteValueError error")
+                            raise                    # reraise exception
+                    except Exception as e:
+                        print("unexpected error {}".format(e))
+                        raise
+                
+                elif sys.version_info[0] == 2:
+                    print("we are using python 2 ... try to connect ...")
+                    try:
+                        autoproxy_connect(server=SERVER, port=port, authkey=authkey)
+                    except ValueError as e:
+                        if p_version_server == 3:
+                            print("that is ok, because the server is running on python3")      # the occurrence of this Exception is normal
+                            print()
+                            pass
+                        else:                
+                            print("JMConnectionRefusedError error")
+                            raise                    # reraise exception
+                    except Exception as e:
+                        print("unexpected error {}".format(e))
+                        raise
 
                 # all the following only for the same python versions
                 if (sys.version_info[0] != p_version_server):
                     continue
                     
                 try:
+                    print("try to connect to server, use wrong port")
                     autoproxy_connect(server=SERVER, port=port+1, authkey=authkey)
                 except jobmanager.JMConnectionRefusedError:
                     print("that is ok")
+                    print()
                 except:
                     raise
                 
                 try:
+                    print("try to connect to server, use wrong authkey")
                     autoproxy_connect(server=SERVER, port=port, authkey=authkey+'_')
                 except jobmanager.AuthenticationError:
                     print("that is ok")
+                    print()
                 except:
                     raise
                 
                 m = autoproxy_connect(server=SERVER, port=port, authkey=authkey)
+                
+                print("try pass some data forth and back ...")
                 
                 q = m.get_q()
                 
@@ -819,9 +845,7 @@ def test_exception():
                 q_put(s1)
                 s2 = q_get()
                 
-                assert s1 == s2
-                
-                
+                assert s1 == s2                
                 
                 
             finally:

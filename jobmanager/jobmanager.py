@@ -1438,6 +1438,7 @@ def handler_broken_pipe_error(e, verbose):
 def handler_connection_refused(e, identifier, dest, verbose):
     if verbose > 1:
         print("this usually means that no matching Manager object was instanciated at destination side!")
+        print("either there is no Manager running at all, or it is listening to another port.")
     raise JMConnectionRefusedError(e)
 
 def handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose):
