@@ -748,10 +748,10 @@ def test_exception():
                str(port), 
                authkey]
 
-        print("#"*40)
+        print("+"*40)
         print("start an autoproxy server with command")
         print(cmd)
-        print("#"*40)
+        print("+"*40)
         return subprocess.Popen(cmd, env=python_env, stdout=outfile, stderr=subprocess.STDOUT)
 
     def autoproxy_connect(server, port, authkey):
@@ -768,16 +768,15 @@ def test_exception():
         PORT += 10
         port = PORT
         authkey = 'q'
-        with open("ap_server.out", 'w') as outfile:
-            
-            p_server = autoproxy_server(p_version_server, port, authkey, outfile)
-            print("autoproxy server running with PID {}".format(p_server.pid))
-            time.sleep(1)
-            
-            print("running tests with python {} ...".format(sys.version_info[0]))
-            print()
-             
-            try:
+        try:
+            with open("ap_server.out", 'w') as outfile:
+                p_server = autoproxy_server(p_version_server, port, authkey, outfile)
+                print("autoproxy server running with PID {}".format(p_server.pid))
+                time.sleep(1)
+                
+                print("running tests with python {} ...".format(sys.version_info[0]))
+                print()
+
                 if sys.version_info[0] == 3:
                     print("we are using python 3 ... try to connect ...")
                     try:
@@ -786,7 +785,6 @@ def test_exception():
                         if p_version_server == 2:
                             print("that is ok, because the server is running on python2")      # the occurrence of this Exception is normal
                             print()
-                            pass
                         else:
                             print("RemoteValueError error")
                             raise                    # reraise exception
@@ -802,7 +800,6 @@ def test_exception():
                         if p_version_server == 3:
                             print("that is ok, because the server is running on python3")      # the occurrence of this Exception is normal
                             print()
-                            pass
                         else:                
                             print("JMConnectionRefusedError error")
                             raise                    # reraise exception
@@ -846,29 +843,34 @@ def test_exception():
                 s2 = q_get()
                 
                 assert s1 == s2                
-                
-                
-            finally:
-                print()
-                print("tests done! terminate server ...".format())
-                
-                p_server.send_signal(signal.SIGTERM)
-                
-                t = time.time()
-                timeout = 10
-                r = None
-                while r is None:
-                    r = p_server.poll()
-                    time.sleep(1)
-                    print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
-                    if (time.time() - t) > timeout:
-                        print("timeout exceeded, kill p_server")
-                        print("the managers subprocess will still be running, and needs to be killed by hand")
-                        p_server.send_signal(signal.SIGKILL)
-                        break
-                
-                print("server terminated with exitcode {}".format(r))
- 
+                                
+        finally:
+            print()
+            print("tests done! terminate server ...".format())
+            
+            p_server.send_signal(signal.SIGTERM)
+            
+            t = time.time()
+            timeout = 10
+            r = None
+            while r is None:
+                r = p_server.poll()
+                time.sleep(1)
+                print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
+                if (time.time() - t) > timeout:
+                    print("timeout exceeded, kill p_server")
+                    print("the managers subprocess will still be running, and needs to be killed by hand")
+                    p_server.send_signal(signal.SIGKILL)
+                    break
+            
+            print("server terminated with exitcode {}".format(r))
+    
+            with open("ap_server.out", 'r') as outfile:
+                print("+"*40)
+                print("this is the server output:")
+                for l in outfile:
+                    print("    {}".format(l[:-1]))
+                print("+"*40)
         
     
 

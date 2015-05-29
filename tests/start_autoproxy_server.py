@@ -28,25 +28,14 @@ q = jobmanager.myQueue()
 MyManager_Server.register('get_q', callable = lambda: q)        
 m = MyManager_Server(address = ('', port), authkey = bytearray(authkey, encoding='utf8'))
 m.start()
-print("Server started (manager process at {})".format(m._process.pid))
+print("MyManager_Server started (manager process at {})".format(m._process.pid))
 sys.stdout.flush()
  
 try:
     while True:
         time.sleep(10)
-        print(time.time())
+        print("MyManager_Server is running, time:", time.time())
         sys.stdout.flush()
-except:
-    print("Exception")
-    sys.stdout.flush()
-  
 finally:
-#     print("stop server ...")
-#     pm = m._process
-#     m.shutdown()
-#     progress.check_process_termination(proc=pm, 
-#                                        identifier="autoproxy manager subprocess", 
-#                                        timeout=2, 
-#                                        verbose=2, 
-#                                        auto_kill_on_last_resort=True)
-    print("Server stopped")
+    print("MyManager_Server stopping")
+    sys.stdout.flush()

@@ -1335,7 +1335,7 @@ def call_connect_python3(connect, dest, verbose=1, identifier='', reconnect_wait
         
         else:                               # no exception
             if verbose > 1:
-                print("{}connection to {} successfully stablished".format(identifier, dest))
+                print("{}connection to {} successfully established".format(identifier, dest))
             return True      
 
 def call_connect_python2(connect, dest, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
@@ -1378,7 +1378,7 @@ def call_connect_python2(connect, dest, verbose=1, identifier='', reconnect_wait
         
         else:                               # no exception
             if verbose > 1:
-                print("{}connection to {} successfully stablished".format(identifier, dest))
+                print("{}connection to {} successfully established".format(identifier, dest))
             return True                     # SUCCESS -> return True            
 
 call_connect = call_connect_python2 if sys.version_info[0] == 2 else call_connect_python3
