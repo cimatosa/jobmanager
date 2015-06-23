@@ -113,8 +113,8 @@ def test_Signal_to_terminate_process_list():
         for i in range(n):
             p.append(mp.Process(target=child_proc))
             p[-1].start()
-            
-        jobmanager.Signal_to_terminate_process_list(p)
+
+        jobmanager.Signal_to_terminate_process_list(identifier='mother_proc', process_list=p, identifier_list=["proc_{}".format(i+1) for i in range(n)], verbose=2)
         print("spawned {} processes".format(n))        
         for i in range(n):
             p[i].join()
@@ -122,7 +122,8 @@ def test_Signal_to_terminate_process_list():
             
     p_mother = mp.Process(target=mother_proc)
     p_mother.start()
-    time.sleep(0.5)
+    time.sleep(1.5)
+    assert p_mother.is_alive()
     print("send SIGINT")
     os.kill(p_mother.pid, signal.SIGINT)
     
@@ -879,13 +880,13 @@ if __name__ == "__main__":
         pass
     else:    
         func = [
-#         test_Signal_to_SIG_IGN,
-#         test_Signal_to_sys_exit,
-#         test_Signal_to_terminate_process_list,
+        test_Signal_to_SIG_IGN,
+        test_Signal_to_sys_exit,
+        test_Signal_to_terminate_process_list,
 #                 
-#         test_jobmanager_basic,
-#         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
+        test_jobmanager_basic,
+        test_jobmanager_server_signals,
+        test_shutdown_server_while_client_running,
 #         test_shutdown_client,
 #         test_check_fail,
 #         test_jobmanager_read_old_stat,
@@ -896,7 +897,7 @@ if __name__ == "__main__":
 #         test_start_server_on_used_port,
 #         test_shared_const_arg,
 #         test_digest_rejected,
-        test_exception,
+#         test_exception,
 
         lambda : print("END")
         ]
