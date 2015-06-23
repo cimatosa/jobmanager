@@ -1257,7 +1257,7 @@ class Signal_to_terminate_process_list(object):
             
     def _handler(self, signal, frame):
         if self.verbose > 0:
-            print(": received sig {} -> terminate all given subprocesses".format(self.identifier, progress.signal_dict[signal]))
+            print("{}: received sig {} -> terminate all given subprocesses".format(self.identifier, progress.signal_dict[signal]))
         for i, p in enumerate(self.process_list):
             p.terminate()
             progress.check_process_termination(proc       = p, 
