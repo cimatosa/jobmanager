@@ -32,6 +32,9 @@ before_install:
 # add the two environments to the path
 - export PATH=/home/travis/miniconda/envs/my_py3.4/bin:$PATH
 - export PATH=/home/travis/miniconda/envs/my_py2.7/bin:$PATH
+# hack to circumvent errors in tests
+- sed -i -- 's/except ImportError:/except:/g' /home/travis/miniconda/envs/my_py3.4/lib/python2.7/hashlib.py
+- sed -i -- 's/except ImportError:/except:/g' /home/travis/miniconda/envs/my_py3.4/lib/python3.4/hashlib.py
 # activate the correct environment
 - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2.7; fi
 - if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then source activate my_py3.4; fi
