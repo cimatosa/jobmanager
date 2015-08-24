@@ -2,7 +2,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
  
+import os
 import sys
+
+# debug:
+print(sys.executable)
+print(sys.path)
+print(os.environ)
+
 import time
 import multiprocessing as mp
 import numpy as np
@@ -15,7 +22,7 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 from jobmanager import jobmanager, progress
 
 jobmanager.Signal_to_sys_exit(verbose=2)
-     
+
 class MyManager_Server(jobmanager.BaseManager):
     pass
  
