@@ -738,14 +738,17 @@ def test_exception():
         # "/usr/lib/python3.4" for python 3
         if which_python == 2:
             python_interpreter = "python2.7"
+            python_env = python_env.replace("3.4", "2.7")
         elif which_python == 3:
             python_interpreter = "python3.4"
+            python_env = python_env.replace("2.7", "3.4")
         else:
             raise ValueError("'which_python' must be 2 or 3")
             
         
         path = dirname(abspath(__file__))
         cmd = [python_interpreter,
+        
                "{}/start_autoproxy_server.py".format(path),
                str(port), 
                authkey]
@@ -753,6 +756,8 @@ def test_exception():
         print("+"*40)
         print("start an autoproxy server with command")
         print(cmd)
+        print("and environment")
+        print(python_env)
         print("+"*40)
         return subprocess.Popen(cmd, env=python_env, stdout=outfile, stderr=subprocess.STDOUT)
 
