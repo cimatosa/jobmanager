@@ -728,7 +728,6 @@ def test_digest_rejected():
     
 def test_exception():   
     global PORT
-    PORT += 1 
     class MyManager_Client(jobmanager.BaseManager):
         pass
         
@@ -768,8 +767,7 @@ def test_exception():
         return m
         
     for p_version_server in [2, 3]:
-        global PORT
-        PORT += 10
+        PORT += 2 # plus two because we also check for wrong port
         port = PORT
         authkey = 'q'
         try:
