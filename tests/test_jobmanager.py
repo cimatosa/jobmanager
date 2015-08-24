@@ -733,12 +733,14 @@ def test_exception():
         pass
         
     def autoproxy_server(which_python, port, authkey, outfile):
+        python_env = {"PYTHONPATH": os.path.dirname(os.__file__)}
+        # env will be
+        # "/usr/lib/python2.7" for python 2
+        # "/usr/lib/python3.4" for python 3
         if which_python == 2:
             python_interpreter = "python2.7"
-            python_env = {"PYTHONPATH": "/usr/lib/python2.7"}
         elif which_python == 3:
             python_interpreter = "python3.4"
-            python_env = {"PYTHONPATH": "/usr/lib/python3.4"}
         else:
             raise ValueError("'which_python' must be 2 or 3")
             

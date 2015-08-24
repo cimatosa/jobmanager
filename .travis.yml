@@ -12,20 +12,35 @@ matrix:
   allow_failures:
   - python: '2.7'
 before_install:
-- sudo apt-get update -qq
-- sudo apt-get install -qq libatlas-dev libatlas-base-dev liblapack-dev gfortran
 - wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
 - chmod +x miniconda.sh
 - "./miniconda.sh -b"
 - export PATH=/home/travis/miniconda/bin:$PATH
 - conda update --yes conda
-- travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy matplotlib
+## The following lines are necessary for a test that needs Python 2 and 3
+# Install python2 and python3 anaconda (required for testing)
+# python2
+- conda create -y -n my_py2 python=2 pip numpy scipy matplotlib
+- source activate my_py2
+- pip install sqlitedict psutil
+- source deactivate
+# python3
+- conda create -y -n my_py3 python=3 pip numpy scipy matplotlib
+- source activate my_py3
+- pip install sqlitedict psutil
+- source deactivate
+# add the two environments to the path
+- export PATH=/home/travis/miniconda/envs/my_py3/bin:$PATH
+- export PATH=/home/travis/miniconda/envs/my_py2/bin:$PATH
+# activate the correct environment
+- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2; fi
+- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then source activate my_py3; fi
+- which python
+- which python2.7
+- which python3.4
 install:
-- travis_retry pip install sqlitedict
-- travis_retry pip install psutil
 - pip freeze
 script:
-- netstat -tulpen
 - travis_wait python setup.py test
 after_success:
 - git config credential.helper "store --file=.git/credentials"
