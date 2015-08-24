@@ -768,6 +768,7 @@ def test_exception():
         return m
         
     for p_version_server in [2, 3]:
+        global PORT
         PORT += 10
         port = PORT
         authkey = 'q'
