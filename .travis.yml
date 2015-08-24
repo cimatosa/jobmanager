@@ -41,6 +41,17 @@ before_install:
 install:
 - pip freeze
 script:
+- which python
+- which python2.7
+- which python3.4
+- export PATH=/home/travis/miniconda/envs/my_py3.4/bin:$PATH
+- export PATH=/home/travis/miniconda/envs/my_py2.7/bin:$PATH
+# activate the correct environment
+- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2.7; fi
+- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then source activate my_py3.4; fi
+- which python
+- which python2.7
+- which python3.4
 - travis_wait python setup.py test
 after_success:
 - git config credential.helper "store --file=.git/credentials"
