@@ -732,7 +732,8 @@ def test_exception():
         pass
         
     def autoproxy_server(which_python, port, authkey, outfile):
-        envpath = os.path.dirname(os.__file__)
+        libpath = os.path.dirname(os.__file__)
+        envpath = "{LIB}:{LIB}/site-packages".format(LIB=libpath)
         # env will be
         # "/usr/lib/python2.7" for python 2
         # "/usr/lib/python3.4" for python 3
