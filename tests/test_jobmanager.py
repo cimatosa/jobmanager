@@ -775,12 +775,11 @@ def test_exception():
         PORT += 2 # plus two because we also check for wrong port
         port = PORT
         authkey = 'q'
-        try:
-            with open("ap_server.out", 'w') as outfile:
-                p_server = autoproxy_server(p_version_server, port, authkey, outfile)
-                print("autoproxy server running with PID {}".format(p_server.pid))
-                time.sleep(1)
-                
+        with open("ap_server.out", 'w') as outfile:
+            p_server = autoproxy_server(p_version_server, port, authkey, outfile)
+            print("autoproxy server running with PID {}".format(p_server.pid))
+            time.sleep(1)
+            try:
                 print("running tests with python {} ...".format(sys.version_info[0]))
                 print()
 
@@ -851,34 +850,34 @@ def test_exception():
                 
                 assert s1 == s2                
                                 
-        finally:
-            print()
-            print("tests done! terminate server ...".format())
-            
-            p_server.send_signal(signal.SIGTERM)
-            
-            t = time.time()
-            timeout = 10
-            r = None
-            while r is None:
-                r = p_server.poll()
-                time.sleep(1)
-                print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
-                if (time.time() - t) > timeout:
-                    print("timeout exceeded, kill p_server")
-                    print("the managers subprocess will still be running, and needs to be killed by hand")
-                    p_server.send_signal(signal.SIGKILL)
-                    break
-            
-            print("server terminated with exitcode {}".format(r))
-    
-            with open("ap_server.out", 'r') as outfile:
-                print("+"*40)
-                print("this is the server output:")
-                for l in outfile:
-                    print("    {}".format(l[:-1]))
-                print("+"*40)
+            finally:
+                print()
+                print("tests done! terminate server ...".format())
+                
+                p_server.send_signal(signal.SIGTERM)
+                
+                t = time.time()
+                timeout = 10
+                r = None
+                while r is None:
+                    r = p_server.poll()
+                    time.sleep(1)
+                    print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
+                    if (time.time() - t) > timeout:
+                        print("timeout exceeded, kill p_server")
+                        print("the managers subprocess will still be running, and needs to be killed by hand")
+                        p_server.send_signal(signal.SIGKILL)
+                        break
+                
+                print("server terminated with exitcode {}".format(r))
         
+                with open("ap_server.out", 'r') as outfile:
+                    print("+"*40)
+                    print("this is the server output:")
+                    for l in outfile:
+                        print("    {}".format(l[:-1]))
+                    print("+"*40)
+            
     
 
 if __name__ == "__main__":
