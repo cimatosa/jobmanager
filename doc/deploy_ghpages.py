@@ -71,8 +71,9 @@ sp.check_output("rsync -rt --del --exclude='.git' --exclude='.nojekyll' ./build/
 os.chdir("gh_pages")
 sp.check_output("echo 'https://${GH_TOKEN}:@github.com' > .git/credentials", shell=True)
 sp.check_output("git add --all ./*", shell=True)
+
 try:
-    sp.check_output("git commit -a -m 'travis bot build ${TRAVIS_COMMIT} [ci skip]'", shell=True)
+    sp.check_output("git commit -a -m 'travis bot build {} [ci skip]'".format(os.getenv("TRAVIS_COMMIT")), shell=True)
 except:
     pass #nothing to do
 else:
