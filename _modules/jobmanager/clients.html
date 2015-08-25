@@ -66,30 +66,30 @@
 
 <div class="viewcode-block" id="merge_arg_and_const_arg"><a class="viewcode-back" href="../../index.html#jobmanager.clients.merge_arg_and_const_arg">[docs]</a><span class="k">def</span> <span class="nf">merge_arg_and_const_arg</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        prepares data from arg and const_arg such that they can be passed</span>
-<span class="sd">        to the general integration routine</span>
-<span class="sd">        </span>
-<span class="sd">        arg and const_arg are both assumed to be dictionaries</span>
-<span class="sd">        </span>
-<span class="sd">        the merge process must not alter arg nor const_arg</span>
-<span class="sd">        in order to be used in the jobmanager context</span>
-<span class="sd">        </span>
-<span class="sd">        returns the arguments passed to the function</span>
-<span class="sd">        defining the derivative such that</span>
-<span class="sd">        args_dgl = arg[&#39;args&#39;] + const_arg[&#39;args&#39;]</span>
-<span class="sd">        where as arg[&#39;args&#39;] and const_arg[&#39;args&#39;] have been assumed to be tuples</span>
-<span class="sd">        </span>
-<span class="sd">        e.g. </span>
-<span class="sd">            arg[&#39;args&#39;] = (2, &#39;low&#39;)</span>
-<span class="sd">            const_arg[&#39;args&#39;] = (15, np.pi)</span>
-<span class="sd">        f will be called with</span>
-<span class="sd">        f(t, x, 2, &#39;low&#39;, 15, np.pi)</span>
-<span class="sd">        </span>
-<span class="sd">        returns further the combined dictionary</span>
-<span class="sd">        arg + const_arg with the keyword &#39;args&#39; removed</span>
-<span class="sd">        </span>
-<span class="sd">        For any duplicate keys the value will be the value</span>
-<span class="sd">        from the &#39;arg&#39; dictionary. </span>
+<span class="sd">    prepares data from arg and const_arg such that they can be passed</span>
+<span class="sd">    to the general integration routine</span>
+<span class="sd">    </span>
+<span class="sd">    arg and const_arg are both assumed to be dictionaries</span>
+<span class="sd">    </span>
+<span class="sd">    the merge process must not alter arg nor const_arg</span>
+<span class="sd">    in order to be used in the jobmanager context</span>
+<span class="sd">    </span>
+<span class="sd">    returns the arguments passed to the function</span>
+<span class="sd">    defining the derivative such that</span>
+<span class="sd">    args_dgl = arg[&#39;args&#39;] + const_arg[&#39;args&#39;]</span>
+<span class="sd">    where as arg[&#39;args&#39;] and const_arg[&#39;args&#39;] have been assumed to be tuples</span>
+<span class="sd">    </span>
+<span class="sd">    e.g. </span>
+<span class="sd">        arg[&#39;args&#39;] = (2, &#39;low&#39;)</span>
+<span class="sd">        const_arg[&#39;args&#39;] = (15, np.pi)</span>
+<span class="sd">    f will be called with</span>
+<span class="sd">    f(t, x, 2, &#39;low&#39;, 15, np.pi)</span>
+<span class="sd">    </span>
+<span class="sd">    returns further the combined dictionary</span>
+<span class="sd">    arg + const_arg with the keyword &#39;args&#39; removed</span>
+<span class="sd">    </span>
+<span class="sd">    For any duplicate keys the value will be the value</span>
+<span class="sd">    from the &#39;arg&#39; dictionary. </span>
 <span class="sd">    &quot;&quot;&quot;</span>
     
     <span class="c"># allows arg to be a namedtuple (or any other object that</span>
