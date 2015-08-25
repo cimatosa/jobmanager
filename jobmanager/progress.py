@@ -331,16 +331,17 @@ class Progress(Loop):
     use of the 'with' statement is highly encouraged. 
     """    
     def __init__(self, 
-                  count, 
-                  max_count=None,
-                  prepend=None,
-                  width='auto',
-                  speed_calc_cycles=10, 
-                  interval=1, 
-                  verbose=0,
-                  sigint='stop', 
-                  sigterm='stop',
-                  name='progress'):
+                 count, 
+                 max_count         = None,
+                 prepend           = None,
+                 width             = 'auto',
+                 speed_calc_cycles = 10, 
+                 interval          = 1, 
+                 verbose           = 0,
+                 sigint            = 'stop', 
+                 sigterm           = 'stop',
+                 name              = 'progress',
+                 info_line       = None):
         """       
         count [mp.Value] - shared memory to hold the current state, (list or single value)
         
@@ -382,7 +383,7 @@ class Progress(Loop):
                 except TypeError:
                     raise TypeError("'max_count' must be iterable")
             else:
-                assert isinstance(max_count, mp.sharedctypes.Synchronized), "'max_count' must be if the type multiprocessing.sharedctypes.Synchronized"
+                assert isinstance(max_count, mp.sharedctypes.Synchronized), "'max_count' must be of the type multiprocessing.sharedctypes.Synchronized"
                 max_count = [max_count]
         else:
             max_count = [None] * self.len
@@ -429,6 +430,8 @@ class Progress(Loop):
         self.show_on_exit = False
         self.add_args = {}
         
+        self.info_line = info_line
+        
         # setup loop class with func
         super(Progress, self).__init__(func=Progress.show_stat_wrapper_multi, 
                          args=(self.count,
@@ -444,7 +447,8 @@ class Progress(Loop):
                                self.__class__.show_stat,
                                self.len,
                                self.add_args,
-                               self.lock), 
+                               self.lock,
+                               self.info_line), 
                          interval=interval, 
                          verbose=verbose, 
                          sigint=sigint, 
@@ -551,7 +555,9 @@ class Progress(Loop):
                                          self.__class__.show_stat,
                                          self.len, 
                                          self.add_args,
-                                         self.lock)
+                                         self.lock,
+                                         self.info_line,
+                                         no_move_up=True)
 
     def reset(self, i = None):
         """
@@ -629,7 +635,9 @@ class Progress(Loop):
                                 show_stat_function, 
                                 len_, 
                                 add_args,
-                                lock):
+                                lock,
+                                info_line,
+                                no_move_up=False):
         """
             call the static method show_stat_wrapper for each process
         """
@@ -650,7 +658,22 @@ class Progress(Loop):
                                        add_args, 
                                        i, 
                                        lock[i])
-        print(ESC_MOVE_LINE_UP(len_) + ESC_NO_CHAR_ATTR, end='')
+        n = len_
+        if info_line is not None:
+            s = info_line.value.decode('utf-8')
+            s = s.split('\n')
+            n += len(s)
+            for si in s:
+                if width == 'auto':
+                    width = get_terminal_width()
+                if len(si) > width:
+                    si = si[:width]
+                print("{0:<{1}}".format(si, width))
+        
+        if no_move_up:
+            n = 0
+            
+        print(ESC_MOVE_LINE_UP(n) + ESC_NO_CHAR_ATTR, end='')
         sys.stdout.flush()
 
     def start(self):
@@ -683,7 +706,7 @@ class Progress(Loop):
 
         if self.show_on_exit:
             self._show_stat()
-            print('\n'*(self.len-1))
+            print()
         self.show_on_exit = False
         
 
@@ -701,7 +724,8 @@ class ProgressBar(Progress):
                   verbose=0,
                   sigint='stop', 
                   sigterm='stop',
-                  name='progress_bar'):
+                  name='progress_bar',
+                  info_line=None):
         """
             width [int/'auto'] - the number of characters used to show the Progress bar,
             use 'auto' to determine width from terminal information -> see _set_width
@@ -715,7 +739,8 @@ class ProgressBar(Progress):
                          verbose = verbose,
                          sigint=sigint,
                          sigterm=sigterm,
-                         name=name)
+                         name=name,
+                         info_line=info_line)
 
         self._PRE_PREPEND = ESC_NO_CHAR_ATTR + ESC_RED
         self._POST_PREPEND = ESC_BOLD + ESC_GREEN
@@ -782,7 +807,8 @@ class ProgressBarCounter(Progress):
                  verbose=0,
                  sigint='stop', 
                  sigterm='stop',
-                 name='progress_bar_counter'):
+                 name='progress_bar_counter',
+                 info_line=None):
         
         super(ProgressBarCounter, self).__init__(count=count,
                          max_count=max_count,
@@ -793,7 +819,8 @@ class ProgressBarCounter(Progress):
                          verbose = verbose,
                          sigint=sigint,
                          sigterm=sigterm,
-                         name=name)
+                         name=name,
+                         info_line=info_line)
         
         self.counter_count = []
         self.counter_q = []
@@ -889,7 +916,8 @@ class ProgressBarFancy(Progress):
                   verbose=0,
                   sigint='stop', 
                   sigterm='stop',
-                  name='progress_bar'):
+                  name='progress_bar',
+                  info_line=None):
         """
             width [int/'auto'] - the number of characters used to show the Progress bar,
             use 'auto' to determine width from terminal information -> see _set_width
@@ -906,7 +934,8 @@ class ProgressBarFancy(Progress):
                          verbose = verbose,
                          sigint=sigint,
                          sigterm=sigterm,
-                         name=name)
+                         name=name,
+                         info_line=info_line)
         
     @staticmethod        
     def get_d(s1, s2, width, lp, lps):
@@ -1179,6 +1208,9 @@ def FloatValue(val=0.):
 
 def UnsignedIntValue(val=0):
     return mp.Value('I', val, lock=True)
+
+def StringValue(num_of_bytes):
+    return mp.Array('c', bytearray(num_of_bytes), lock=True)
 
 
 def check_process_termination(proc, identifier, timeout, verbose=0, auto_kill_on_last_resort = False):

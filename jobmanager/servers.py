@@ -85,7 +85,16 @@ class PersistentData_Server(JobManager_Server):
                 print("{}: overwriting existing data is DISABLED".format(self._identifier))
          
     def process_new_result(self, arg, result):
-        self.pds[data_as_binary_key(arg.id)] = (arg, result)
+        """
+            use arg.id as key to store the pair (arg, result) in the data base
+            
+            return True, if a new data set was added (key not already in pds)
+            otherwise false
+        """
+        key = data_as_binary_key(arg.id)
+        has_key = key in self.pds
+        self.pds[key] = (arg, result)
+        return not has_key
         
     def put_arg(self, a):
         a_bin = data_as_binary_key(a.id)

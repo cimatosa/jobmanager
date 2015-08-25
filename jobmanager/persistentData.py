@@ -44,7 +44,10 @@ class PersistentDataStructure(object):
         self._name = name
         self._path = abspath(path)
         if not exists(self._path):
-            raise RuntimeError("given path does not exists ({} -> {})".format(path, self._path))
+            print("given path does not exists ({} -> {})".format(path, self._path))
+            print("create path")
+            os.makedirs(self._path)
+            
         
         self.verbose = verbose
         

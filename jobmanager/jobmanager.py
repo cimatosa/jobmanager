@@ -1072,18 +1072,22 @@ class JobManager_Server(object):
         else:
             Progress = progress.ProgressSilentDummy
   
-        with Progress(count = self._numresults,
-                      max_count = self._numjobs, 
-                      interval = self.msg_interval,
-                      speed_calc_cycles=self.speed_calc_cycles,
-                      verbose = self.verbose,
-                      sigint='ign',
-                      sigterm='ign') as stat:
+        info_line = progress.StringValue(num_of_bytes=80)
+  
+        with Progress(count             = self._numresults,
+                      max_count         = self._numjobs, 
+                      interval          = self.msg_interval,
+                      speed_calc_cycles = self.speed_calc_cycles,
+                      verbose           = self.verbose,
+                      sigint            = 'ign',
+                      sigterm           = 'ign',
+                      info_line         = info_line) as stat:
 
             stat.start()
         
             while (len(self.args_set) - self.fail_q.qsize()) > 0:
                 try:
+                    info_line.value = "result_q size: {}".format(self.result_q.qsize()).encode('utf-8')
                     arg, result = self.result_q.get(timeout=1)
                     self.args_set.remove(arg)
                     self.numresults = self.numjobs - len(self.args_set)
@@ -1260,7 +1264,7 @@ class Signal_to_terminate_process_list(object):
             
     def _handler(self, signal, frame):
         if self.verbose > 0:
-            print(": received sig {} -> terminate all given subprocesses".format(self.identifier, progress.signal_dict[signal]))
+            print("{}: received sig {} -> terminate all given subprocesses".format(self.identifier, progress.signal_dict[signal]))
         for i, p in enumerate(self.process_list):
             p.terminate()
             progress.check_process_termination(proc       = p, 
@@ -1338,7 +1342,7 @@ def call_connect_python3(connect, dest, verbose=1, identifier='', reconnect_wait
         
         else:                               # no exception
             if verbose > 1:
-                print("{}connection to {} successfully stablished".format(identifier, dest))
+                print("{}connection to {} successfully established".format(identifier, dest))
             return True      
 
 def call_connect_python2(connect, dest, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
@@ -1381,7 +1385,7 @@ def call_connect_python2(connect, dest, verbose=1, identifier='', reconnect_wait
         
         else:                               # no exception
             if verbose > 1:
-                print("{}connection to {} successfully stablished".format(identifier, dest))
+                print("{}connection to {} successfully established".format(identifier, dest))
             return True                     # SUCCESS -> return True            
 
 call_connect = call_connect_python2 if sys.version_info[0] == 2 else call_connect_python3
@@ -1441,6 +1445,7 @@ def handler_broken_pipe_error(e, verbose):
 def handler_connection_refused(e, identifier, dest, verbose):
     if verbose > 1:
         print("this usually means that no matching Manager object was instanciated at destination side!")
+        print("either there is no Manager running at all, or it is listening to another port.")
     raise JMConnectionRefusedError(e)
 
 def handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose):

@@ -1,0 +1,53 @@
+language: python
+env:
+  global:
+  - GH_REF: github.com/cimatosa/jobmanager.git
+  - secure: Q3YVqRTs3QLspdzHgYMMuOoMypn7yetkb7v0LFe/68AwxZAwEkpCF24FHL/cEH9khc99AGbDIST81undY6kJLWLEDHYIWaoKUbC8OmaT7H6MUdfLtznsv1NnOLut9Z3So/mTMGQHCmTga9NKsuFpDMxg/oxp3wS915ar6+PLh3w=
+notifications:
+  email: false
+python:
+- '3.4'
+- '2.7'
+matrix:
+  allow_failures:
+  - python: '2.7'
+before_install:
+# required for testing
+- sudo apt-get update -qq -y
+- sudo apt-get install openssl
+- wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+- chmod +x miniconda.sh
+- "./miniconda.sh -b"
+- export PATH=/home/travis/miniconda/bin:$PATH
+- conda update --yes conda
+## The following lines are necessary for a test that needs Python 2 and 3
+# Install python2 and python3 anaconda (required for testing)
+# python2
+- conda create -y -n my_py2.7 python=2 pip numpy scipy matplotlib
+- source activate my_py2.7
+- pip install sqlitedict psutil
+- source deactivate
+# python3
+- conda create -y -n my_py3.4 python=3 pip numpy scipy matplotlib
+- source activate my_py3.4
+- pip install sqlitedict psutil
+- source deactivate
+# add the two environments to the path
+- export PATH=/home/travis/miniconda/envs/my_py3.4/bin:$PATH
+- export PATH=/home/travis/miniconda/envs/my_py2.7/bin:$PATH
+# activate the correct environment
+- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2.7; fi
+- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then source activate my_py3.4; fi
+- which python
+- which python2.7
+- which python3.4
+install:
+- pip freeze
+script:
+- travis_wait python setup.py test
+after_success:
+- git config credential.helper "store --file=.git/credentials"
+- echo "https://${GH_TOKEN}:@github.com" > .git/credentials
+- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then travis_retry conda install --yes sphinx; fi
+- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then pip install numpydoc; fi
+- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then python doc/deploy_ghpages.py; fi

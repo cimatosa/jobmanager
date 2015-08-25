@@ -730,7 +730,22 @@ def test_progress_bar_counter_fancy_hide_bar():
                            
             time.sleep(0.0432)
             if (time.time() - t0) > 15:
-                break                   
+                break         
+
+def test_info_line():
+    c1 = progress.UnsignedIntValue(val=0)
+    s  = progress.StringValue(80)
+    m1 = progress.UnsignedIntValue(val=30)
+    
+    with progress.ProgressBarFancy(count=c1, max_count=m1, verbose=1, interval=0.2, info_line=s) as sc:
+        sc.start()
+        while True:
+            c1.value = c1.value + 1
+            if c1.value > 10:
+                s.value = b'info_line\nline2' 
+            time.sleep(0.1)
+            if c1.value >= m1.value:
+                break
             
 if __name__ == "__main__":
     func = [    
@@ -752,12 +767,13 @@ if __name__ == "__main__":
 #     test_progress_bar_counter_hide_bar,
 #     test_progress_bar_slow_change,
 #     test_progress_bar_start_stop,
-    test_progress_bar_fancy,
-    test_progress_bar_multi_fancy,
-    test_progress_bar_fancy_small,
-    test_progress_bar_counter_fancy,
-    test_progress_bar_counter_fancy_non_max,
-    test_progress_bar_counter_fancy_hide_bar,
+#     test_progress_bar_fancy,
+#     test_progress_bar_multi_fancy,
+#     test_progress_bar_fancy_small,
+#     test_progress_bar_counter_fancy,
+#     test_progress_bar_counter_fancy_non_max,
+#     test_progress_bar_counter_fancy_hide_bar,
+    test_info_line,
     lambda: print("END")
     ]
     

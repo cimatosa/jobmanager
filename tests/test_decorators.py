@@ -62,8 +62,9 @@ def my_func_ProgressBarOverrideCount(c = None, m = None):
             c.value = i 
 
 
+
 @decorators.ProgressBar
-def test_decorated_func_calls_decorated_func(
+def testing_decorated_func_calls_decorated_func(
                 c     = decorators.progress.UnsignedIntValue(val=0), 
                 m     = decorators.progress.UnsignedIntValue(val=1),
                                 ):
@@ -81,6 +82,9 @@ def test_decorated_func_calls_decorated_func(
         # methods for reserving a terminal, the function does not print
         # anything - which makes the output pretty.
         _my_func_1(arg=i, kwarg=0, sleep=0.005)
+
+def test_decorated_func_calls_decorated_func():
+    testing_decorated_func_calls_decorated_func()
 
 def test_decorator():
     c = progress.UnsignedIntValue(val=0)
