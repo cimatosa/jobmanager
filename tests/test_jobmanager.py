@@ -733,6 +733,7 @@ def test_exception():
         
     def autoproxy_server(which_python, port, authkey, outfile):
         libpath = os.path.dirname(os.__file__)
+        python_env = os.environ.copy()
         envpath = "{LIB}:{LIB}/site-packages".format(LIB=libpath)
         envpath += ":{LIB}/lib-old".format(LIB=libpath)
         envpath += ":{LIB}/lib-tk".format(LIB=libpath)
@@ -750,7 +751,7 @@ def test_exception():
         else:
             raise ValueError("'which_python' must be 2 or 3")
             
-        python_env = {"PYTHONPATH": envpath}        
+        python_env["PYTHONPATH"] = envpath
         path = dirname(abspath(__file__))
         cmd = [python_interpreter,
         

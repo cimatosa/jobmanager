@@ -12,6 +12,7 @@ matrix:
   allow_failures:
   - python: '2.7'
 before_install:
+- sudo apt-get install openssl
 - wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
 - chmod +x miniconda.sh
 - "./miniconda.sh -b"
