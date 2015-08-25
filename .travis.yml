@@ -12,6 +12,7 @@ matrix:
   allow_failures:
   - python: '2.7'
 before_install:
+# required for testing
 - sudo apt-get update -qq -y
 - sudo apt-get install openssl
 - wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
@@ -34,9 +35,6 @@ before_install:
 # add the two environments to the path
 - export PATH=/home/travis/miniconda/envs/my_py3.4/bin:$PATH
 - export PATH=/home/travis/miniconda/envs/my_py2.7/bin:$PATH
-# hack to circumvent errors in tests
-- sed -i -- 's/except ImportError:/except:/g' /home/travis/miniconda/envs/my_py2.7/lib/python2.7/hashlib.py
-- sed -i -- 's/except ImportError:/except:/g' /home/travis/miniconda/envs/my_py3.4/lib/python3.4/hashlib.py
 # activate the correct environment
 - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2.7; fi
 - if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then source activate my_py3.4; fi
@@ -46,17 +44,6 @@ before_install:
 install:
 - pip freeze
 script:
-- which python
-- which python2.7
-- which python3.4
-- export PATH=/home/travis/miniconda/envs/my_py3.4/bin:$PATH
-- export PATH=/home/travis/miniconda/envs/my_py2.7/bin:$PATH
-# activate the correct environment
-- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2.7; fi
-- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then source activate my_py3.4; fi
-- which python
-- which python2.7
-- which python3.4
 - travis_wait python setup.py test
 after_success:
 - git config credential.helper "store --file=.git/credentials"

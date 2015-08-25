@@ -5,11 +5,6 @@ from __future__ import division, print_function
 import os
 import sys
 
-# debug:
-print(sys.executable)
-print(sys.path)
-print(os.environ)
-
 import time
 import multiprocessing as mp
 import numpy as np
