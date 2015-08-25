@@ -208,38 +208,38 @@
 </div>
 <div class="viewcode-block" id="ProgressBarExtended"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.ProgressBarExtended">[docs]</a><span class="k">class</span> <span class="nc">ProgressBarExtended</span><span class="p">(</span><span class="n">ProgressBar</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        extends the ProgressBar such that</span>
-<span class="sd">        </span>
-<span class="sd">        on can turn of the ProgressBar by giving an extra argument,</span>
-<span class="sd">        namely &#39;progress_bar_off&#39; and set its value to &#39;True&#39;.</span>
-<span class="sd">        </span>
-<span class="sd">        further there will be an additional argument passed to the function</span>
-<span class="sd">        called &#39;progress_bar&#39; which allows to stop the progress bar from</span>
-<span class="sd">        within the function. note that there will be an function signature error</span>
-<span class="sd">        if the function does not accept the extra argument &#39;progress_bar&#39;. So a</span>
-<span class="sd">        general **kwargs at the end of the functions arguments will help.</span>
-<span class="sd">        That is also the reason why the extended version comes in an extra class</span>
-<span class="sd">        because it might otherwise break compatibility.</span>
-<span class="sd">        </span>
-<span class="sd">        Example</span>
-<span class="sd">        -------</span>
-<span class="sd">        </span>
-<span class="sd">        &gt;&gt;&gt; import jobmanager as jm</span>
-<span class="sd">        </span>
-<span class="sd">        &gt;&gt;&gt; c = jm.progress.UnsignedIntValue(val=0)</span>
-<span class="sd">        &gt;&gt;&gt; m = jm.progress.UnsignedIntValue(val=20)</span>
+<span class="sd">    extends the ProgressBar such that</span>
 <span class="sd">    </span>
-<span class="sd">        &gt;&gt;&gt; @jm.decorators.ProgressBarExtended    # choose &#39;ProgressBarExtended&#39;</span>
-<span class="sd">        &gt;&gt;&gt; def my_func_kwargs(c, m, **kwargs):   # simply add &#39;**kwargs&#39; here</span>
-<span class="sd">        &gt;&gt;&gt;     for i in range(m.value):</span>
-<span class="sd">        &gt;&gt;&gt;         c.value = i+1</span>
-<span class="sd">        &gt;&gt;&gt;         time.sleep(0.1)</span>
-<span class="sd">        </span>
-<span class="sd">        &gt;&gt;&gt; # same as when using ProgressBar</span>
-<span class="sd">        &gt;&gt;&gt; my_func_kwargs(c, m)</span>
-<span class="sd">        </span>
-<span class="sd">        &gt;&gt;&gt; # a simple kwarg will switch the progressBar off</span>
-<span class="sd">        &gt;&gt;&gt; my_func_kwargs(c, m, progress_bar_off=True)</span>
+<span class="sd">    on can turn of the ProgressBar by giving an extra argument,</span>
+<span class="sd">    namely &#39;progress_bar_off&#39; and set its value to &#39;True&#39;.</span>
+<span class="sd">    </span>
+<span class="sd">    further there will be an additional argument passed to the function</span>
+<span class="sd">    called &#39;progress_bar&#39; which allows to stop the progress bar from</span>
+<span class="sd">    within the function. note that there will be an function signature error</span>
+<span class="sd">    if the function does not accept the extra argument &#39;progress_bar&#39;. So a</span>
+<span class="sd">    general **kwargs at the end of the functions arguments will help.</span>
+<span class="sd">    That is also the reason why the extended version comes in an extra class</span>
+<span class="sd">    because it might otherwise break compatibility.</span>
+<span class="sd">    </span>
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; import jobmanager as jm</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; c = jm.progress.UnsignedIntValue(val=0)</span>
+<span class="sd">    &gt;&gt;&gt; m = jm.progress.UnsignedIntValue(val=20)</span>
+
+<span class="sd">    &gt;&gt;&gt; @jm.decorators.ProgressBarExtended    # choose &#39;ProgressBarExtended&#39;</span>
+<span class="sd">    &gt;&gt;&gt; def my_func_kwargs(c, m, **kwargs):   # simply add &#39;**kwargs&#39; here</span>
+<span class="sd">    &gt;&gt;&gt;     for i in range(m.value):</span>
+<span class="sd">    &gt;&gt;&gt;         c.value = i+1</span>
+<span class="sd">    &gt;&gt;&gt;         time.sleep(0.1)</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; # same as when using ProgressBar</span>
+<span class="sd">    &gt;&gt;&gt; my_func_kwargs(c, m)</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; # a simple kwarg will switch the progressBar off</span>
+<span class="sd">    &gt;&gt;&gt; my_func_kwargs(c, m, progress_bar_off=True)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="c"># Bind the args and kwds to the argument names of self.func</span>
