@@ -8,7 +8,7 @@
     
     <title>jobmanager documentation &mdash; jobmanager 0.1.0 documentation</title>
     
-    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     
     <script type="text/javascript">
@@ -23,12 +23,12 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="top" title="jobmanager 0.1.0 documentation" href="#" />
     <link rel="next" title="jobmanager documentation" href="" /> 
   </head>
-  <body>
-    <div class="related">
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -40,14 +40,14 @@
         <li class="right" >
           <a href="#" title="jobmanager documentation"
              accesskey="N">next</a> |</li>
-        <li><a href="#">jobmanager 0.1.0 documentation</a> &raquo;</li> 
+        <li class="nav-item nav-item-0"><a href="#">jobmanager 0.1.0 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
     <div class="document">
       <div class="documentwrapper">
         <div class="bodywrapper">
-          <div class="body">
+          <div class="body" role="main">
             
   <div class="section" id="jobmanager-documentation">
 <h1>jobmanager documentation<a class="headerlink" href="#jobmanager-documentation" title="Permalink to this headline">¶</a></h1>
@@ -93,24 +93,24 @@
 </ul>
 </div>
 <p>For an alphabetically sorted list of all modules, classes, and
-methods, see <a class="reference internal" href="genindex.html"><em>Index</em></a>.</p>
+methods, see <a class="reference internal" href="genindex.html"><span>Index</span></a>.</p>
 </div>
 <div class="section" id="module-jobmanager">
 <span id="main-module"></span><h2>Main module<a class="headerlink" href="#module-jobmanager" title="Permalink to this headline">¶</a></h2>
 <p>Easy distributed computing based on the python class SyncManager for remote communication and python module multiprocessing for local parallelism.</p>
 <p>Scheduling across different processes/machines is implemented in the
-core modules <a class="reference internal" href="#module-jobmanager.jobmanager" title="jobmanager.jobmanager"><tt class="xref py py-mod docutils literal"><span class="pre">jobmanager.jobmanager</span></tt></a>, <a class="reference internal" href="#module-jobmanager.servers" title="jobmanager.servers"><tt class="xref py py-mod docutils literal"><span class="pre">jobmanager.servers</span></tt></a>,
-and <a class="reference internal" href="#module-jobmanager.clients" title="jobmanager.clients"><tt class="xref py py-mod docutils literal"><span class="pre">jobmanager.clients</span></tt></a>.</p>
+core modules <a class="reference internal" href="#module-jobmanager.jobmanager" title="jobmanager.jobmanager"><code class="xref py py-mod docutils literal"><span class="pre">jobmanager.jobmanager</span></code></a>, <a class="reference internal" href="#module-jobmanager.servers" title="jobmanager.servers"><code class="xref py py-mod docutils literal"><span class="pre">jobmanager.servers</span></code></a>,
+and <a class="reference internal" href="#module-jobmanager.clients" title="jobmanager.clients"><code class="xref py py-mod docutils literal"><span class="pre">jobmanager.clients</span></code></a>.</p>
 <table border="1" class="longtable docutils">
 <colgroup>
 <col width="10%" />
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Client" title="jobmanager.jobmanager.JobManager_Client"><tt class="xref py py-obj docutils literal"><span class="pre">JobManager_Client</span></tt></a>(server,&nbsp;authkey[,&nbsp;port,&nbsp;...])</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Client" title="jobmanager.jobmanager.JobManager_Client"><code class="xref py py-obj docutils literal"><span class="pre">JobManager_Client</span></code></a>(server,&nbsp;authkey[,&nbsp;port,&nbsp;...])</td>
 <td>Calls the functions self.func with arguments fetched from the job_q.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server" title="jobmanager.jobmanager.JobManager_Server"><tt class="xref py py-obj docutils literal"><span class="pre">JobManager_Server</span></tt></a>(authkey[,&nbsp;const_arg,&nbsp;...])</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server" title="jobmanager.jobmanager.JobManager_Server"><code class="xref py py-obj docutils literal"><span class="pre">JobManager_Server</span></code></a>(authkey[,&nbsp;const_arg,&nbsp;...])</td>
 <td>general usage:</td>
 </tr>
 </tbody>
@@ -118,16 +118,16 @@ and <a class="reference internal" href="#module-jobmanager.clients" title="jobma
 <div class="figure align-center">
 <img alt="_images/server_client_communication.png" src="_images/server_client_communication.png" />
 </div>
-<p>Progress classes are implemented in the <a class="reference internal" href="#module-jobmanager.progress" title="jobmanager.progress"><tt class="xref py py-mod docutils literal"><span class="pre">jobmanager.progress</span></tt></a>
+<p>Progress classes are implemented in the <a class="reference internal" href="#module-jobmanager.progress" title="jobmanager.progress"><code class="xref py py-mod docutils literal"><span class="pre">jobmanager.progress</span></code></a>
 submodule. Intuitive access to progress bars is facilitated with
-decorators (<a class="reference internal" href="#module-jobmanager.decorators" title="jobmanager.decorators"><tt class="xref py py-mod docutils literal"><span class="pre">jobmanager.decorators</span></tt></a>).</p>
+decorators (<a class="reference internal" href="#module-jobmanager.decorators" title="jobmanager.decorators"><code class="xref py py-mod docutils literal"><span class="pre">jobmanager.decorators</span></code></a>).</p>
 <p>Fork <a class="reference external" href="https://github.com/cimatosa/jobmanager/">jobmanager on GitHib</a>.</p>
 </div>
 <div class="section" id="module-jobmanager.progress">
 <span id="progress-monitoring"></span><h2>Progress monitoring<a class="headerlink" href="#module-jobmanager.progress" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
 <dt id="jobmanager.progress.Loop">
-<em class="property">class </em><tt class="descclassname">jobmanager.progress.</tt><tt class="descname">Loop</tt><big>(</big><em>func</em>, <em>args=()</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name=None</em>, <em>auto_kill_on_last_resort=False</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Loop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.progress.</code><code class="descname">Loop</code><span class="sig-paren">(</span><em>func</em>, <em>args=()</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name=None</em>, <em>auto_kill_on_last_resort=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Loop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop" title="Permalink to this definition">¶</a></dt>
 <dd><p>class to run a function periodically an seperate process.</p>
 <p>In case the called function returns True, the loop will stop.
 Otherwise a time interval given by interval will be slept before
@@ -157,7 +157,7 @@ question to send SIGKILL with no.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.run" title="jobmanager.progress.Loop.run"><tt class="xref py py-obj docutils literal"><span class="pre">run</span></tt></a></td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.run" title="jobmanager.progress.Loop.run"><code class="xref py py-obj docutils literal"><span class="pre">run</span></code></a></td>
 <td>makes the shared memory boolean accessible as class attribute</td>
 </tr>
 </tbody>
@@ -169,44 +169,44 @@ question to send SIGKILL with no.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.getpid" title="jobmanager.progress.Loop.getpid"><tt class="xref py py-obj docutils literal"><span class="pre">getpid</span></tt></a>()</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.getpid" title="jobmanager.progress.Loop.getpid"><code class="xref py py-obj docutils literal"><span class="pre">getpid</span></code></a>()</td>
 <td>return the process id of the spawned process</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_alive</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">is_alive</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.join" title="jobmanager.progress.Loop.join"><tt class="xref py py-obj docutils literal"><span class="pre">join</span></tt></a>(timeout)</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.join" title="jobmanager.progress.Loop.join"><code class="xref py py-obj docutils literal"><span class="pre">join</span></code></a>(timeout)</td>
 <td>calls join for the spawned process with given timeout</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">pause</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">pause</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">resume</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">resume</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.progress.Loop.start" title="jobmanager.progress.Loop.start"><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt></a>()</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.progress.Loop.start" title="jobmanager.progress.Loop.start"><code class="xref py py-obj docutils literal"><span class="pre">start</span></code></a>()</td>
 <td>uses multiprocess Process to call _wrapper_func in subprocess</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.stop" title="jobmanager.progress.Loop.stop"><tt class="xref py py-obj docutils literal"><span class="pre">stop</span></tt></a>()</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Loop.stop" title="jobmanager.progress.Loop.stop"><code class="xref py py-obj docutils literal"><span class="pre">stop</span></code></a>()</td>
 <td>stops the process triggered by start</td>
 </tr>
 </tbody>
 </table>
 <dl class="method">
 <dt id="jobmanager.progress.Loop.getpid">
-<tt class="descname">getpid</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.getpid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.getpid" title="Permalink to this definition">¶</a></dt>
+<code class="descname">getpid</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.getpid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.getpid" title="Permalink to this definition">¶</a></dt>
 <dd><p>return the process id of the spawned process</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.progress.Loop.join">
-<tt class="descname">join</tt><big>(</big><em>timeout</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.join"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.join" title="Permalink to this definition">¶</a></dt>
+<code class="descname">join</code><span class="sig-paren">(</span><em>timeout</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.join"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.join" title="Permalink to this definition">¶</a></dt>
 <dd><p>calls join for the spawned process with given timeout</p>
 </dd></dl>
 
 <dl class="attribute">
 <dt id="jobmanager.progress.Loop.run">
-<tt class="descname">run</tt><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.run" title="Permalink to this definition">¶</a></dt>
+<code class="descname">run</code><a class="headerlink" href="#jobmanager.progress.Loop.run" title="Permalink to this definition">¶</a></dt>
 <dd><p>makes the shared memory boolean accessible as class attribute</p>
 <p>Set run False, the loop will stop repeating.
 Calling start, will set run True and start the loop again as a new process.</p>
@@ -214,13 +214,13 @@ Calling start, will set run True and start the loop again as a new process.</p>
 
 <dl class="method">
 <dt id="jobmanager.progress.Loop.start">
-<tt class="descname">start</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.start" title="Permalink to this definition">¶</a></dt>
+<code class="descname">start</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.start" title="Permalink to this definition">¶</a></dt>
 <dd><p>uses multiprocess Process to call _wrapper_func in subprocess</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.progress.Loop.stop">
-<tt class="descname">stop</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.stop" title="Permalink to this definition">¶</a></dt>
+<code class="descname">stop</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Loop.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Loop.stop" title="Permalink to this definition">¶</a></dt>
 <dd><p>stops the process triggered by start</p>
 <p>Setting the shared memory boolean run to false, which should prevent
 the loop from repeating. Call __cleanup to make sure the process
@@ -231,7 +231,7 @@ stopped. After that we could trigger start() again.</p>
 
 <dl class="class">
 <dt id="jobmanager.progress.Progress">
-<em class="property">class </em><tt class="descclassname">jobmanager.progress.</tt><tt class="descname">Progress</tt><big>(</big><em>count</em>, <em>max_count=None</em>, <em>prepend=None</em>, <em>width='auto'</em>, <em>speed_calc_cycles=10</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress'</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Progress"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.progress.</code><code class="descname">Progress</code><span class="sig-paren">(</span><em>count</em>, <em>max_count=None</em>, <em>prepend=None</em>, <em>width='auto'</em>, <em>speed_calc_cycles=10</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress'</em>, <em>info_line=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Progress"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress" title="Permalink to this definition">¶</a></dt>
 <dd><p>Abstract Progress Loop</p>
 <p>Uses Loop class to implement a repeating function to display the progress
 of multiples processes.</p>
@@ -287,7 +287,7 @@ use of the &#8216;with&#8217; statement is highly encouraged.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">run</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">run</span></code></td>
 <td>makes the shared memory boolean accessible as class attribute</td>
 </tr>
 </tbody>
@@ -299,51 +299,51 @@ use of the &#8216;with&#8217; statement is highly encouraged.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">getpid</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">getpid</span></code>()</td>
 <td>return the process id of the spawned process</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_alive</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">is_alive</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">join</span></tt>(timeout)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">join</span></code>(timeout)</td>
 <td>calls join for the spawned process with given timeout</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">pause</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">pause</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.reset" title="jobmanager.progress.Progress.reset"><tt class="xref py py-obj docutils literal"><span class="pre">reset</span></tt></a>([i])</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.reset" title="jobmanager.progress.Progress.reset"><code class="xref py py-obj docutils literal"><span class="pre">reset</span></code></a>([i])</td>
 <td>convenient function to reset progress information</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">resume</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">resume</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.show_stat" title="jobmanager.progress.Progress.show_stat"><tt class="xref py py-obj docutils literal"><span class="pre">show_stat</span></tt></a>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.show_stat" title="jobmanager.progress.Progress.show_stat"><code class="xref py py-obj docutils literal"><span class="pre">show_stat</span></code></a>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
 <td>re implement this function in a subclass</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></tt>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></code>(count,&nbsp;last_count,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.show_stat_wrapper_multi" title="jobmanager.progress.Progress.show_stat_wrapper_multi"><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></tt></a>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.show_stat_wrapper_multi" title="jobmanager.progress.Progress.show_stat_wrapper_multi"><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></code></a>(count,&nbsp;last_count,&nbsp;...)</td>
 <td>call the static method show_stat_wrapper for each process</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">start</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.stop" title="jobmanager.progress.Progress.stop"><tt class="xref py py-obj docutils literal"><span class="pre">stop</span></tt></a>([make_sure_its_down])</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.progress.Progress.stop" title="jobmanager.progress.Progress.stop"><code class="xref py py-obj docutils literal"><span class="pre">stop</span></code></a>([make_sure_its_down])</td>
 <td>trigger clean up by hand, needs to be done when not using</td>
 </tr>
 </tbody>
 </table>
 <dl class="method">
 <dt id="jobmanager.progress.Progress.reset">
-<tt class="descname">reset</tt><big>(</big><em>i=None</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.reset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.reset" title="Permalink to this definition">¶</a></dt>
+<code class="descname">reset</code><span class="sig-paren">(</span><em>i=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.reset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.reset" title="Permalink to this definition">¶</a></dt>
 <dd><p>convenient function to reset progress information</p>
 <p>i [None, int] - None: reset all, int: reset process indexed by i</p>
 </dd></dl>
 
 <dl class="staticmethod">
 <dt id="jobmanager.progress.Progress.show_stat">
-<em class="property">static </em><tt class="descname">show_stat</tt><big>(</big><em>count_value</em>, <em>max_count_value</em>, <em>prepend</em>, <em>speed</em>, <em>tet</em>, <em>ttg</em>, <em>width</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.show_stat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.show_stat" title="Permalink to this definition">¶</a></dt>
+<em class="property">static </em><code class="descname">show_stat</code><span class="sig-paren">(</span><em>count_value</em>, <em>max_count_value</em>, <em>prepend</em>, <em>speed</em>, <em>tet</em>, <em>ttg</em>, <em>width</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.show_stat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.show_stat" title="Permalink to this definition">¶</a></dt>
 <dd><p>re implement this function in a subclass</p>
 <p>count_value - current value of progress</p>
 <p>max_count_value - maximum value the progress can take</p>
@@ -359,13 +359,13 @@ to get readable information in string format)</p>
 
 <dl class="staticmethod">
 <dt id="jobmanager.progress.Progress.show_stat_wrapper_multi">
-<em class="property">static </em><tt class="descname">show_stat_wrapper_multi</tt><big>(</big><em>count</em>, <em>last_count</em>, <em>start_time</em>, <em>max_count</em>, <em>speed_calc_cycles</em>, <em>width</em>, <em>q</em>, <em>last_old_count</em>, <em>last_old_time</em>, <em>prepend</em>, <em>show_stat_function</em>, <em>len_</em>, <em>add_args</em>, <em>lock</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.show_stat_wrapper_multi"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.show_stat_wrapper_multi" title="Permalink to this definition">¶</a></dt>
+<em class="property">static </em><code class="descname">show_stat_wrapper_multi</code><span class="sig-paren">(</span><em>count</em>, <em>last_count</em>, <em>start_time</em>, <em>max_count</em>, <em>speed_calc_cycles</em>, <em>width</em>, <em>q</em>, <em>last_old_count</em>, <em>last_old_time</em>, <em>prepend</em>, <em>show_stat_function</em>, <em>len_</em>, <em>add_args</em>, <em>lock</em>, <em>info_line</em>, <em>no_move_up=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.show_stat_wrapper_multi"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.show_stat_wrapper_multi" title="Permalink to this definition">¶</a></dt>
 <dd><p>call the static method show_stat_wrapper for each process</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.progress.Progress.stop">
-<tt class="descname">stop</tt><big>(</big><em>make_sure_its_down=False</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.stop" title="Permalink to this definition">¶</a></dt>
+<code class="descname">stop</code><span class="sig-paren">(</span><em>make_sure_its_down=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#Progress.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.Progress.stop" title="Permalink to this definition">¶</a></dt>
 <dd><p>trigger clean up by hand, needs to be done when not using
 context management via &#8216;with&#8217; statement</p>
 <ul class="simple">
@@ -379,7 +379,7 @@ context management via &#8216;with&#8217; statement</p>
 
 <dl class="class">
 <dt id="jobmanager.progress.ProgressBar">
-<em class="property">class </em><tt class="descclassname">jobmanager.progress.</tt><tt class="descname">ProgressBar</tt><big>(</big><em>count</em>, <em>max_count=None</em>, <em>width='auto'</em>, <em>prepend=None</em>, <em>speed_calc_cycles=10</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress_bar'</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#ProgressBar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.ProgressBar" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.progress.</code><code class="descname">ProgressBar</code><span class="sig-paren">(</span><em>count</em>, <em>max_count=None</em>, <em>width='auto'</em>, <em>prepend=None</em>, <em>speed_calc_cycles=10</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress_bar'</em>, <em>info_line=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#ProgressBar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.ProgressBar" title="Permalink to this definition">¶</a></dt>
 <dd><p>implements a progress bar similar to the one known from &#8216;wget&#8217; or &#8216;pv&#8217;</p>
 <p class="rubric">Attributes</p>
 <table border="1" class="longtable docutils">
@@ -388,7 +388,7 @@ context management via &#8216;with&#8217; statement</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">run</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">run</span></code></td>
 <td>makes the shared memory boolean accessible as class attribute</td>
 </tr>
 </tbody>
@@ -400,37 +400,37 @@ context management via &#8216;with&#8217; statement</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">getpid</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">getpid</span></code>()</td>
 <td>return the process id of the spawned process</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_alive</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">is_alive</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">join</span></tt>(timeout)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">join</span></code>(timeout)</td>
 <td>calls join for the spawned process with given timeout</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">pause</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">pause</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">reset</span></tt>([i])</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">reset</span></code>([i])</td>
 <td>convenient function to reset progress information</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">resume</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">resume</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat</span></tt>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat</span></code>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></tt>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></code>(count,&nbsp;last_count,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></tt>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></code>(count,&nbsp;last_count,&nbsp;...)</td>
 <td>call the static method show_stat_wrapper for each process</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">start</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">stop</span></tt>([make_sure_its_down])</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">stop</span></code>([make_sure_its_down])</td>
 <td>trigger clean up by hand, needs to be done when not using</td>
 </tr>
 </tbody>
@@ -439,7 +439,7 @@ context management via &#8216;with&#8217; statement</p>
 
 <dl class="class">
 <dt id="jobmanager.progress.ProgressBarCounter">
-<em class="property">class </em><tt class="descclassname">jobmanager.progress.</tt><tt class="descname">ProgressBarCounter</tt><big>(</big><em>count</em>, <em>max_count=None</em>, <em>prepend=None</em>, <em>speed_calc_cycles_bar=10</em>, <em>speed_calc_cycles_counter=5</em>, <em>width='auto'</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress_bar_counter'</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#ProgressBarCounter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.ProgressBarCounter" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.progress.</code><code class="descname">ProgressBarCounter</code><span class="sig-paren">(</span><em>count</em>, <em>max_count=None</em>, <em>prepend=None</em>, <em>speed_calc_cycles_bar=10</em>, <em>speed_calc_cycles_counter=5</em>, <em>width='auto'</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress_bar_counter'</em>, <em>info_line=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#ProgressBarCounter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.ProgressBarCounter" title="Permalink to this definition">¶</a></dt>
 <dd><p>records also the time of each reset and calculates the speed
 of the resets.</p>
 <p>shows the TET since init (not effected by reset)
@@ -456,7 +456,7 @@ max_count == 0 -&gt; hide process statistic at all</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">run</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">run</span></code></td>
 <td>makes the shared memory boolean accessible as class attribute</td>
 </tr>
 </tbody>
@@ -468,40 +468,40 @@ max_count == 0 -&gt; hide process statistic at all</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">get_counter_count</span></tt>([i])</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">get_counter_count</span></code>([i])</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">getpid</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">getpid</span></code>()</td>
 <td>return the process id of the spawned process</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_alive</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">is_alive</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">join</span></tt>(timeout)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">join</span></code>(timeout)</td>
 <td>calls join for the spawned process with given timeout</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">pause</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">pause</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">reset</span></tt>([i])</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">reset</span></code>([i])</td>
 <td>convenient function to reset progress information</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">resume</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">resume</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat</span></tt>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat</span></code>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></tt>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></code>(count,&nbsp;last_count,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></tt>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></code>(count,&nbsp;last_count,&nbsp;...)</td>
 <td>call the static method show_stat_wrapper for each process</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">start</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">stop</span></tt>([make_sure_its_down])</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">stop</span></code>([make_sure_its_down])</td>
 <td>trigger clean up by hand, needs to be done when not using</td>
 </tr>
 </tbody>
@@ -510,7 +510,7 @@ max_count == 0 -&gt; hide process statistic at all</p>
 
 <dl class="class">
 <dt id="jobmanager.progress.ProgressBarFancy">
-<em class="property">class </em><tt class="descclassname">jobmanager.progress.</tt><tt class="descname">ProgressBarFancy</tt><big>(</big><em>count</em>, <em>max_count=None</em>, <em>width='auto'</em>, <em>prepend=None</em>, <em>speed_calc_cycles=10</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress_bar'</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#ProgressBarFancy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.ProgressBarFancy" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.progress.</code><code class="descname">ProgressBarFancy</code><span class="sig-paren">(</span><em>count</em>, <em>max_count=None</em>, <em>width='auto'</em>, <em>prepend=None</em>, <em>speed_calc_cycles=10</em>, <em>interval=1</em>, <em>verbose=0</em>, <em>sigint='stop'</em>, <em>sigterm='stop'</em>, <em>name='progress_bar'</em>, <em>info_line=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#ProgressBarFancy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.ProgressBarFancy" title="Permalink to this definition">¶</a></dt>
 <dd><p>implements a progress bar where the color indicates the current status
 similar to the bars known from &#8216;htop&#8217;</p>
 <p class="rubric">Attributes</p>
@@ -520,7 +520,7 @@ similar to the bars known from &#8216;htop&#8217;</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">run</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">run</span></code></td>
 <td>makes the shared memory boolean accessible as class attribute</td>
 </tr>
 </tbody>
@@ -532,61 +532,61 @@ similar to the bars known from &#8216;htop&#8217;</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">full_minor_stat</span></tt>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">full_minor_stat</span></code>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">full_stat</span></tt>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">full_stat</span></code>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">get_d</span></tt>(s1,&nbsp;s2,&nbsp;width,&nbsp;lp,&nbsp;lps)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">get_d</span></code>(s1,&nbsp;s2,&nbsp;width,&nbsp;lp,&nbsp;lps)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">getpid</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">getpid</span></code>()</td>
 <td>return the process id of the spawned process</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_alive</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">is_alive</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">join</span></tt>(timeout)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">join</span></code>(timeout)</td>
 <td>calls join for the spawned process with given timeout</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">kw_bold</span></tt>(s,&nbsp;ch_after)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">kw_bold</span></code>(s,&nbsp;ch_after)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">pause</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">pause</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">reduced_1_stat</span></tt>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">reduced_1_stat</span></code>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">reduced_2_stat</span></tt>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">reduced_2_stat</span></code>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">reduced_3_stat</span></tt>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">reduced_3_stat</span></code>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">reduced_4_stat</span></tt>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">reduced_4_stat</span></code>(p,&nbsp;tet,&nbsp;speed,&nbsp;ttg,&nbsp;eta,&nbsp;ort,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">reset</span></tt>([i])</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">reset</span></code>([i])</td>
 <td>convenient function to reset progress information</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">resume</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">resume</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat</span></tt>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat</span></code>(count_value,&nbsp;max_count_value,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></tt>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper</span></code>(count,&nbsp;last_count,&nbsp;...)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></tt>(count,&nbsp;last_count,&nbsp;...)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat_wrapper_multi</span></code>(count,&nbsp;last_count,&nbsp;...)</td>
 <td>call the static method show_stat_wrapper for each process</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">start</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">stop</span></tt>([make_sure_its_down])</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">stop</span></code>([make_sure_its_down])</td>
 <td>trigger clean up by hand, needs to be done when not using</td>
 </tr>
 </tbody>
@@ -595,7 +595,7 @@ similar to the bars known from &#8216;htop&#8217;</p>
 
 <dl class="class">
 <dt id="jobmanager.progress.SIG_handler_Loop">
-<em class="property">class </em><tt class="descclassname">jobmanager.progress.</tt><tt class="descname">SIG_handler_Loop</tt><big>(</big><em>shared_mem_run</em>, <em>sigint</em>, <em>sigterm</em>, <em>identifier</em>, <em>verbose=0</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#SIG_handler_Loop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.SIG_handler_Loop" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.progress.</code><code class="descname">SIG_handler_Loop</code><span class="sig-paren">(</span><em>shared_mem_run</em>, <em>sigint</em>, <em>sigterm</em>, <em>identifier</em>, <em>verbose=0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#SIG_handler_Loop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.SIG_handler_Loop" title="Permalink to this definition">¶</a></dt>
 <dd><p>class to setup signal handling for the Loop class</p>
 <p>Note: each subprocess receives the default signal handling from it&#8217;s parent.
 If the signal function from the module signal is evoked within the subprocess
@@ -611,7 +611,7 @@ a signal was receives.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">set_signal</span></tt>(sig,&nbsp;handler_str)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">set_signal</span></code>(sig,&nbsp;handler_str)</td>
 <td></td>
 </tr>
 </tbody>
@@ -620,7 +620,7 @@ a signal was receives.</p>
 
 <dl class="function">
 <dt id="jobmanager.progress.get_terminal_size">
-<tt class="descclassname">jobmanager.progress.</tt><tt class="descname">get_terminal_size</tt><big>(</big><em>defaultw=80</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#get_terminal_size"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.get_terminal_size" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.progress.</code><code class="descname">get_terminal_size</code><span class="sig-paren">(</span><em>defaultw=80</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#get_terminal_size"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.get_terminal_size" title="Permalink to this definition">¶</a></dt>
 <dd><p>Checks various methods to determine the terminal size</p>
 <p>Methods:
 - shutil.get_terminal_size (only Python3)
@@ -650,19 +650,19 @@ found, None is return in its place.</p>
 
 <dl class="function">
 <dt id="jobmanager.progress.humanize_speed">
-<tt class="descclassname">jobmanager.progress.</tt><tt class="descname">humanize_speed</tt><big>(</big><em>c_per_sec</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#humanize_speed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.humanize_speed" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.progress.</code><code class="descname">humanize_speed</code><span class="sig-paren">(</span><em>c_per_sec</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#humanize_speed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.humanize_speed" title="Permalink to this definition">¶</a></dt>
 <dd><p>convert a speed in counts per second to counts per [s, min, h, d], choosing the smallest value greater zero.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="jobmanager.progress.humanize_time">
-<tt class="descclassname">jobmanager.progress.</tt><tt class="descname">humanize_time</tt><big>(</big><em>secs</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#humanize_time"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.humanize_time" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.progress.</code><code class="descname">humanize_time</code><span class="sig-paren">(</span><em>secs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#humanize_time"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.humanize_time" title="Permalink to this definition">¶</a></dt>
 <dd><p>convert second in to hh:mm:ss format</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="jobmanager.progress.terminal_reserve">
-<tt class="descclassname">jobmanager.progress.</tt><tt class="descname">terminal_reserve</tt><big>(</big><em>progress_obj</em>, <em>terminal_obj=None</em>, <em>verbose=0</em>, <em>identifier=None</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#terminal_reserve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.terminal_reserve" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.progress.</code><code class="descname">terminal_reserve</code><span class="sig-paren">(</span><em>progress_obj</em>, <em>terminal_obj=None</em>, <em>verbose=0</em>, <em>identifier=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#terminal_reserve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.terminal_reserve" title="Permalink to this definition">¶</a></dt>
 <dd><p>Registers the terminal (stdout) for printing.</p>
 <p>Useful to prevent multiple processes from writing progress bars
 to stdout.</p>
@@ -685,7 +685,7 @@ Nothing is locked.</p>
 
 <dl class="function">
 <dt id="jobmanager.progress.terminal_unreserve">
-<tt class="descclassname">jobmanager.progress.</tt><tt class="descname">terminal_unreserve</tt><big>(</big><em>progress_obj</em>, <em>terminal_obj=None</em>, <em>verbose=0</em>, <em>identifier=None</em><big>)</big><a class="reference internal" href="_modules/jobmanager/progress.html#terminal_unreserve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.terminal_unreserve" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.progress.</code><code class="descname">terminal_unreserve</code><span class="sig-paren">(</span><em>progress_obj</em>, <em>terminal_obj=None</em>, <em>verbose=0</em>, <em>identifier=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/progress.html#terminal_unreserve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.progress.terminal_unreserve" title="Permalink to this definition">¶</a></dt>
 <dd><p>Unregisters the terminal (stdout) for printing.</p>
 <p>an instance (progress_obj) can only unreserve the tty (terminal_obj) when it also reserved it</p>
 <p>see terminal_reserved for more information</p>
@@ -707,7 +707,7 @@ Nothing is locked.</p>
 <p>Implements decorators/wrappers for simple use-cases of jobmanager.</p>
 <dl class="class">
 <dt id="jobmanager.decorators.ProgressBar">
-<em class="property">class </em><tt class="descclassname">jobmanager.decorators.</tt><tt class="descname">ProgressBar</tt><big>(</big><em>func</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/jobmanager/decorators.html#ProgressBar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.decorators.ProgressBar" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.decorators.</code><code class="descname">ProgressBar</code><span class="sig-paren">(</span><em>func</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/decorators.html#ProgressBar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.decorators.ProgressBar" title="Permalink to this definition">¶</a></dt>
 <dd><p>A wrapper/decorator with a text-based progress bar.</p>
 <p>Methods:
 - __init__
@@ -741,7 +741,7 @@ progress bar.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">__call__</span></tt>(*args,&nbsp;**kwargs)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">__call__</span></code>(*args,&nbsp;**kwargs)</td>
 <td>Calls <cite>func</cite> - previously defined in <cite>__init__</cite>.</td>
 </tr>
 </tbody>
@@ -750,7 +750,7 @@ progress bar.</p>
 
 <dl class="class">
 <dt id="jobmanager.decorators.ProgressBarExtended">
-<em class="property">class </em><tt class="descclassname">jobmanager.decorators.</tt><tt class="descname">ProgressBarExtended</tt><big>(</big><em>func</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/jobmanager/decorators.html#ProgressBarExtended"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.decorators.ProgressBarExtended" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.decorators.</code><code class="descname">ProgressBarExtended</code><span class="sig-paren">(</span><em>func</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/decorators.html#ProgressBarExtended"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.decorators.ProgressBarExtended" title="Permalink to this definition">¶</a></dt>
 <dd><p>extends the ProgressBar such that</p>
 <p>on can turn of the ProgressBar by giving an extra argument,
 namely &#8216;progress_bar_off&#8217; and set its value to &#8216;True&#8217;.</p>
@@ -768,7 +768,7 @@ because it might otherwise break compatibility.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">__call__</span></tt>(*args,&nbsp;**kwargs)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">__call__</span></code>(*args,&nbsp;**kwargs)</td>
 <td></td>
 </tr>
 </tbody>
@@ -777,7 +777,7 @@ because it might otherwise break compatibility.</p>
 
 <dl class="function">
 <dt id="jobmanager.decorators.decorate_module_ProgressBar">
-<tt class="descclassname">jobmanager.decorators.</tt><tt class="descname">decorate_module_ProgressBar</tt><big>(</big><em>module</em>, <em>decorator=&lt;class 'jobmanager.decorators.ProgressBar'&gt;</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/jobmanager/decorators.html#decorate_module_ProgressBar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.decorators.decorate_module_ProgressBar" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.decorators.</code><code class="descname">decorate_module_ProgressBar</code><span class="sig-paren">(</span><em>module</em>, <em>decorator=&lt;class 'jobmanager.decorators.ProgressBar'&gt;</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/decorators.html#decorate_module_ProgressBar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.decorators.decorate_module_ProgressBar" title="Permalink to this definition">¶</a></dt>
 <dd><p>Decorates all decoratable functions in a module with a
 ProgressBar.</p>
 <p>You can prevent wrapping of a function by not specifying the keyword
@@ -814,7 +814,7 @@ behavior.</p>
 <span id="ode-wrapper"></span><h3>ODE wrapper<a class="headerlink" href="#module-jobmanager.ode_wrapper" title="Permalink to this headline">¶</a></h3>
 <dl class="function">
 <dt id="jobmanager.ode_wrapper.wrap_complex_intgeration">
-<tt class="descclassname">jobmanager.ode_wrapper.</tt><tt class="descname">wrap_complex_intgeration</tt><big>(</big><em>f_complex</em><big>)</big><a class="reference internal" href="_modules/jobmanager/ode_wrapper.html#wrap_complex_intgeration"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.ode_wrapper.wrap_complex_intgeration" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.ode_wrapper.</code><code class="descname">wrap_complex_intgeration</code><span class="sig-paren">(</span><em>f_complex</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/ode_wrapper.html#wrap_complex_intgeration"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.ode_wrapper.wrap_complex_intgeration" title="Permalink to this definition">¶</a></dt>
 <dd><p>if f: R x C^n -&gt; C^n
 then this functions returns the real equivalent
 f_prime R x R^n x R^n -&gt; R^n x R^n</p>
@@ -856,7 +856,7 @@ process the obtained results (see process_final_result)</p>
 <p>The class JobManager_Client</p>
 <dl class="class">
 <dt id="jobmanager.jobmanager.JobManager_Client">
-<em class="property">class </em><tt class="descclassname">jobmanager.jobmanager.</tt><tt class="descname">JobManager_Client</tt><big>(</big><em>server</em>, <em>authkey</em>, <em>port=42524</em>, <em>nproc=0</em>, <em>njobs=0</em>, <em>nice=19</em>, <em>no_warnings=False</em>, <em>verbose=1</em>, <em>show_statusbar_for_jobs=True</em>, <em>show_counter_only=False</em>, <em>interval=0.3</em><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Client"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Client" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.jobmanager.</code><code class="descname">JobManager_Client</code><span class="sig-paren">(</span><em>server</em>, <em>authkey</em>, <em>port=42524</em>, <em>nproc=0</em>, <em>njobs=0</em>, <em>nice=19</em>, <em>no_warnings=False</em>, <em>verbose=1</em>, <em>show_statusbar_for_jobs=True</em>, <em>show_counter_only=False</em>, <em>interval=0.3</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Client"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Client" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calls the functions self.func with arguments fetched from the job_q.
 You should subclass this class and overwrite func to handle your own
 function.</p>
@@ -880,7 +880,7 @@ traceback_args_&lt;args&gt;_err_&lt;err&gt;_&lt;YYYY&gt;_&lt;MM&gt;_&lt;DD&gt;_&
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">connected</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">connected</span></code></td>
 <td></td>
 </tr>
 </tbody>
@@ -892,23 +892,23 @@ traceback_args_&lt;args&gt;_err_&lt;err&gt;_&lt;YYYY&gt;_&lt;MM&gt;_&lt;DD&gt;_&
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">connect</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">connect</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Client.func" title="jobmanager.jobmanager.JobManager_Client.func"><tt class="xref py py-obj docutils literal"><span class="pre">func</span></tt></a>(arg,&nbsp;const_arg)</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Client.func" title="jobmanager.jobmanager.JobManager_Client.func"><code class="xref py py-obj docutils literal"><span class="pre">func</span></code></a>(arg,&nbsp;const_arg)</td>
 <td>function to be called by the worker processes</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">get_manager_objects</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">get_manager_objects</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Client.start" title="jobmanager.jobmanager.JobManager_Client.start"><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt></a>()</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Client.start" title="jobmanager.jobmanager.JobManager_Client.start"><code class="xref py py-obj docutils literal"><span class="pre">start</span></code></a>()</td>
 <td>starts a number of nproc subprocess to work on the job_q</td>
 </tr>
 </tbody>
 </table>
 <dl class="staticmethod">
 <dt id="jobmanager.jobmanager.JobManager_Client.func">
-<em class="property">static </em><tt class="descname">func</tt><big>(</big><em>arg</em>, <em>const_arg</em><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Client.func"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Client.func" title="Permalink to this definition">¶</a></dt>
+<em class="property">static </em><code class="descname">func</code><span class="sig-paren">(</span><em>arg</em>, <em>const_arg</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Client.func"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Client.func" title="Permalink to this definition">¶</a></dt>
 <dd><p>function to be called by the worker processes</p>
 <p>arg - provided by the job_q of the JobManager_Server</p>
 <p>const_arg - tuple of constant arguments also provided by the JobManager_Server</p>
@@ -924,7 +924,7 @@ Subclass and overwrite this function to implement your own function.</p>
 
 <dl class="method">
 <dt id="jobmanager.jobmanager.JobManager_Client.start">
-<tt class="descname">start</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Client.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Client.start" title="Permalink to this definition">¶</a></dt>
+<code class="descname">start</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Client.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Client.start" title="Permalink to this definition">¶</a></dt>
 <dd><p>starts a number of nproc subprocess to work on the job_q</p>
 <p>SIGTERM and SIGINT are managed to terminate all subprocesses</p>
 <p>retruns when all subprocesses have terminated</p>
@@ -934,7 +934,7 @@ Subclass and overwrite this function to implement your own function.</p>
 
 <dl class="class">
 <dt id="jobmanager.jobmanager.JobManager_Server">
-<em class="property">class </em><tt class="descclassname">jobmanager.jobmanager.</tt><tt class="descname">JobManager_Server</tt><big>(</big><em>authkey</em>, <em>const_arg=None</em>, <em>port=42524</em>, <em>verbose=1</em>, <em>msg_interval=1</em>, <em>fname_dump='auto'</em>, <em>speed_calc_cycles=50</em><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.jobmanager.</code><code class="descname">JobManager_Server</code><span class="sig-paren">(</span><em>authkey</em>, <em>const_arg=None</em>, <em>port=42524</em>, <em>verbose=1</em>, <em>msg_interval=1</em>, <em>fname_dump='auto'</em>, <em>speed_calc_cycles=50</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server" title="Permalink to this definition">¶</a></dt>
 <dd><p>general usage:</p>
 <blockquote>
 <div><ul class="simple">
@@ -989,10 +989,10 @@ find the process still using the port</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">numjobs</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">numjobs</span></code></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">numresults</span></tt></td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">numresults</span></code></td>
 <td></td>
 </tr>
 </tbody>
@@ -1004,50 +1004,50 @@ find the process still using the port</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.args_from_list" title="jobmanager.jobmanager.JobManager_Server.args_from_list"><tt class="xref py py-obj docutils literal"><span class="pre">args_from_list</span></tt></a>(args)</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.args_from_list" title="jobmanager.jobmanager.JobManager_Server.args_from_list"><code class="xref py py-obj docutils literal"><span class="pre">args_from_list</span></code></a>(args)</td>
 <td>serialize a list of arguments to the job_q</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.process_final_result" title="jobmanager.jobmanager.JobManager_Server.process_final_result"><tt class="xref py py-obj docutils literal"><span class="pre">process_final_result</span></tt></a>()</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.process_final_result" title="jobmanager.jobmanager.JobManager_Server.process_final_result"><code class="xref py py-obj docutils literal"><span class="pre">process_final_result</span></code></a>()</td>
 <td>to implement user defined final processing</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.process_new_result" title="jobmanager.jobmanager.JobManager_Server.process_new_result"><tt class="xref py py-obj docutils literal"><span class="pre">process_new_result</span></tt></a>(arg,&nbsp;result)</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.process_new_result" title="jobmanager.jobmanager.JobManager_Server.process_new_result"><code class="xref py py-obj docutils literal"><span class="pre">process_new_result</span></code></a>(arg,&nbsp;result)</td>
 <td>Will be called when the result_q has data available.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.put_arg" title="jobmanager.jobmanager.JobManager_Server.put_arg"><tt class="xref py py-obj docutils literal"><span class="pre">put_arg</span></tt></a>(a)</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.put_arg" title="jobmanager.jobmanager.JobManager_Server.put_arg"><code class="xref py py-obj docutils literal"><span class="pre">put_arg</span></code></a>(a)</td>
 <td>add argument a to the job_q</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">read_old_state</span></tt>([fname_dump])</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">read_old_state</span></code>([fname_dump])</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_statistics</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">show_statistics</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.shutdown" title="jobmanager.jobmanager.JobManager_Server.shutdown"><tt class="xref py py-obj docutils literal"><span class="pre">shutdown</span></tt></a>()</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.shutdown" title="jobmanager.jobmanager.JobManager_Server.shutdown"><code class="xref py py-obj docutils literal"><span class="pre">shutdown</span></code></a>()</td>
 <td>&#8220;stop all spawned processes and clean up</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.start" title="jobmanager.jobmanager.JobManager_Server.start"><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt></a>()</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.jobmanager.JobManager_Server.start" title="jobmanager.jobmanager.JobManager_Server.start"><code class="xref py py-obj docutils literal"><span class="pre">start</span></code></a>()</td>
 <td>starts to loop over incoming results</td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">static_load</span></tt>(f)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">static_load</span></code>(f)</td>
 <td></td>
 </tr>
 </tbody>
 </table>
 <dl class="method">
 <dt id="jobmanager.jobmanager.JobManager_Server.args_from_list">
-<tt class="descname">args_from_list</tt><big>(</big><em>args</em><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.args_from_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.args_from_list" title="Permalink to this definition">¶</a></dt>
+<code class="descname">args_from_list</code><span class="sig-paren">(</span><em>args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.args_from_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.args_from_list" title="Permalink to this definition">¶</a></dt>
 <dd><p>serialize a list of arguments to the job_q</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.jobmanager.JobManager_Server.process_final_result">
-<tt class="descname">process_final_result</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.process_final_result"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.process_final_result" title="Permalink to this definition">¶</a></dt>
+<code class="descname">process_final_result</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.process_final_result"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.process_final_result" title="Permalink to this definition">¶</a></dt>
 <dd><p>to implement user defined final processing</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.jobmanager.JobManager_Server.process_new_result">
-<tt class="descname">process_new_result</tt><big>(</big><em>arg</em>, <em>result</em><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.process_new_result"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.process_new_result" title="Permalink to this definition">¶</a></dt>
+<code class="descname">process_new_result</code><span class="sig-paren">(</span><em>arg</em>, <em>result</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.process_new_result"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.process_new_result" title="Permalink to this definition">¶</a></dt>
 <dd><p>Will be called when the result_q has data available.      
 result is the computed result to the argument arg.</p>
 <p>Should be overwritten by subclassing!</p>
@@ -1055,13 +1055,13 @@ result is the computed result to the argument arg.</p>
 
 <dl class="method">
 <dt id="jobmanager.jobmanager.JobManager_Server.put_arg">
-<tt class="descname">put_arg</tt><big>(</big><em>a</em><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.put_arg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.put_arg" title="Permalink to this definition">¶</a></dt>
+<code class="descname">put_arg</code><span class="sig-paren">(</span><em>a</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.put_arg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.put_arg" title="Permalink to this definition">¶</a></dt>
 <dd><p>add argument a to the job_q</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.jobmanager.JobManager_Server.shutdown">
-<tt class="descname">shutdown</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.shutdown"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.shutdown" title="Permalink to this definition">¶</a></dt>
+<code class="descname">shutdown</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.shutdown"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.shutdown" title="Permalink to this definition">¶</a></dt>
 <dd><p>&#8220;stop all spawned processes and clean up</p>
 <ul class="simple">
 <li>call process_final_result to handle all collected result</li>
@@ -1071,7 +1071,7 @@ result is the computed result to the argument arg.</p>
 
 <dl class="method">
 <dt id="jobmanager.jobmanager.JobManager_Server.start">
-<tt class="descname">start</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.start" title="Permalink to this definition">¶</a></dt>
+<code class="descname">start</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#JobManager_Server.start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.JobManager_Server.start" title="Permalink to this definition">¶</a></dt>
 <dd><p>starts to loop over incoming results</p>
 <p>When finished, or on exception call stop() afterwards to shut down gracefully.</p>
 </dd></dl>
@@ -1080,7 +1080,7 @@ result is the computed result to the argument arg.</p>
 
 <dl class="function">
 <dt id="jobmanager.jobmanager.getDateForFileName">
-<tt class="descclassname">jobmanager.jobmanager.</tt><tt class="descname">getDateForFileName</tt><big>(</big><em>includePID=False</em><big>)</big><a class="reference internal" href="_modules/jobmanager/jobmanager.html#getDateForFileName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.getDateForFileName" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.jobmanager.</code><code class="descname">getDateForFileName</code><span class="sig-paren">(</span><em>includePID=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/jobmanager.html#getDateForFileName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.jobmanager.getDateForFileName" title="Permalink to this definition">¶</a></dt>
 <dd><p>returns the current date-time and optionally the process id in the format
 YYYY_MM_DD_hh_mm_ss_pid</p>
 </dd></dl>
@@ -1092,7 +1092,7 @@ YYYY_MM_DD_hh_mm_ss_pid</p>
 <p>This module provides special subclasses of the JobManager_Client</p>
 <dl class="class">
 <dt id="jobmanager.clients.Integration_Client_CPLX">
-<em class="property">class </em><tt class="descclassname">jobmanager.clients.</tt><tt class="descname">Integration_Client_CPLX</tt><big>(</big><em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/jobmanager/clients.html#Integration_Client_CPLX"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.clients.Integration_Client_CPLX" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.clients.</code><code class="descname">Integration_Client_CPLX</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/clients.html#Integration_Client_CPLX"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.clients.Integration_Client_CPLX" title="Permalink to this definition">¶</a></dt>
 <dd><p>A JobManager_Client subclass to integrate a set of complex valued ODE.</p>
 <p>&#8216;arg&#8217; and &#8216;const_arg&#8217; are understood as keyword arguments in oder to
 call ode_wrapper.integrate_cplx. They are passed to merge_arg_and_const_arg
@@ -1145,7 +1145,7 @@ f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...).</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">connected</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">connected</span></code></td>
 <td></td>
 </tr>
 </tbody>
@@ -1157,17 +1157,8 @@ f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...).</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">connect</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">func</span></code>(arg,&nbsp;const_arg,&nbsp;c,&nbsp;m)</td>
 <td></td>
-</tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">func</span></tt>(arg,&nbsp;const_arg,&nbsp;c,&nbsp;m)</td>
-<td></td>
-</tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">get_manager_objects</span></tt>()</td>
-<td></td>
-</tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt>()</td>
-<td>starts a number of nproc subprocess to work on the job_q</td>
 </tr>
 </tbody>
 </table>
@@ -1175,7 +1166,7 @@ f(t, x, arg_1, arg_2, ... const_arg_1, const_arg_2, ...).</p>
 
 <dl class="class">
 <dt id="jobmanager.clients.Integration_Client_REAL">
-<em class="property">class </em><tt class="descclassname">jobmanager.clients.</tt><tt class="descname">Integration_Client_REAL</tt><big>(</big><em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/jobmanager/clients.html#Integration_Client_REAL"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.clients.Integration_Client_REAL" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.clients.</code><code class="descname">Integration_Client_REAL</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/clients.html#Integration_Client_REAL"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.clients.Integration_Client_REAL" title="Permalink to this definition">¶</a></dt>
 <dd><p>A JobManager_Client subclass to integrate a set of complex real ODE.</p>
 <p>same behavior as described for Integration_Client_CPLX except
 that &#8216;vode&#8217; and &#8216;lsoda&#8217; do not do any wrapping, so there is no
@@ -1187,7 +1178,7 @@ performance issue and &#8216;zvode&#8217; is obviously not supported.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">connected</span></tt></td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">connected</span></code></td>
 <td></td>
 </tr>
 </tbody>
@@ -1199,17 +1190,8 @@ performance issue and &#8216;zvode&#8217; is obviously not supported.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">connect</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">func</span></code>(arg,&nbsp;const_arg,&nbsp;c,&nbsp;m)</td>
 <td></td>
-</tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">func</span></tt>(arg,&nbsp;const_arg,&nbsp;c,&nbsp;m)</td>
-<td></td>
-</tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">get_manager_objects</span></tt>()</td>
-<td></td>
-</tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">start</span></tt>()</td>
-<td>starts a number of nproc subprocess to work on the job_q</td>
 </tr>
 </tbody>
 </table>
@@ -1217,7 +1199,7 @@ performance issue and &#8216;zvode&#8217; is obviously not supported.</p>
 
 <dl class="function">
 <dt id="jobmanager.clients.merge_arg_and_const_arg">
-<tt class="descclassname">jobmanager.clients.</tt><tt class="descname">merge_arg_and_const_arg</tt><big>(</big><em>arg</em>, <em>const_arg</em><big>)</big><a class="reference internal" href="_modules/jobmanager/clients.html#merge_arg_and_const_arg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.clients.merge_arg_and_const_arg" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.clients.</code><code class="descname">merge_arg_and_const_arg</code><span class="sig-paren">(</span><em>arg</em>, <em>const_arg</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/clients.html#merge_arg_and_const_arg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.clients.merge_arg_and_const_arg" title="Permalink to this definition">¶</a></dt>
 <dd><p>prepares data from arg and const_arg such that they can be passed
 to the general integration routine</p>
 <p>arg and const_arg are both assumed to be dictionaries</p>
@@ -1245,7 +1227,7 @@ from the &#8216;arg&#8217; dictionary.</p>
 <span id="servers"></span><h3>servers<a class="headerlink" href="#module-jobmanager.servers" title="Permalink to this headline">¶</a></h3>
 <dl class="function">
 <dt id="jobmanager.servers.recursive_scan_for_instance">
-<tt class="descclassname">jobmanager.servers.</tt><tt class="descname">recursive_scan_for_instance</tt><big>(</big><em>obj</em>, <em>type</em>, <em>explicit_exclude=None</em><big>)</big><a class="reference internal" href="_modules/jobmanager/servers.html#recursive_scan_for_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.servers.recursive_scan_for_instance" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">jobmanager.servers.</code><code class="descname">recursive_scan_for_instance</code><span class="sig-paren">(</span><em>obj</em>, <em>type</em>, <em>explicit_exclude=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/servers.html#recursive_scan_for_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.servers.recursive_scan_for_instance" title="Permalink to this definition">¶</a></dt>
 <dd><p>try to do some recursive check to see whether &#8216;obj&#8217; is of type
 &#8216;type&#8217; or contains items of &#8216;type&#8217; type.</p>
 <p>if obj is a mapping (like dict) this will only check
@@ -1264,7 +1246,7 @@ we know it is NOT an instance of type.</p>
 <span id="persistentdata"></span><h3>persistentData<a class="headerlink" href="#module-jobmanager.persistentData" title="Permalink to this headline">¶</a></h3>
 <dl class="class">
 <dt id="jobmanager.persistentData.PersistentDataStructure">
-<em class="property">class </em><tt class="descclassname">jobmanager.persistentData.</tt><tt class="descname">PersistentDataStructure</tt><big>(</big><em>name</em>, <em>path='./'</em>, <em>verbose=1</em><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">jobmanager.persistentData.</code><code class="descname">PersistentDataStructure</code><span class="sig-paren">(</span><em>name</em>, <em>path='./'</em>, <em>verbose=1</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure" title="Permalink to this definition">¶</a></dt>
 <dd><p>Note: avoid using pickled dictionaries as binary keys! The problem with dicts is
 that the order of the keys, when returned as list, depends on the hash value of
 the keys. If the keys are strings, the hash value will be randomly seeded for
@@ -1281,72 +1263,72 @@ implement your own pickle behavior without the need of dictionaries.</p>
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.clear" title="jobmanager.persistentData.PersistentDataStructure.clear"><tt class="xref py py-obj docutils literal"><span class="pre">clear</span></tt></a>()</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.clear" title="jobmanager.persistentData.PersistentDataStructure.clear"><code class="xref py py-obj docutils literal"><span class="pre">clear</span></code></a>()</td>
 <td>delete all entries from the db</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.close" title="jobmanager.persistentData.PersistentDataStructure.close"><tt class="xref py py-obj docutils literal"><span class="pre">close</span></tt></a>()</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.close" title="jobmanager.persistentData.PersistentDataStructure.close"><code class="xref py py-obj docutils literal"><span class="pre">close</span></code></a>()</td>
 <td>close the sqligtedict ans therefore the SQL database</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.erase" title="jobmanager.persistentData.PersistentDataStructure.erase"><tt class="xref py py-obj docutils literal"><span class="pre">erase</span></tt></a>()</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.erase" title="jobmanager.persistentData.PersistentDataStructure.erase"><code class="xref py py-obj docutils literal"><span class="pre">erase</span></code></a>()</td>
 <td>removed the database file from the disk</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">getData</span></tt>(key[,&nbsp;create_sub_data])</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">getData</span></code>(key[,&nbsp;create_sub_data])</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">has_key</span></tt>(key)</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">has_key</span></code>(key)</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_closed</span></tt>()</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">is_closed</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_open</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">is_open</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">is_subdata</span></tt>(key)</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">is_subdata</span></code>(key)</td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><tt class="xref py py-obj docutils literal"><span class="pre">need_open</span></tt>()</td>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">need_open</span></code>()</td>
 <td></td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.newSubData" title="jobmanager.persistentData.PersistentDataStructure.newSubData"><tt class="xref py py-obj docutils literal"><span class="pre">newSubData</span></tt></a>(key)</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.newSubData" title="jobmanager.persistentData.PersistentDataStructure.newSubData"><code class="xref py py-obj docutils literal"><span class="pre">newSubData</span></code></a>(key)</td>
 <td>if key is not in database</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.open" title="jobmanager.persistentData.PersistentDataStructure.open"><tt class="xref py py-obj docutils literal"><span class="pre">open</span></tt></a>()</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.open" title="jobmanager.persistentData.PersistentDataStructure.open"><code class="xref py py-obj docutils literal"><span class="pre">open</span></code></a>()</td>
 <td>open the SQL database at self._filename = &lt;path&gt;/__&lt;name&gt;/&lt;name&gt;.db</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.setData" title="jobmanager.persistentData.PersistentDataStructure.setData"><tt class="xref py py-obj docutils literal"><span class="pre">setData</span></tt></a>(key,&nbsp;value[,&nbsp;overwrite])</td>
+<tr class="row-even"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.setData" title="jobmanager.persistentData.PersistentDataStructure.setData"><code class="xref py py-obj docutils literal"><span class="pre">setData</span></code></a>(key,&nbsp;value[,&nbsp;overwrite])</td>
 <td>write the key value pair to the data base</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.setDataFromSubData" title="jobmanager.persistentData.PersistentDataStructure.setDataFromSubData"><tt class="xref py py-obj docutils literal"><span class="pre">setDataFromSubData</span></tt></a>(key,&nbsp;subData)</td>
+<tr class="row-odd"><td><a class="reference internal" href="#jobmanager.persistentData.PersistentDataStructure.setDataFromSubData" title="jobmanager.persistentData.PersistentDataStructure.setDataFromSubData"><code class="xref py py-obj docutils literal"><span class="pre">setDataFromSubData</span></code></a>(key,&nbsp;subData)</td>
 <td>set an entry of the PDS with data from an other PDS</td>
 </tr>
-<tr class="row-even"><td><tt class="xref py py-obj docutils literal"><span class="pre">show_stat</span></tt>([recursive,&nbsp;prepend])</td>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">show_stat</span></code>([recursive,&nbsp;prepend])</td>
 <td></td>
 </tr>
 </tbody>
 </table>
 <dl class="method">
 <dt id="jobmanager.persistentData.PersistentDataStructure.clear">
-<tt class="descname">clear</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.clear" title="Permalink to this definition">¶</a></dt>
+<code class="descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.clear" title="Permalink to this definition">¶</a></dt>
 <dd><p>delete all entries from the db</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.persistentData.PersistentDataStructure.close">
-<tt class="descname">close</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.close" title="Permalink to this definition">¶</a></dt>
+<code class="descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.close" title="Permalink to this definition">¶</a></dt>
 <dd><p>close the sqligtedict ans therefore the SQL database</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.persistentData.PersistentDataStructure.erase">
-<tt class="descname">erase</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.erase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.erase" title="Permalink to this definition">¶</a></dt>
+<code class="descname">erase</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.erase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.erase" title="Permalink to this definition">¶</a></dt>
 <dd><p>removed the database file from the disk</p>
 <p>this is called recursively for all sub PersistentDataStructure</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.persistentData.PersistentDataStructure.newSubData">
-<tt class="descname">newSubData</tt><big>(</big><em>key</em><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.newSubData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.newSubData" title="Permalink to this definition">¶</a></dt>
+<code class="descname">newSubData</code><span class="sig-paren">(</span><em>key</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.newSubData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.newSubData" title="Permalink to this definition">¶</a></dt>
 <dd><p>if key is not in database
 create a new database (sqlitedict)
 which can be queried from this one
@@ -1358,14 +1340,14 @@ managed (simple increasing number)</p>
 
 <dl class="method">
 <dt id="jobmanager.persistentData.PersistentDataStructure.open">
-<tt class="descname">open</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.open"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.open" title="Permalink to this definition">¶</a></dt>
+<code class="descname">open</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.open"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.open" title="Permalink to this definition">¶</a></dt>
 <dd><p>open the SQL database at self._filename = &lt;path&gt;/__&lt;name&gt;/&lt;name&gt;.db
 as sqlitedict</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="jobmanager.persistentData.PersistentDataStructure.setData">
-<tt class="descname">setData</tt><big>(</big><em>key</em>, <em>value</em>, <em>overwrite=False</em><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.setData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.setData" title="Permalink to this definition">¶</a></dt>
+<code class="descname">setData</code><span class="sig-paren">(</span><em>key</em>, <em>value</em>, <em>overwrite=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.setData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.setData" title="Permalink to this definition">¶</a></dt>
 <dd><p>write the key value pair to the data base</p>
 <p>if the key already exists, overwrite must be
 set True in oder to update the data for
@@ -1374,7 +1356,7 @@ that key in the database</p>
 
 <dl class="method">
 <dt id="jobmanager.persistentData.PersistentDataStructure.setDataFromSubData">
-<tt class="descname">setDataFromSubData</tt><big>(</big><em>key</em>, <em>subData</em><big>)</big><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.setDataFromSubData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.setDataFromSubData" title="Permalink to this definition">¶</a></dt>
+<code class="descname">setDataFromSubData</code><span class="sig-paren">(</span><em>key</em>, <em>subData</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/jobmanager/persistentData.html#PersistentDataStructure.setDataFromSubData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#jobmanager.persistentData.PersistentDataStructure.setDataFromSubData" title="Permalink to this definition">¶</a></dt>
 <dd><p>set an entry of the PDS with data from an other PDS</p>
 <p>this means copying the appropriate file to the right place
 and rename them</p>
@@ -1388,7 +1370,7 @@ and rename them</p>
 <h2>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h2>
 <div class="section" id="module-simple_example">
 <span id="simple-example"></span><h3>simple example<a class="headerlink" href="#module-simple_example" title="Permalink to this headline">¶</a></h3>
-<p>Download: <a class="reference download internal" href="_downloads/simple_example.py"><tt class="xref download docutils literal"><span class="pre">../examples/simple_example.py</span></tt></a>.</p>
+<p>Download: <a class="reference download internal" href="_downloads/simple_example.py"><code class="xref download docutils literal"><span class="pre">../examples/simple_example.py</span></code></a>.</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
 <span class="c"># -*- coding: utf-8 -*-</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
@@ -1468,7 +1450,7 @@ and rename them</p>
 </div>
 <div class="section" id="id9">
 <h3>decorators<a class="headerlink" href="#id9" title="Permalink to this headline">¶</a></h3>
-<span class="target" id="module-wrapper_example"></span><p>Download: <a class="reference download internal" href="_downloads/wrapper_example.py"><tt class="xref download docutils literal"><span class="pre">../examples/wrapper_example.py</span></tt></a>.</p>
+<span class="target" id="module-wrapper_example"></span><p>Download: <a class="reference download internal" href="_downloads/wrapper_example.py"><code class="xref download docutils literal"><span class="pre">../examples/wrapper_example.py</span></code></a>.</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
 <span class="c"># -*- coding: utf-8 -*-</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
@@ -1593,7 +1575,7 @@ and rename them</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar">
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
   <h3><a href="#">Table Of Contents</a></h3>
   <ul>
@@ -1633,12 +1615,14 @@ and rename them</p>
   <h4>Next topic</h4>
   <p class="topless"><a href=""
                         title="next chapter">jobmanager documentation</a></p>
-  <h3>This Page</h3>
-  <ul class="this-page-menu">
-    <li><a href="_sources/index.txt"
-           rel="nofollow">Show Source</a></li>
-  </ul>
-<div id="searchbox" style="display: none">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
   <h3>Quick search</h3>
     <form class="search" action="search.html" method="get">
       <input type="text" name="q" />
@@ -1655,7 +1639,7 @@ and rename them</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related">
+    <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -1667,12 +1651,12 @@ and rename them</p>
         <li class="right" >
           <a href="#" title="jobmanager documentation"
              >next</a> |</li>
-        <li><a href="#">jobmanager 0.1.0 documentation</a> &raquo;</li> 
+        <li class="nav-item nav-item-0"><a href="#">jobmanager 0.1.0 documentation</a> &raquo;</li> 
       </ul>
     </div>
-    <div class="footer">
+    <div class="footer" role="contentinfo">
         &copy; Copyright 2015, Richard Hartmann.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
     </div>
   </body>
 </html>
