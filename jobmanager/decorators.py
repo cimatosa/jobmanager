@@ -152,7 +152,6 @@ class ProgressBar(object):
                                   prepend   = "{} ".format(self.__name__),
                                   **self.kwargs) as pb:
             pb.start()
-            callargs['progress_bar'] = pb
             return self.func(**callargs)
 
 
@@ -209,7 +208,8 @@ class ProgressBarExtended(ProgressBar):
                     
         if progress_bar_off:
             return self.func(**callargs)
-
+        
+        
         count = callargs[self.cm[0]]
         max_count = callargs[self.cm[1]]
          
@@ -268,7 +268,6 @@ class ProgressBarOverrideCount(ProgressBar):
                                   prepend   = "{} ".format(self.__name__),
                                   **self.kwargs) as pb:
             pb.start()
-            callargs['progress_bar'] = pb
             return self.func(**callargs)    
 
     
