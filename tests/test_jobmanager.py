@@ -728,23 +728,33 @@ def test_digest_rejected():
     
 def test_exception():   
     global PORT
-    PORT += 1 
     class MyManager_Client(jobmanager.BaseManager):
         pass
         
     def autoproxy_server(which_python, port, authkey, outfile):
+        libpath = os.path.dirname(os.__file__)
+        python_env = os.environ.copy()
+        envpath = "{LIB}:{LIB}/site-packages".format(LIB=libpath)
+        envpath += ":{LIB}/lib-old".format(LIB=libpath)
+        envpath += ":{LIB}/lib-tk".format(LIB=libpath)
+        envpath += ":{LIB}/lib-dynload".format(LIB=libpath)
+        envpath += ":{LIB}/plat-linux2".format(LIB=libpath)
+        # env will be
+        # "/usr/lib/python2.7" for python 2
+        # "/usr/lib/python3.4" for python 3
         if which_python == 2:
             python_interpreter = "python2.7"
-            python_env = {"PYTHONPATH": "/usr/lib/python2.7"}
+            envpath = envpath.replace("3.4", "2.7")
         elif which_python == 3:
             python_interpreter = "python3.4"
-            python_env = {"PYTHONPATH": "/usr/lib/python3.4"}
+            envpath = envpath.replace("2.7", "3.4")
         else:
             raise ValueError("'which_python' must be 2 or 3")
             
-        
+        python_env["PYTHONPATH"] = envpath
         path = dirname(abspath(__file__))
         cmd = [python_interpreter,
+        
                "{}/start_autoproxy_server.py".format(path),
                str(port), 
                authkey]
@@ -752,6 +762,8 @@ def test_exception():
         print("+"*40)
         print("start an autoproxy server with command")
         print(cmd)
+        print("and environment")
+        print(python_env)
         print("+"*40)
         return subprocess.Popen(cmd, env=python_env, stdout=outfile, stderr=subprocess.STDOUT)
 
@@ -766,15 +778,14 @@ def test_exception():
         return m
         
     for p_version_server in [2, 3]:
-        PORT += 10
+        PORT += 2 # plus two because we also check for wrong port
         port = PORT
         authkey = 'q'
-        try:
-            with open("ap_server.out", 'w') as outfile:
-                p_server = autoproxy_server(p_version_server, port, authkey, outfile)
-                print("autoproxy server running with PID {}".format(p_server.pid))
-                time.sleep(1)
-                
+        with open("ap_server.out", 'w') as outfile:
+            p_server = autoproxy_server(p_version_server, port, authkey, outfile)
+            print("autoproxy server running with PID {}".format(p_server.pid))
+            time.sleep(1)
+            try:
                 print("running tests with python {} ...".format(sys.version_info[0]))
                 print()
 
@@ -845,34 +856,34 @@ def test_exception():
                 
                 assert s1 == s2                
                                 
-        finally:
-            print()
-            print("tests done! terminate server ...".format())
-            
-            p_server.send_signal(signal.SIGTERM)
-            
-            t = time.time()
-            timeout = 10
-            r = None
-            while r is None:
-                r = p_server.poll()
-                time.sleep(1)
-                print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
-                if (time.time() - t) > timeout:
-                    print("timeout exceeded, kill p_server")
-                    print("the managers subprocess will still be running, and needs to be killed by hand")
-                    p_server.send_signal(signal.SIGKILL)
-                    break
-            
-            print("server terminated with exitcode {}".format(r))
-    
-            with open("ap_server.out", 'r') as outfile:
-                print("+"*40)
-                print("this is the server output:")
-                for l in outfile:
-                    print("    {}".format(l[:-1]))
-                print("+"*40)
+            finally:
+                print()
+                print("tests done! terminate server ...".format())
+                
+                p_server.send_signal(signal.SIGTERM)
+                
+                t = time.time()
+                timeout = 10
+                r = None
+                while r is None:
+                    r = p_server.poll()
+                    time.sleep(1)
+                    print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
+                    if (time.time() - t) > timeout:
+                        print("timeout exceeded, kill p_server")
+                        print("the managers subprocess will still be running, and needs to be killed by hand")
+                        p_server.send_signal(signal.SIGKILL)
+                        break
+                
+                print("server terminated with exitcode {}".format(r))
         
+                with open("ap_server.out", 'r') as outfile:
+                    print("+"*40)
+                    print("this is the server output:")
+                    for l in outfile:
+                        print("    {}".format(l[:-1]))
+                    print("+"*40)
+            
     
 
 if __name__ == "__main__":

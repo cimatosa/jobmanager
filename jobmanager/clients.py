@@ -16,30 +16,30 @@ from . import ode_wrapper
 
 def merge_arg_and_const_arg(arg, const_arg):
     """
-        prepares data from arg and const_arg such that they can be passed
-        to the general integration routine
-        
-        arg and const_arg are both assumed to be dictionaries
-        
-        the merge process must not alter arg nor const_arg
-        in order to be used in the jobmanager context
-        
-        returns the arguments passed to the function
-        defining the derivative such that
-        args_dgl = arg['args'] + const_arg['args']
-        where as arg['args'] and const_arg['args'] have been assumed to be tuples
-        
-        e.g. 
-            arg['args'] = (2, 'low')
-            const_arg['args'] = (15, np.pi)
-        f will be called with
-        f(t, x, 2, 'low', 15, np.pi)
-        
-        returns further the combined dictionary
-        arg + const_arg with the keyword 'args' removed
-        
-        For any duplicate keys the value will be the value
-        from the 'arg' dictionary. 
+    prepares data from arg and const_arg such that they can be passed
+    to the general integration routine
+    
+    arg and const_arg are both assumed to be dictionaries
+    
+    the merge process must not alter arg nor const_arg
+    in order to be used in the jobmanager context
+    
+    returns the arguments passed to the function
+    defining the derivative such that
+    args_dgl = arg['args'] + const_arg['args']
+    where as arg['args'] and const_arg['args'] have been assumed to be tuples
+    
+    e.g. 
+        arg['args'] = (2, 'low')
+        const_arg['args'] = (15, np.pi)
+    f will be called with
+    f(t, x, 2, 'low', 15, np.pi)
+    
+    returns further the combined dictionary
+    arg + const_arg with the keyword 'args' removed
+    
+    For any duplicate keys the value will be the value
+    from the 'arg' dictionary. 
     """
     
     # allows arg to be a namedtuple (or any other object that
