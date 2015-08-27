@@ -972,10 +972,7 @@
             <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}    not queried yet : {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">id2</span><span class="p">,</span> <span class="n">not_queried</span><span class="p">))</span>
             <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}len(args_set) : {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">id2</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args_set</span><span class="p">)))</span>
             <span class="k">if</span> <span class="p">(</span><span class="n">all_not_processed</span> <span class="o">+</span> <span class="n">failed</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args_set</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="ne">RuntimeWarning</span><span class="p">(</span>
-                    <span class="s">&quot;&#39;all_not_processed != len(self.args_set)&#39; &quot;</span><span class="o">+</span>\
-                    <span class="s">&quot;something is inconsistent! Make sure you did &quot;</span><span class="o">+</span>\
-                    <span class="s">&quot;not set any duplicate arguments.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">RuntimeWarning</span><span class="p">(</span><span class="s">&quot;&#39;all_not_processed != len(self.args_set)&#39; something is inconsistent!&quot;</span><span class="p">)</span>
             
 
     <span class="nd">@staticmethod</span>
