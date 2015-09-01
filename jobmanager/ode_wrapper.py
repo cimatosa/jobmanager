@@ -45,7 +45,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         # define complex derivative
         f_ = f_partial_complex
         x0_ = x0
-    elif (integrator == 'vode') | (integrator == 'lsoda'): 
+    elif (integrator == 'vode') | (integrator == 'lsoda') | (integrator == 'dopri5') | (integrator == 'dop853'): 
         # define real derivative (separation for real and imaginary part)
         f_ = lambda t, x: wrap_complex_intgeration(f_partial_complex)(t, x)
         x0_ = complex_to_real(x0)
@@ -55,6 +55,10 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         raise RuntimeError("unknown integrator '{}'".format(integrator))
     
     r = ode(f_)
+    
+    if (integrator == 'dopri5') | (integrator == 'dop853'):
+        if 'order' in kwargs:
+            del kwargs['order']
     
     kws = list(kwargs.keys())
     for kw in kws:
