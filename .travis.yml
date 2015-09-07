@@ -44,7 +44,7 @@ before_install:
 install:
 - pip freeze
 script:
-- travis_wait python setup.py test
+- travis_wait 60 python setup.py test
 after_success:
 - git config credential.helper "store --file=.git/credentials"
 - echo "https://${GH_TOKEN}:@github.com" > .git/credentials
