@@ -29,7 +29,6 @@ before_install:
 - pip install sqlitedict psutil
 - source deactivate
 # python3
-- if
 - conda create -y -n my_py3 python=3.4 pip numpy scipy matplotlib
 - source activate my_py3
 - pip install sqlitedict psutil
