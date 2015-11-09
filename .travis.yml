@@ -6,6 +6,7 @@ env:
 notifications:
   email: false
 python:
+- '3.5'
 - '3.4'
 - '2.7'
 matrix:
@@ -28,8 +29,10 @@ before_install:
 - source activate my_py2
 - pip install sqlitedict psutil
 - source deactivate
-# python3
-- conda create -y -n my_py3 python=3.4 pip numpy scipy matplotlib
+# python3 (install python3 version as defined in TRAVIS_PYTHON_VERSION) 
+- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then PYTHON3="3.4"; fi
+- if [[ $TRAVIS_PYTHON_VERSION != 2.7 ]]; then PYTHON3=$TRAVIS_PYTHON_VERSION; fi
+- conda create -y -n my_py3 python=$PYTHON3 pip numpy scipy matplotlib
 - source activate my_py3
 - pip install sqlitedict psutil
 - source deactivate
