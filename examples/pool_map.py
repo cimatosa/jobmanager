@@ -15,9 +15,9 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 import jobmanager
 
 
-
 def func(x):
     """Example function with only one argument"""
+    time.sleep(x[0]/10)
     return np.sum(x)
 
 # Create list of parameters
@@ -25,9 +25,13 @@ a = list()
 for i in range(10):
     a.append((i,2.34))
 
-# equivalent to mp.Pool()
-p = jobmanager.decorators.Pool()
+# mp.Pool example:
+p_mp = mp.Pool()
+res_mp = p_mp.map(func, a)
 
-b = p.map(func, a)
+# equivalent to mp.Pool() but with progress bar:
+p_jm = jobmanager.decorators.Pool()
+res_jm = p_jm.map(func, a)
 
-print(b)
+assert res_mp == res_jm
+print("result: ", res_jm)

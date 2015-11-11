@@ -111,7 +111,7 @@ class Pool(_mpool.Pool):
         p_server.join()
         
         # call q.get() to obtain the results    
-        return q
+        return q.get()
         
     @staticmethod
     def _run_jm_client(func, authkey):

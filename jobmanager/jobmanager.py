@@ -342,6 +342,7 @@ class JobManager_Client(object):
             def _func(arg, const_arg, c, m):
                 arg[count_args[0]] = c
                 arg[count_args[1]] = m
+                return func(arg, const_arg)
         else:
             if verbose > 1:
                 print("{}: found standard keyword arguments: [c, m]".format(identifier))
