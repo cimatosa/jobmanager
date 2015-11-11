@@ -8,11 +8,12 @@ from inspect import getcallargs
 import multiprocessing as mp
 import random
 import multiprocessing.pool as _mpool
+import time
 import warnings
 
 from . import clients
 from . import progress
-from .jobmanager import getCountKwargs, validCountKwargs, JobManager_Server, JobManager_Client
+from .jobmanager import getCountKwargs, validCountKwargs, JobManager_Server, JobManager_Client, JMConnectionError
 
 
 #__all__ = ["ProgressBar", "ProgressBarOverrideCount"]
@@ -22,7 +23,7 @@ class _Pool_Server(JobManager_Server):
     def __init__(self, authkey):
         # server show status information (verbose=1)
         super(_Pool_Server, self).__init__(authkey=authkey,
-                         verbose=2)
+                                           verbose=1)
         self.results = list()
         
     def process_new_result(self, arg, result):
@@ -46,7 +47,7 @@ class _Pool_Server(JobManager_Server):
         
 class _Pool_Client(JobManager_Client):
     def __init__(self, authkey,):
-        super(_Pool_Client, self).__init__(server="localhost", 
+        super(_Pool_Client, self).__init__(server="localhost",
                                            authkey=authkey, 
                                            verbose=0)
 
@@ -69,7 +70,7 @@ class Pool(_mpool.Pool):
     def __init__(self, processes=None, initializer=None, 
                  initargs=(), maxtasksperchild=None, authkey=None):
         _mpool.Pool.__init__(self, processes, initializer, initargs,
-                               maxtasksperchild)
+                             maxtasksperchild)
         if authkey is None:
             authkey = str("map_{}".format(random.random()))
         self.authkey = authkey
@@ -78,7 +79,9 @@ class Pool(_mpool.Pool):
     
     def _map_async(self, *args, **kwargs):
         return self.map_async(*args, **kwargs)
-    
+
+    def map(self, *args, **kwargs):
+        return self.map_async(*args, **kwargs)
     
     def map_async(self, func, iterable, chunksize=None, callback=None):
         '''
@@ -90,16 +93,20 @@ class Pool(_mpool.Pool):
         if not hasattr(iterable, '__len__'):
             iterable = list(iterable)
         
-        warnings.warn("chunksize not supported in jobmanager")
-        warnings.warn("callback not yet implemented")
+        if chunksize is not None:
+            raise NotImplementedError("chunksize not supported in jobmanager")
+        if callback is not None:
+            raise NotImplementedError("callback for jobmanager pool not yet implemented")
     
         q = mp.Queue()
         p_server = mp.Process(target=Pool._run_jm_server, args=(q, iterable, self.authkey))
         p_server.start()
-       
+
+        time.sleep(1)
+        
         p_client = mp.Process(target=Pool._run_jm_client, args=(func, self.authkey))
         p_client.start()
-           
+        
         p_client.join()
         p_server.join()
         
@@ -111,6 +118,8 @@ class Pool(_mpool.Pool):
         client = _Pool_Client(authkey)
         client._func = func
         client.start()
+
+
 
     @staticmethod
     def _run_jm_server(q, iterable, authkey):
@@ -429,8 +438,8 @@ def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
             if getCountKwargs(vdict[key]) is not None:
                 newid = "_jm_decorate_{}".format(key)
                 if hasattr(module, newid):
-                    warings.warn("Wrapping of {} prevented by module.".
-                                 format(key))
+                    warnings.warn("Wrapping of {} prevented by module.".
+                                  format(key))
                 else:
                     # copy old function
                     setattr(module, newid, vdict[key])
