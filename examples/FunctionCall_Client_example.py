@@ -25,7 +25,6 @@ def my_func(arg1, const_arg1, arg2, const_arg2, __c, __m, **kwargs):
     return arg1 + arg2
 
 
-
 def start_server():
     const_arg = {'const_arg1' : 'ca1',
                  'const_arg2' : 'ca2',
@@ -40,12 +39,12 @@ def start_server():
                  {'arg1': 5, 'arg2': 50, 'other': -5},
                  {'arg1': 6, 'arg2': 60, 'other': -6} ] 
     
-    with jm.JobManager_Server(authkey=AUTHKEY, const_arg=const_arg, fname_dump=None) as server:
+    with jm.JobManager_Server(authkey=AUTHKEY, const_arg=const_arg, fname_dump=None, verbose=1) as server:
         server.args_from_list(arg_list)
         server.start()
 
 def start_client():
-    client = jm.clients.FunctionCall_Client(authkey=AUTHKEY, server='localhost', show_statusbar_for_jobs=False, verbose=2)
+    client = jm.clients.FunctionCall_Client(authkey=AUTHKEY, server='localhost', show_statusbar_for_jobs=False, verbose=0)
     client.start()
     
 if __name__ == "__main__":
@@ -63,5 +62,3 @@ if __name__ == "__main__":
     
     import IPython
     IPython.embed()    
-    
-    
