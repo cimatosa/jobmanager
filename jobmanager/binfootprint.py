@@ -1,6 +1,7 @@
 import struct
 import numpy as np
 import sys
+from math import ceil
 
 _spec_types = (bool, type(None))
 
@@ -17,9 +18,28 @@ _NPARRAY    = 0x09
 _LIST       = 0x0a
 _GETSTATE   = 0x0b
 _DICT       = 0x0c
+_INT_NEG    = 0x0d
 
 __max_int32 = +2147483647
 __min_int32 = -2147483648
+
+
+def __int_to_bytes(i):
+    m = 0xff
+    assert i >= 0
+    ba = bytearray()
+    while i > 0:
+        b = i & m
+        ba += bytearray([b])
+        i = i >> 8
+    return ba[::-1]
+
+def __bytes_to_int(ba):
+    i = 0
+    for b in ba:
+        i = i << 8
+        i += b
+    return i
 
 BYTES_CLASS = bytearray
 
@@ -27,13 +47,17 @@ if sys.version_info.major > 2:
     str_to_bytes = lambda s: BYTES_CLASS(s, 'utf8')
     bytes_to_str = lambda b: str(b, 'utf8')
     LONG_TYPE    = int
+    int_to_bytes = lambda i: i.to_bytes(ceil(i.bit_length() / 8), 'big')  
+    bytes_to_int = lambda ba: int.from_bytes(ba, 'big')
+    np_load      = lambda ba: np.loads(ba)
 else:
+
     str_to_bytes = lambda s: s
     bytes_to_str = lambda b: str(b)
     LONG_TYPE    = long
-    
-    
-
+    int_to_bytes = __int_to_bytes
+    bytes_to_int = __bytes_to_int
+    np_load      = lambda ba: np.loads(str(ba))
 
 class BFLoadError(Exception):
     pass
@@ -71,16 +95,27 @@ def _load_int_32(b):
     return i, 5
     
 def _dump_int(ob):
-    b = BYTES_CLASS([_INT])
-    num_bytes = ob.__sizeof__()
+    if ob < 0:
+        b = BYTES_CLASS([_INT_NEG])
+        ob *= -1
+    else:
+        b = BYTES_CLASS([_INT])
+        
+    ib = int_to_bytes(ob)
+    num_bytes = len(ib)
     b += struct.pack('>I', num_bytes)
-    b += ob.to_bytes(num_bytes, 'big')
+    b += ib
     return b
 
 def _load_int(b):
-    assert b[0] == _INT
+    if b[0] == _INT:
+        m = 1
+    elif b[0] == _INT_NEG:
+        m = -1
+    else:
+        assert False
     num_bytes = struct.unpack('>I', b[1:5])[0]
-    i = int.from_bytes(b[5:5+num_bytes], 'big')
+    i = m*bytes_to_int(b[5:5+num_bytes])
     return i, num_bytes + 5
     
 def _dump_float(ob):
@@ -202,7 +237,7 @@ def _dump_np_array(np_array):
 def _load_np_array(b):
     assert b[0] == _NPARRAY
     size = struct.unpack('>I', b[1:5])[0]
-    npa = np.loads(b[5: size+5])
+    npa = np_load(b[5: size+5])
     return npa, size+5
 
 def _dump_getstate(ob):
@@ -254,7 +289,7 @@ def _dump(ob):
         return _dump_complex(ob)
     elif isinstance(ob, str):
         return _dump_str(ob)
-    elif isinstance(ob, BYTES_CLASS):
+    elif isinstance(ob, (bytearray, bytes)):
         return _dump_bytes(ob)    
     elif isinstance(ob, tuple):
         if hasattr(ob, '_fields'):
@@ -278,7 +313,7 @@ def _load(b):
         return _load_spec(b)
     elif identifier == _INT_32:
         return _load_int_32(b)
-    elif identifier == _INT:
+    elif (identifier == _INT) or (identifier == _INT_NEG):
         return _load_int(b)    
     elif identifier == _FLOAT:
         return _load_float(b)
@@ -301,6 +336,8 @@ def _load(b):
     elif identifier == _GETSTATE:
         return _load_getstate(b)    
     else:
+        if isinstance(identifier, str):
+            identifier = ord(identifier)
         raise BFLoadError("unknown identifier '{}'".format(hex(identifier)))
     
 def dump(ob):

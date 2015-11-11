@@ -27,9 +27,13 @@ KEY_SUB_DATA_KEYS = '1'
 RESERVED_KEYS = (KEY_COUNTER, KEY_SUB_DATA_KEYS)
 
 def key_to_str(key, max_len = 255):
+    if isinstance(key, (bytearray, bytes)):
+        return "<binary key>"
     s = str(key)
-    l = min(max_len, len(s))
-    return s[:l]
+    if len(s) > max_len:
+        return s[:max_len] + ' ...'
+    else:
+        return s
     
 
 class PersistentDataStructure(object):

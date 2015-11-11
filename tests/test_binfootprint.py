@@ -20,13 +20,12 @@ import warnings
 warnings.filterwarnings('error')
 
 def test_atom():
-    atoms = [12345678, 3.141, 'hallo Welt', 'öäüß', True, False, None, 2**65]
+    atoms = [12345678, 3.141, 'hallo Welt', 'öäüß', True, False, None, 2**65, -3**65, bytearray([54,234,2]), b'\xff\fe\03']
     
     for atom in atoms:
         bin_atom = bfp.dump(atom)
         atom_prime = bfp.load(bin_atom)
         bin_ob_prime = bfp.dump(atom_prime)
-        print(atom, atom_prime)
         assert bin_atom == bin_ob_prime
         
 def test_tuple():
@@ -115,7 +114,7 @@ def test_complex():
     assert zr == z    
     
 def test_dict():
-    a = {'a':1, 5:5, 3+4j:'l', False: bytearray(b'ab4+#')}
+    a = {'a':1, 5:5, 3+4j:'l', False: b'ab4+#'}
     bf = bfp.dump(a)
     a_restored = bfp.load(bf)
     
@@ -126,21 +125,14 @@ def run():
     print(bfp.dump(None))
      
 if __name__ == "__main__":    
-#     test_atom()
-#     test_tuple()
-#     test_nparray()
-#     test_list()
-#     test_getstate()
-#     test_named_tuple()
-#     test_complex()
-#     test_dict()
+    test_atom()
+    test_tuple()
+    test_nparray()
+    test_list()
+    test_getstate()
+    test_named_tuple()
+    test_complex()
+    test_dict()
 #     run()
-    i = 2**145 - 1
-    h = hex(i)
-    if h[-1] == 'L':
-        h = h[2:-1]
-    else:
-        h = h[2:]
-    print(h)
 
 

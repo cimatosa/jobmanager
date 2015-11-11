@@ -73,7 +73,8 @@ for py in ${PYLIST[@]}; do
     echo "Running py.test ..."
     #(echo ""; date; $py runtests.py --color=yes) 2>&1 > $OUTFILE  #| tee -a $OUTFILE
     #(echo ""; date; $py runtests.py --color=yes) | tee -a $OUTFILE
-    (echo ""; date; $py /usr/local/bin/py.test -v --color=yes) | tee -a $OUTFILE
+    #(echo ""; date; $py /usr/local/bin/py.test -v --color=yes) | tee -a $OUTFILE
+    (echo ""; date; $py /usr/bin/py.test -v --color=yes) | tee -a $OUTFILE
     echo "Done!" 
 done
 
