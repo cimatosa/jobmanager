@@ -392,6 +392,7 @@
             <span class="k">def</span> <span class="nf">_func</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
                 <span class="n">arg</span><span class="p">[</span><span class="n">count_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">c</span>
                 <span class="n">arg</span><span class="p">[</span><span class="n">count_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">m</span>
+                <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">const_arg</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="k">print</span><span class="p">(</span><span class="s">&quot;{}: found standard keyword arguments: [c, m]&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">identifier</span><span class="p">))</span>
