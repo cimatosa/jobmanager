@@ -78,6 +78,9 @@ if sys.version_info[0] == 2:
     
     class JMConnectionResetError(JMConnectionError):
         pass
+
+    class BrokenPipeError(JMConnectionError):
+        pass
     
 else:
     # Python 3
@@ -301,7 +304,7 @@ class JobManager_Client(object):
     @staticmethod
     def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs):
         """
-        the wrapper spawned nproc trimes calling and handling self.func
+        the wrapper spawned nproc times calling and handling self.func
         """
         identifier = progress.get_identifier(name='worker{}'.format(i+1))
         Signal_to_sys_exit(signals=[signal.SIGTERM])
@@ -328,6 +331,7 @@ class JobManager_Client(object):
         #args_of_func = inspect.getfullargspec(func).args
         #if len(args_of_func) == 2:
         count_args = getCountKwargs(func)
+
         if count_args is None:
             if verbose > 1:
                 print("{}: found function without status information".format(identifier))
@@ -340,8 +344,9 @@ class JobManager_Client(object):
             # in `validCountKwargs`.
             # Here we translate to "c" and "m".
             def _func(arg, const_arg, c, m):
-                arg[count_args[0]] = c
-                arg[count_args[1]] = m
+                kwargs = {count_args[0]: c,
+                          count_args[1]: m}
+                return func(arg, const_arg, **kwargs)
         else:
             if verbose > 1:
                 print("{}: found standard keyword arguments: [c, m]".format(identifier))
@@ -922,7 +927,10 @@ class JobManager_Server(object):
             print("{}    not queried yet : {}".format(id2, not_queried))
             print("{}len(args_set) : {}".format(id2, len(self.args_set)))
             if (all_not_processed + failed) != len(self.args_set):
-                raise RuntimeWarning("'all_not_processed != len(self.args_set)' something is inconsistent!")
+                raise RuntimeWarning(
+                    "'all_not_processed != len(self.args_set)' "+\
+                    "something is inconsistent! Make sure you did "+\
+                    "not set any duplicate arguments.")
             
 
     @staticmethod

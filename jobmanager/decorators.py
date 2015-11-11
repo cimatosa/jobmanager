@@ -5,13 +5,134 @@
 from __future__ import division, print_function
 
 from inspect import getcallargs
+import multiprocessing as mp
+import random
+import multiprocessing.pool as _mpool
+import time
 import warnings
 
+from . import clients
 from . import progress
-from .jobmanager import getCountKwargs, validCountKwargs
+from .jobmanager import getCountKwargs, validCountKwargs, JobManager_Server, JobManager_Client, JMConnectionError
+
 
 #__all__ = ["ProgressBar", "ProgressBarOverrideCount"]
 
+
+class _Pool_Server(JobManager_Server):
+    def __init__(self, authkey):
+        # server show status information (verbose=1)
+        super(_Pool_Server, self).__init__(authkey=authkey,
+                                           verbose=1)
+        self.results = list()
+        
+    def process_new_result(self, arg, result):
+        """
+        write the result into a list
+        """ 
+        self.results.append(result)
+            
+    def process_final_result(self):
+        """
+        sort return list according to input arguments
+        """
+        self.queue.put(self.results)
+
+    def set_queue(self, q):
+        """ Set the queue that will be used to send the arguments back
+        to the host
+        """
+        self.queue = q
+        
+        
+class _Pool_Client(JobManager_Client):
+    def __init__(self, authkey,):
+        super(_Pool_Client, self).__init__(server="localhost",
+                                           authkey=authkey, 
+                                           verbose=0)
+
+    def func(self, args, *_):
+        """simply return the current argument"""
+        return self._func(args)
+    
+
+class Pool(_mpool.Pool):
+    """
+    A progressbar-decorated version of `multiprocessing.Pool`
+    It is possible to set the `authkey` argument manually. The authkey
+    is saved as the property `Pool().authkey`.
+
+    The methods `map` and `map_async` work as expected.
+        
+    """
+    __doc__ = __doc__ + _mpool.Pool.__doc__
+    
+    def __init__(self, processes=None, initializer=None, 
+                 initargs=(), maxtasksperchild=None, authkey=None):
+        _mpool.Pool.__init__(self, processes, initializer, initargs,
+                             maxtasksperchild)
+        if authkey is None:
+            authkey = str("map_{}".format(random.random()))
+        self.authkey = authkey
+        # the self.map method calls the self.map_async method
+        
+    
+    def _map_async(self, *args, **kwargs):
+        return self.map_async(*args, **kwargs)
+
+    def map(self, *args, **kwargs):
+        return self.map_async(*args, **kwargs)
+    
+    def map_async(self, func, iterable, chunksize=None, callback=None):
+        '''
+        Asynchronous equivalent of `map()` builtin.
+        Note that chunksize and callback have no effect.
+        
+        '''
+        assert self._state == _mpool.RUN
+        if not hasattr(iterable, '__len__'):
+            iterable = list(iterable)
+        
+        if chunksize is not None:
+            raise NotImplementedError("chunksize not supported in jobmanager")
+        if callback is not None:
+            raise NotImplementedError("callback for jobmanager pool not yet implemented")
+    
+        q = mp.Queue()
+        p_server = mp.Process(target=Pool._run_jm_server, args=(q, iterable, self.authkey))
+        p_server.start()
+
+        time.sleep(1)
+        
+        p_client = mp.Process(target=Pool._run_jm_client, args=(func, self.authkey))
+        p_client.start()
+        
+        p_client.join()
+        p_server.join()
+        
+        # call q.get() to obtain the results    
+        return q.get()
+        
+    @staticmethod
+    def _run_jm_client(func, authkey):
+        client = _Pool_Client(authkey)
+        client._func = func
+        client.start()
+
+
+
+    @staticmethod
+    def _run_jm_server(q, iterable, authkey):
+        #iterable = self._jm_iterable
+        # Create jobmanager server and client
+        with _Pool_Server(authkey) as server:
+            server.set_queue(q)
+            for it in iterable:
+                if not isinstance(it, tuple):
+                    it = (it,)
+                server.put_arg(it)
+            server.start()
+   
 
 class ProgressBar(object):
     """ A wrapper/decorator with a text-based progress bar.
@@ -129,6 +250,14 @@ class ProgressBar(object):
                   "must accept one of the following pairs of "+
                   "keyword arguments:{}".format(validCountKwargs))
 
+    def _get_callargs(self, *args, **kwargs):
+        """
+        Retrieve all arguments that `self.func` needs and
+        return a dictionary with call arguments.
+        """
+        callargs = getcallargs(self.func, *args, **kwargs)
+        return callargs
+        
         
     def __call__(self, *args, **kwargs):
         """ Calls `func` - previously defined in `__init__`.
@@ -140,9 +269,8 @@ class ProgressBar(object):
         **kwargs : dict
             Keyword-arguments for `func`.
         """
-        
         # Bind the args and kwds to the argument names of self.func
-        callargs = getcallargs(self.func, *args, **kwargs)
+        callargs = self._get_callargs(*args, **kwargs)
         
         count = callargs[self.cm[0]]
         max_count = callargs[self.cm[1]]
@@ -158,12 +286,11 @@ class ProgressBar(object):
 
 class ProgressBarExtended(ProgressBar):
     """
-    extends the ProgressBar such that
+    extends the ProgressBar such that one can turn of the ProgressBar
+    by giving an extra argument, namely 'progress_bar_off' and set its
+    value to 'True'.
     
-    on can turn of the ProgressBar by giving an extra argument,
-    namely 'progress_bar_off' and set its value to 'True'.
-    
-    further there will be an additional argument passed to the function
+    Further there will be an additional argument passed to the function
     called 'progress_bar' which allows to stop the progress bar from
     within the function. note that there will be an function signature error
     if the function does not accept the extra argument 'progress_bar'. So a
@@ -311,8 +438,8 @@ def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
             if getCountKwargs(vdict[key]) is not None:
                 newid = "_jm_decorate_{}".format(key)
                 if hasattr(module, newid):
-                    warings.warn("Wrapping of {} prevented by module.".
-                                 format(key))
+                    warnings.warn("Wrapping of {} prevented by module.".
+                                  format(key))
                 else:
                     # copy old function
                     setattr(module, newid, vdict[key])
