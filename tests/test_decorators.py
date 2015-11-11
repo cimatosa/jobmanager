@@ -13,6 +13,9 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 from jobmanager import decorators, progress
 
+import warnings
+warnings.filterwarnings('error')
+
 
 @decorators.ProgressBar
 def _my_func_1(arg, 
@@ -176,11 +179,11 @@ def test_ProgressBarOverrideCount():
 
         
 if __name__ == "__main__":
-#     test_ProgressBar()
-#     test_decorator()
-#     test_ProgressBarOverrideCount()
-#     test_extended_PB_get_access_to_progress_bar()
-#     test_extended_PB_progress_bar_off()
+    test_ProgressBar()
+    test_decorator()
+    test_ProgressBarOverrideCount()
+    test_extended_PB_get_access_to_progress_bar()
+    test_extended_PB_progress_bar_off()
     test_decorated_func_calls_decorated_func()
 
 

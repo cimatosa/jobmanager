@@ -17,7 +17,10 @@ from os.path import abspath, dirname, split
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
-from jobmanager import jobmanager, progress
+from jobmanager import jobmanager, progress, binfootprint
+
+import warnings
+warnings.filterwarnings('error')
 
 AUTHKEY = 'testing'
 PORT = 42525
@@ -212,8 +215,11 @@ def test_jobmanager_server_signals():
     with open(fname, 'rb') as f:
         data = jobmanager.JobManager_Server.static_load(f)    
     
-    args_set = data['args_set']
-    ref_set = set(range(1,30))
+    args_set = set(data['args_dict'].keys())
+    args_ref = range(1,30)
+    ref_set = set()
+    for a in args_ref:
+        ref_set.add(binfootprint.dump(a))
     
     assert len(args_set) == len(ref_set)
     assert len(ref_set - args_set) == 0
@@ -236,9 +242,12 @@ def test_jobmanager_server_signals():
     with open(fname, 'rb') as f:
         data = jobmanager.JobManager_Server.static_load(f)    
     
-    args_set = data['args_set']
-    
-    ref_set = set(range(1,30))
+    args_set = set(data['args_dict'].keys())
+    args_ref = range(1,30)
+    ref_set = set()
+    for a in args_ref:
+        ref_set.add(binfootprint.dump(a))
+        
     assert len(args_set) == len(ref_set)
     assert len(ref_set - args_set) == 0
     print("[+] args_set from dump contains all arguments")
@@ -295,12 +304,15 @@ def test_shutdown_server_while_client_running():
     with open(fname, 'rb') as f:
         data = jobmanager.JobManager_Server.static_load(f)    
 
-    args_set = data['args_set']
+    args_set = set(data['args_dict'].keys())
     final_result = data['final_result']
 
     final_res_args = {a[0] for a in final_result}
         
-    set_ref = set(range(1,n))
+    args_ref = range(1,n)
+    set_ref = set()
+    for a in args_ref:
+        set_ref.add(binfootprint.dump(a))    
     
     set_recover = set(args_set) | set(final_res_args)
     
@@ -370,7 +382,7 @@ def shutdown_client(sig):
     with open(fname, 'rb') as f:
         data = jobmanager.JobManager_Server.static_load(f)    
     
-    assert len(data['args_set']) == 0
+    assert len(data['args_dict']) == 0
     print("[+] args_set is empty -> all args processed & none failed")
     
     final_res_args_set = {a[0] for a in data['final_result']}
@@ -436,14 +448,12 @@ def test_check_fail():
         data = jobmanager.JobManager_Server.static_load(f)    
 
     
-    set_ref = set(range(1,n))
+    set_ref = {binfootprint.dump(a) for a in range(1,n)}
     
-    print(data['args_set'])
-    print(data['fail_set'])
+    args_set = set(data['args_dict'].keys())    
+    assert args_set == data['fail_set']
     
-    assert data['args_set'] == data['fail_set']
-    
-    final_result_args_set = {a[0] for a in data['final_result']}
+    final_result_args_set = {binfootprint.dump(a[0]) for a in data['final_result']}
     
     all_set = final_result_args_set | data['fail_set']
     
@@ -470,6 +480,8 @@ def test_jobmanager_read_old_stat():
     
     time.sleep(3)
     
+    
+    # terminate server ... to start again using reload_from_dump
     p_server.terminate()
      
     p_client.join(10)
@@ -481,6 +493,7 @@ def test_jobmanager_read_old_stat():
     
     time.sleep(2)
     PORT += 1
+    # start server using old dump
     p_server = mp.Process(target=start_server, args=(n,True))
     p_server.start()
     
@@ -505,32 +518,11 @@ def test_jobmanager_read_old_stat():
     set_ref = set(range(1,n))
      
     intersect = set_ref - final_res_args_set
+    print(intersect)
      
     assert len(intersect) == 0, "final result does not contain all arguments!"
     print("[+] all arguments found in final_results")    
-    
-def test_hashDict():
-    s = set()
-    
-    d1 = jobmanager.hashDict()
-    d1['a'] = 1
-    d1['b'] = 2
-    s.add(d1)
-    
-    d2 = jobmanager.hashDict()
-    d2['a'] = 2
-    d2['b'] = 1
-    s.add(d2)
-    
-    d3 = jobmanager.hashDict()
-    d3['a'] = 1
-    d3['b'] = 2
-    
-    assert d3 in s
-    
-    d3['c'] = 0
-    assert not d3 in s
-    
+        
 def test_hashedViewOnNumpyArray():
     s = set()
     
@@ -894,21 +886,19 @@ if __name__ == "__main__":
         test_Signal_to_SIG_IGN,
         test_Signal_to_sys_exit,
         test_Signal_to_terminate_process_list,
-#                 
+                  
         test_jobmanager_basic,
         test_jobmanager_server_signals,
         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
-#         test_check_fail,
-#         test_jobmanager_read_old_stat,
-#         test_hashDict,
-#         test_hashedViewOnNumpyArray,
-#         test_client_status,
-#         test_jobmanager_local,
-#         test_start_server_on_used_port,
-#         test_shared_const_arg,
-#         test_digest_rejected,
-#         test_exception,
+        test_shutdown_client,
+        test_check_fail,
+        test_jobmanager_read_old_stat,
+        test_client_status,
+        test_jobmanager_local,
+        test_start_server_on_used_port,
+        test_shared_const_arg,
+        test_digest_rejected,
+        test_exception,
 
         lambda : print("END")
         ]
