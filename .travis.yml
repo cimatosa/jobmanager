@@ -6,45 +6,50 @@ env:
 notifications:
   email: false
 python:
-- '3.4'
 - '2.7'
+- '3.4'
+- '3.5'
 matrix:
   allow_failures:
   - python: '2.7'
+  - python: '3.5'
 before_install:
 # required for testing
 - sudo apt-get update -qq -y
 - sudo apt-get install openssl
 - wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
 - chmod +x miniconda.sh
-- "./miniconda.sh -b"
+- INSTALL_DIR=${HOME}
+- ./miniconda.sh -b -p ${INSTALL_DIR}/miniconda
 - export PATH=/home/travis/miniconda/bin:$PATH
 - conda update --yes conda
 ## The following lines are necessary for a test that needs Python 2 and 3
 # Install python2 and python3 anaconda (required for testing)
 # python2
-- conda create -y -n my_py2.7 python=2 pip numpy scipy matplotlib
-- source activate my_py2.7
+- conda create -y -n my_py2 python=2 pip numpy scipy matplotlib
+- source activate my_py2
 - pip install sqlitedict psutil
 - source deactivate
-# python3
-- conda create -y -n my_py3.4 python=3 pip numpy scipy matplotlib
-- source activate my_py3.4
+# python3 (install python3 version as defined in TRAVIS_PYTHON_VERSION) 
+- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then PYTHON3="3.4"; fi
+- if [[ $TRAVIS_PYTHON_VERSION != 2.7 ]]; then PYTHON3=$TRAVIS_PYTHON_VERSION; fi
+- conda create -y -n my_py3 python=$PYTHON3 pip numpy scipy matplotlib
+- source activate my_py3
 - pip install sqlitedict psutil
 - source deactivate
 # add the two environments to the path
-- export PATH=/home/travis/miniconda/envs/my_py3.4/bin:$PATH
-- export PATH=/home/travis/miniconda/envs/my_py2.7/bin:$PATH
+- export PATH=/home/travis/miniconda/envs/my_py3/bin:$PATH
+- export PATH=/home/travis/miniconda/envs/my_py2/bin:$PATH
 # activate the correct environment
-- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2.7; fi
-- if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then source activate my_py3.4; fi
+- if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then source activate my_py2; fi
+- if [[ $TRAVIS_PYTHON_VERSION != 2.7 ]]; then source activate my_py3; fi
 - which python
-- which python2.7
-- which python3.4
+- which python2
+- which python3
 install:
 - pip freeze
 script:
-- travis_wait python setup.py test
+- travis_wait 60 python setup.py test
 after_success:
 - git config credential.helper "store --file=.git/credentials"
 - echo "https://${GH_TOKEN}:@github.com" > .git/credentials

@@ -26,6 +26,12 @@ KEY_SUB_DATA_KEYS = '1'
 
 RESERVED_KEYS = (KEY_COUNTER, KEY_SUB_DATA_KEYS)
 
+def key_to_str(key, max_len = 255):
+    s = str(key)
+    l = min(max_len, len(s))
+    return s[:l]
+    
+
 class PersistentDataStructure(object):
     """
         Note: avoid using pickled dictionaries as binary keys! The problem with dicts is
@@ -73,6 +79,25 @@ class PersistentDataStructure(object):
         self.counter = self.db[KEY_COUNTER]
         self.sub_data_keys = self.db[KEY_SUB_DATA_KEYS]
 
+    def _repair(self):
+        self.need_open()
+        c = 0
+        for key in self.db:
+            value = self.db[key]
+            if self.__is_sub_data(value):
+                c = max(c, int(value['name']))
+                if key not in self.sub_data_keys:
+                    print("subdata found which is not in sub_data_keys -> will be added {}".format(value))
+                    self.sub_data_keys.add(key)
+        
+        if c != self.counter:
+            print('set counter to {}'.format(c))
+            self.counter = c
+        
+        self.db[KEY_COUNTER] = self.counter
+        self.db[KEY_SUB_DATA_KEYS] = self.sub_data_keys
+        self.db.commit()        
+        
             
     def _consistency_check(self):
         self.need_open()
@@ -210,14 +235,8 @@ class PersistentDataStructure(object):
         sys.stdout.flush()
         if recursive:
             for k in self.sub_data_keys:
-                if isinstance(k, bytes):
-                    k_from_bytes = pickle.loads(k)
-                    print("show stat for subdata with key (from bytes) {}".format(k_from_bytes))
-                else:
-                    print("show stat for subdata with key {}".format(k))
+                print("show stat for subdata with key {}".format(key_to_str(k)))
                 sys.stdout.flush()
-                    
-                            
                 with self.getData(k) as subdata:
                     subdata.show_stat(recursive = recursive,
                                       prepend = prepend + "->")
@@ -326,11 +345,7 @@ class PersistentDataStructure(object):
                 return self.db[key] 
         else:
             if not create_sub_data:
-                if isinstance(key, bytes):
-                    key = pickle.loads(key)
-#                 print("KEY NOT FOUND:")
-#                 print(key)
-                raise KeyError("key not found\n{}".format(key))
+                raise KeyError("key not found\n{}".format(key_to_str(key)))
             else:
                 if self.verbose > 1:
                     print("getData key does NOT exists -> create subData")
