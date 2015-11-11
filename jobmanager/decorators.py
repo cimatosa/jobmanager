@@ -241,6 +241,14 @@ class ProgressBar(object):
                   "must accept one of the following pairs of "+
                   "keyword arguments:{}".format(validCountKwargs))
 
+    def _get_callargs(self, *args, **kwargs):
+        """
+        Retrieve all arguments that `self.func` needs and
+        return a dictionary with call arguments.
+        """
+        callargs = getcallargs(self.func, *args, **kwargs)
+        return callargs
+        
         
     def __call__(self, *args, **kwargs):
         """ Calls `func` - previously defined in `__init__`.
@@ -252,9 +260,8 @@ class ProgressBar(object):
         **kwargs : dict
             Keyword-arguments for `func`.
         """
-        
         # Bind the args and kwds to the argument names of self.func
-        callargs = getcallargs(self.func, *args, **kwargs)
+        callargs = self._get_callargs(*args, **kwargs)
         
         count = callargs[self.cm[0]]
         max_count = callargs[self.cm[1]]
@@ -270,12 +277,11 @@ class ProgressBar(object):
 
 class ProgressBarExtended(ProgressBar):
     """
-    extends the ProgressBar such that
+    extends the ProgressBar such that one can turn of the ProgressBar
+    by giving an extra argument, namely 'progress_bar_off' and set its
+    value to 'True'.
     
-    on can turn of the ProgressBar by giving an extra argument,
-    namely 'progress_bar_off' and set its value to 'True'.
-    
-    further there will be an additional argument passed to the function
+    Further there will be an additional argument passed to the function
     called 'progress_bar' which allows to stop the progress bar from
     within the function. note that there will be an function signature error
     if the function does not accept the extra argument 'progress_bar'. So a

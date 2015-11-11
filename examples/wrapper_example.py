@@ -6,7 +6,7 @@ from __future__ import division, print_function
 
 """
 
-
+import multiprocessing as mp
 from os.path import split, dirname, abspath
 import sys
 import time
@@ -16,9 +16,14 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 import jobmanager as jm
 
+def UnsignedIntValue(val=0):
+    return mp.Value('I', val, lock=True)
+
 
 @jm.decorators.ProgressBar
-def decorated_function_alpha(an_argument, c, m):
+def decorated_function_alpha(an_argument,
+                             c=UnsignedIntValue(),
+                             m=UnsignedIntValue()):
     """ A simple example of a ProgressBar-decorated function.
     
     The arguments `c` and `m` are the counter and maximal counter
@@ -35,7 +40,9 @@ def decorated_function_alpha(an_argument, c, m):
 
 
 @jm.decorators.ProgressBar
-def decorated_function_beta(an_argument, jmc, jmm):
+def decorated_function_beta(an_argument,
+                            jmc=UnsignedIntValue(),
+                            jmm=UnsignedIntValue()):
     """ A simple example of a ProgressBar-decorated function.
     
     In comparison to `decorated_function_alpha`, we now have the
@@ -56,7 +63,9 @@ def decorated_function_beta(an_argument, jmc, jmm):
 
 
 @jm.decorators.ProgressBar
-def decorated_function_gamma(arg, jmc, jmm, kwarg="2"):
+def decorated_function_gamma(arg, kwarg="2",
+                            jmc=UnsignedIntValue(),
+                            jmm=UnsignedIntValue()):
     """ A simple example of a ProgressBar-decorated function.
     
     In comparison to `decorated_function_alpha`, we now have the
@@ -103,11 +112,11 @@ if __name__ == "__main__":
     ## wrapped
     # When using the wrapper, you can define arguments for
     # `jm.progress.ProgressBar`.
-    pb = jm.decorators.ProgressBar(wrapped_function_beta,
+    pb = jm.decorators.ProgressBarOverrideCount(wrapped_function_beta,
                                    interval=.05)
     retw1 = pb("argument")
     # or
-    retw2 = jm.decorators.ProgressBar(wrapped_function_beta)("arg")
+    retw2 = jm.decorators.ProgressBarOverrideCount(wrapped_function_beta)("arg")
     
     print(retd1, retd2, retd3, sep=" | ")
     print(retw1, retw2, sep=" | ")
