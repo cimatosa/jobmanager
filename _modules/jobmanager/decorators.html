@@ -55,14 +55,126 @@
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
 
 <span class="kn">from</span> <span class="nn">inspect</span> <span class="kn">import</span> <span class="n">getcallargs</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span> <span class="kn">as</span> <span class="nn">mp</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">multiprocessing.pool</span> <span class="kn">as</span> <span class="nn">_mpool</span>
 <span class="kn">import</span> <span class="nn">warnings</span>
 
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">clients</span>
 <span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">progress</span>
-<span class="kn">from</span> <span class="nn">.jobmanager</span> <span class="kn">import</span> <span class="n">getCountKwargs</span><span class="p">,</span> <span class="n">validCountKwargs</span>
+<span class="kn">from</span> <span class="nn">.jobmanager</span> <span class="kn">import</span> <span class="n">getCountKwargs</span><span class="p">,</span> <span class="n">validCountKwargs</span><span class="p">,</span> <span class="n">JobManager_Server</span><span class="p">,</span> <span class="n">JobManager_Client</span>
+
 
 <span class="c">#__all__ = [&quot;ProgressBar&quot;, &quot;ProgressBarOverrideCount&quot;]</span>
 
 
+<span class="k">class</span> <span class="nc">_Pool_Server</span><span class="p">(</span><span class="n">JobManager_Server</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">authkey</span><span class="p">):</span>
+        <span class="c"># server show status information (verbose=1)</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">_Pool_Server</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">authkey</span><span class="o">=</span><span class="n">authkey</span><span class="p">,</span>
+                         <span class="n">verbose</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        
+    <span class="k">def</span> <span class="nf">process_new_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        write the result into a list</span>
+<span class="sd">        &quot;&quot;&quot;</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            
+    <span class="k">def</span> <span class="nf">process_final_result</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        sort return list according to input arguments</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">set_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">q</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Set the queue that will be used to send the arguments back</span>
+<span class="sd">        to the host</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span> <span class="o">=</span> <span class="n">q</span>
+        
+        
+<span class="k">class</span> <span class="nc">_Pool_Client</span><span class="p">(</span><span class="n">JobManager_Client</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">authkey</span><span class="p">,):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">_Pool_Client</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">server</span><span class="o">=</span><span class="s">&quot;localhost&quot;</span><span class="p">,</span> 
+                                           <span class="n">authkey</span><span class="o">=</span><span class="n">authkey</span><span class="p">,</span> 
+                                           <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;simply return the current argument&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_func</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+    
+
+<div class="viewcode-block" id="Pool"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.Pool">[docs]</a><span class="k">class</span> <span class="nc">Pool</span><span class="p">(</span><span class="n">_mpool</span><span class="o">.</span><span class="n">Pool</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A progressbar-decorated version of `multiprocessing.Pool`</span>
+<span class="sd">    It is possible to set the `authkey` argument manually. The authkey</span>
+<span class="sd">    is saved as the property `Pool().authkey`.</span>
+
+<span class="sd">    The methods `map` and `map_async` work as expected.</span>
+<span class="sd">        </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">__doc__</span> <span class="o">=</span> <span class="n">__doc__</span> <span class="o">+</span> <span class="n">_mpool</span><span class="o">.</span><span class="n">Pool</span><span class="o">.</span><span class="n">__doc__</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">processes</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">initializer</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">initargs</span><span class="o">=</span><span class="p">(),</span> <span class="n">maxtasksperchild</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">authkey</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">_mpool</span><span class="o">.</span><span class="n">Pool</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">processes</span><span class="p">,</span> <span class="n">initializer</span><span class="p">,</span> <span class="n">initargs</span><span class="p">,</span>
+                               <span class="n">maxtasksperchild</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">authkey</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">authkey</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="s">&quot;map_{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">authkey</span> <span class="o">=</span> <span class="n">authkey</span>
+        <span class="c"># the self.map method calls the self.map_async method</span>
+        
+    
+    <span class="k">def</span> <span class="nf">_map_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">map_async</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    
+    
+<div class="viewcode-block" id="Pool.map_async"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.Pool.map_async">[docs]</a>    <span class="k">def</span> <span class="nf">map_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">iterable</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">callback</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Asynchronous equivalent of `map()` builtin.</span>
+<span class="sd">        Note that chunksize and callback have no effect.</span>
+<span class="sd">        </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">==</span> <span class="n">_mpool</span><span class="o">.</span><span class="n">RUN</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="s">&#39;__len__&#39;</span><span class="p">):</span>
+            <span class="n">iterable</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">iterable</span><span class="p">)</span>
+        
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;chunksize not supported in jobmanager&quot;</span><span class="p">)</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;callback not yet implemented&quot;</span><span class="p">)</span>
+    
+        <span class="n">q</span> <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+        <span class="n">p_server</span> <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">Pool</span><span class="o">.</span><span class="n">_run_jm_server</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">iterable</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">authkey</span><span class="p">))</span>
+        <span class="n">p_server</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+       
+        <span class="n">p_client</span> <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">Pool</span><span class="o">.</span><span class="n">_run_jm_client</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">authkey</span><span class="p">))</span>
+        <span class="n">p_client</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+           
+        <span class="n">p_client</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+        <span class="n">p_server</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+        
+        <span class="c"># call q.get() to obtain the results    </span>
+        <span class="k">return</span> <span class="n">q</span>
+        </div>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_run_jm_client</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">authkey</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">_Pool_Client</span><span class="p">(</span><span class="n">authkey</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">_func</span> <span class="o">=</span> <span class="n">func</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_run_jm_server</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">iterable</span><span class="p">,</span> <span class="n">authkey</span><span class="p">):</span>
+        <span class="c">#iterable = self._jm_iterable</span>
+        <span class="c"># Create jobmanager server and client</span>
+        <span class="k">with</span> <span class="n">_Pool_Server</span><span class="p">(</span><span class="n">authkey</span><span class="p">)</span> <span class="k">as</span> <span class="n">server</span><span class="p">:</span>
+            <span class="n">server</span><span class="o">.</span><span class="n">set_queue</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">iterable</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">it</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                    <span class="n">it</span> <span class="o">=</span> <span class="p">(</span><span class="n">it</span><span class="p">,)</span>
+                <span class="n">server</span><span class="o">.</span><span class="n">put_arg</span><span class="p">(</span><span class="n">it</span><span class="p">)</span>
+            <span class="n">server</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+   
+</div>
 <div class="viewcode-block" id="ProgressBar"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.ProgressBar">[docs]</a><span class="k">class</span> <span class="nc">ProgressBar</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; A wrapper/decorator with a text-based progress bar.</span>
 <span class="sd">    </span>
@@ -179,6 +291,14 @@
                   <span class="s">&quot;must accept one of the following pairs of &quot;</span><span class="o">+</span>
                   <span class="s">&quot;keyword arguments:{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">validCountKwargs</span><span class="p">))</span>
 
+    <span class="k">def</span> <span class="nf">_get_callargs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve all arguments that `self.func` needs and</span>
+<span class="sd">        return a dictionary with call arguments.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">callargs</span> <span class="o">=</span> <span class="n">getcallargs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">callargs</span>
+        
         
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot; Calls `func` - previously defined in `__init__`.</span>
@@ -190,9 +310,8 @@
 <span class="sd">        **kwargs : dict</span>
 <span class="sd">            Keyword-arguments for `func`.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        
         <span class="c"># Bind the args and kwds to the argument names of self.func</span>
-        <span class="n">callargs</span> <span class="o">=</span> <span class="n">getcallargs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">callargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_callargs</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         
         <span class="n">count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
         <span class="n">max_count</span> <span class="o">=</span> <span class="n">callargs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cm</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
@@ -208,12 +327,11 @@
 </div>
 <div class="viewcode-block" id="ProgressBarExtended"><a class="viewcode-back" href="../../index.html#jobmanager.decorators.ProgressBarExtended">[docs]</a><span class="k">class</span> <span class="nc">ProgressBarExtended</span><span class="p">(</span><span class="n">ProgressBar</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    extends the ProgressBar such that</span>
+<span class="sd">    extends the ProgressBar such that one can turn of the ProgressBar</span>
+<span class="sd">    by giving an extra argument, namely &#39;progress_bar_off&#39; and set its</span>
+<span class="sd">    value to &#39;True&#39;.</span>
 <span class="sd">    </span>
-<span class="sd">    on can turn of the ProgressBar by giving an extra argument,</span>
-<span class="sd">    namely &#39;progress_bar_off&#39; and set its value to &#39;True&#39;.</span>
-<span class="sd">    </span>
-<span class="sd">    further there will be an additional argument passed to the function</span>
+<span class="sd">    Further there will be an additional argument passed to the function</span>
 <span class="sd">    called &#39;progress_bar&#39; which allows to stop the progress bar from</span>
 <span class="sd">    within the function. note that there will be an function signature error</span>
 <span class="sd">    if the function does not accept the extra argument &#39;progress_bar&#39;. So a</span>
