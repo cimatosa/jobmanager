@@ -20,17 +20,21 @@ import warnings
 warnings.filterwarnings('error')
 
 def test_atom():
-    atoms = [12345678, 3.141, 'hallo Welt', 'öäüß', True, False, None, 2**65, -3**65, bytearray([54,234,2]), b'\xff\fe\03']
+    atoms = [12345678, 3.141, 'hallo Welt', 'öäüß', True, False, None, 2**65, -3**65, b'\xff\fe\03']
     
     for atom in atoms:
         bin_atom = bfp.dump(atom)
+        assert type(bin_atom) is bfp.BIN_TYPE
         atom_prime = bfp.load(bin_atom)
         bin_ob_prime = bfp.dump(atom_prime)
         assert bin_atom == bin_ob_prime
         
+        hash(bin_atom)
+        
 def test_tuple():
     t = (12345678, 3.141, 'hallo Welt', 'öäüß', True, False, None, (3, tuple(), (4,5,None), 'test'))
     bin_tuple = bfp._dump_tuple(t)
+    assert type(bin_tuple) is bfp.BIN_TYPE
     t_prime = bfp._load_tuple(bin_tuple)[0]
     assert t == t_prime
     bin_ob_prime = bfp._dump(t_prime)
@@ -39,6 +43,7 @@ def test_tuple():
 def test_nparray():
     ob = np.random.randn(3,53,2)
     bin_ob = bfp._dump(ob)
+    assert type(bin_ob) is bfp.BIN_TYPE
     ob_prime = bfp._load(bin_ob)[0]
     assert np.all(ob == ob_prime)
     bin_ob_prime = bfp._dump(ob_prime)
@@ -56,6 +61,7 @@ def test_nparray():
 def test_list():
     ob = [1,2,3]
     bin_ob = bfp._dump(ob)
+    assert type(bin_ob) is bfp.BIN_TYPE
     ob_prime = bfp._load(bin_ob)[0]
     assert np.all(ob == ob_prime)
     bin_ob_prime = bfp._dump(ob_prime)
@@ -82,6 +88,7 @@ def test_getstate():
     
     ob = T(4)
     bin_ob = bfp._dump(ob)
+    assert type(bin_ob) is bfp.BIN_TYPE
     ob_prime_state = bfp._load(bin_ob)[0]
     ob_prime = T.__new__(T)
     ob_prime.__setstate__(ob_prime_state[1])
@@ -96,6 +103,7 @@ def test_named_tuple():
     obj = obj_type(12345678, 3.141, 'hallo Welt')
     
     bin_obj = bfp._dump(obj)
+    assert type(bin_obj) is bfp.BIN_TYPE
     obj_prime = bfp._load(bin_obj)[0]
     obj_prime_name, obj_prime_data = obj_prime
         
@@ -110,12 +118,14 @@ def test_named_tuple():
 def test_complex():
     z = 3+4j
     bf = bfp.dump(z)
+    assert type(bf) is bfp.BIN_TYPE
     zr = bfp.load(bf)
     assert zr == z    
     
 def test_dict():
     a = {'a':1, 5:5, 3+4j:'l', False: b'ab4+#'}
     bf = bfp.dump(a)
+    assert type(bf) is bfp.BIN_TYPE
     a_restored = bfp.load(bf)
     
     for k in a:
