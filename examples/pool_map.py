@@ -14,7 +14,6 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 import jobmanager
 
-
 def func(x):
     """Example function with only one argument"""
     time.sleep(x[0]/10)

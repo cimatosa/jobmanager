@@ -78,6 +78,9 @@ if sys.version_info[0] == 2:
     
     class JMConnectionResetError(JMConnectionError):
         pass
+
+    class BrokenPipeError(JMConnectionError):
+        pass
     
 else:
     # Python 3

@@ -26,6 +26,12 @@ if sys.version_info[0] == 2:
     
     math.ceil = my_int_ceil
 
+# Magic conversion from 3 to 2
+if sys.version_info[0] == 2:
+    _jm_compatible_bytearray = lambda x: x
+else:
+    _jm_compatible_bytearray = bytearray
+
 
 class Loop(object):
     """
@@ -1209,8 +1215,9 @@ def FloatValue(val=0.):
 def UnsignedIntValue(val=0):
     return mp.Value('I', val, lock=True)
 
+
 def StringValue(num_of_bytes):
-    return mp.Array('c', bytearray(num_of_bytes), lock=True)
+    return mp.Array('c', _jm_compatible_bytearray(num_of_bytes), lock=True)
 
 
 def check_process_termination(proc, identifier, timeout, verbose=0, auto_kill_on_last_resort = False):
