@@ -401,7 +401,8 @@ class JobManager_Client(object):
                 except SystemExit as e:
                     raise e
                 # job_q.get failed -> server down?             
-                except Exception as e: 
+                except Exception as e:
+                    print("Error when calling 'job_q_get'") 
                     JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                     break
                 
@@ -420,7 +421,7 @@ class JobManager_Client(object):
                 except:
                     err, val, trb = sys.exc_info()
                     if verbose > 0:
-                        print("{}: caught exception '{}'".format(identifier, err.__name__))
+                        print("{}: caught exception '{}' when crunching 'func'".format(identifier, err.__name__))
                     
                     if verbose > 1:
                         traceback.print_exc()
@@ -473,6 +474,7 @@ class JobManager_Client(object):
                         raise e
                     
                     except Exception as e:
+                        print("Error when calling 'result_q_put'")
                         JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                         break
                     
@@ -1528,14 +1530,14 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
                     
-                if e is ConnectionResetError:
+                if type(e) is ConnectionResetError:
                     if verbose > 0:
                         traceback.print_exc(limit=1)
                         print("{}try to reconnect".format(identifier))
                     call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
-                elif e is BrokenPipeError:
+                elif type(e) is BrokenPipeError:
                     handler_broken_pipe_error(e, verbose)
-                elif e is EOFError:
+                elif type(e) is EOFError:
                     handler_eof_error(e, verbose)
                 else:
                     handler_unexpected_error(e, verbose)
@@ -1563,7 +1565,7 @@ def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier=''
                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
                     
-                if e is IOError:
+                if type(e) is IOError:
                     if verbose > 0:
                         print("{} with args {}".format(type(e), e.args))
                     err_code = e.args[0]
@@ -1575,9 +1577,9 @@ def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier=''
                     else:
                         handler_unexpected_error(e, verbose)                    
                     
-                elif e is BrokenPipeError:
+                elif type(e) is BrokenPipeError:
                     handler_broken_pipe_error(e, verbose)
-                elif e is EOFError:
+                elif type(e) is EOFError:
                     handler_eof_error(e, verbose)
                 else:
                     handler_unexpected_error(e, verbose)            
