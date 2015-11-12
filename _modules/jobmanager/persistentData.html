@@ -77,9 +77,13 @@
 <span class="n">RESERVED_KEYS</span> <span class="o">=</span> <span class="p">(</span><span class="n">KEY_COUNTER</span><span class="p">,</span> <span class="n">KEY_SUB_DATA_KEYS</span><span class="p">)</span>
 
 <span class="k">def</span> <span class="nf">key_to_str</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">max_len</span> <span class="o">=</span> <span class="mi">255</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="nb">bytearray</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="s">&quot;&lt;binary key&gt;&quot;</span>
     <span class="n">s</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-    <span class="n">l</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">max_len</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">s</span><span class="p">[:</span><span class="n">l</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_len</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">s</span><span class="p">[:</span><span class="n">max_len</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39; ...&#39;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">s</span>
     
 
 <div class="viewcode-block" id="PersistentDataStructure"><a class="viewcode-back" href="../../index.html#jobmanager.persistentData.PersistentDataStructure">[docs]</a><span class="k">class</span> <span class="nc">PersistentDataStructure</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
