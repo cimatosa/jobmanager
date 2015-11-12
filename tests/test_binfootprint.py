@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import division, print_function
 
 import sys
 
@@ -19,12 +20,16 @@ from collections import namedtuple
 import warnings
 warnings.filterwarnings('error')
 
+def test_version_tag():
+    ob = 5
+    binob = bfp.dump(ob)
+    assert bfp.byte_to_ord(binob[0]) == bfp._VERS
+
 def test_atom():
     atoms = [12345678, 3.141, 'hallo Welt', 'öäüß', True, False, None, 2**65, -3**65, b'\xff\fe\03']
     
     for atom in atoms:
         bin_atom = bfp.dump(atom)
-        assert type(bin_atom) is bfp.BIN_TYPE
         atom_prime = bfp.load(bin_atom)
         bin_ob_prime = bfp.dump(atom_prime)
         assert bin_atom == bin_ob_prime
@@ -105,11 +110,12 @@ def test_named_tuple():
     bin_obj = bfp._dump(obj)
     assert type(bin_obj) is bfp.BIN_TYPE
     obj_prime = bfp._load(bin_obj)[0]
-    obj_prime_name, obj_prime_data = obj_prime
-        
+    obj_prime_name, obj_prime_data_values, obj_prime_data_fields = obj_prime      
     
     assert obj_prime_name == obj.__class__.__name__
-    obj_prime = obj_type(*obj_prime_data)
+    obj_prime = obj_type(*obj_prime_data_values)
+    
+    assert obj_prime._fields == obj_prime_data_fields
         
     assert obj_prime == obj
     bin_ob_prime = bfp._dump(obj_prime)
@@ -129,12 +135,22 @@ def test_dict():
     a_restored = bfp.load(bf)
     
     for k in a:
-        assert a[k] == a_restored[k] 
+        assert a[k] == a_restored[k]
+
+def test_versions():
+    nt = namedtuple('nt', ['x', 'y'])
+    n = nt(4,5)
+    n2 = nt(n, n)
+    ob = [3, n, n2]
     
-def run():
-    print(bfp.dump(None))
+    binob = bfp.dump(ob, vers = 0)
+    rest_ob = bfp.load(binob)
+    
+    binob = bfp.dump(ob, vers = 0x80)
+    rest_ob = bfp.load(binob)
      
-if __name__ == "__main__":    
+if __name__ == "__main__":
+    test_version_tag()    
     test_atom()
     test_tuple()
     test_nparray()
@@ -143,6 +159,6 @@ if __name__ == "__main__":
     test_named_tuple()
     test_complex()
     test_dict()
-#     run()
+    test_versions()
 
 

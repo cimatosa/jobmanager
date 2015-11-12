@@ -1,3 +1,39 @@
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
+"""
+    This module intents to generate a binary representation of a python object
+    where it is guaranteed that the same objects will result in the same binary
+    representation.
+    
+    By far not all python objects are supported. Here is the list of supported types
+        
+        - special build-in constants: True, False, None
+        - integer 
+        - float (64bit)
+        - complex (128bit)
+        - np.ndarray
+        - list
+        - tuple
+        - dictionary
+        
+    For any nested combination of these objects it is also guaranteed that the
+    original objects can be restored.
+    
+    Additionally
+        - namedtuple
+        - 'getstate' (objects that implement __getstate__ and return a state that can be dumped as well)
+    can be dumped, but these objects can NOT be restored automatically.
+    
+    Restoring these objects will lead to
+        namedtuple: return a tuple with 3 elements (namedtuple_class_name, namedtuple_values. namedtuple_fields)
+                    where namedtuple_values and namedtuple_fields itself are tuples
+        'getstate': return a tuple with 2 elements (object_class_name, state)
+        
+    NOTE: the tests pass python2.7 and python 3.4 so far, but it not yet been tested if the binary representation
+          is the same among different python versions (they should be though!)    
+"""
+
 import struct
 import numpy as np
 import sys
@@ -20,9 +56,10 @@ _GETSTATE   = 0x0b
 _DICT       = 0x0c
 _INT_NEG    = 0x0d
 
+_VERS       = 0x80
+
 __max_int32 = +2147483647
 __min_int32 = -2147483648
-
 
 def __int_to_bytes(i):
     m = 0xff
@@ -46,7 +83,7 @@ def char_eq_byte(ch, b):
 
 def byte_eq_byte(b1, b2):
     return b1 == b2
-
+ 
 
 
 if sys.version_info.major > 2:
@@ -54,23 +91,39 @@ if sys.version_info.major > 2:
     str_to_bytes = lambda s: bytes(s, 'utf8')
     bytes_to_str = lambda b: str(b, 'utf8')
     LONG_TYPE    = int
-    int_to_bytes = lambda i: i.to_bytes(ceil(i.bit_length() / 8), 'big')  
-    bytes_to_int = lambda ba: int.from_bytes(ba, 'big')
     np_load      = lambda ba: np.loads(ba)
     init_BYTES   = lambda b: bytes(b)
     comp_id      = byte_eq_byte
     char_to_byte = lambda ch: ord(ch)
+    byte_to_ord  = lambda b: b
 else:
     BIN_TYPE = str
     str_to_bytes = lambda s: s
     bytes_to_str = lambda b: str(b)
     LONG_TYPE    = long
-    int_to_bytes = __int_to_bytes
-    bytes_to_int = __bytes_to_int
     np_load      = lambda ba: np.loads(str(ba))
     init_BYTES   = lambda b: str(bytearray(b))
     comp_id      = char_eq_byte
     char_to_byte = lambda ch: ch
+    byte_to_ord  = lambda b: ord(b)
+
+
+int_to_bytes = lambda i: i.to_bytes(ceil(i.bit_length() / 8), 'big')
+bytes_to_int = lambda ba: int.from_bytes(ba, 'big')
+
+try:
+    int_to_bytes(2**77)   
+except AttributeError:
+    int_to_bytes = __int_to_bytes
+
+__b_tmp = int_to_bytes(2**77)    
+    
+try:
+    bytes_to_int(__b_tmp)
+except AttributeError:
+    bytes_to_int = __bytes_to_int
+
+assert bytes_to_int(__b_tmp) == 2**77
 
 class BFLoadError(Exception):
     pass
@@ -202,13 +255,16 @@ def _load_tuple(b):
         idx += len_ob
     return tuple(t), idx
 
+
+
 def _dump_namedtuple(t):   
     b = init_BYTES([_NAMEDTUPLE])
     size = len(t)
     b += struct.pack('>I', size)
     b += _dump(t.__class__.__name__)    
-    for ti in t:
-        b += _dump(ti)
+    for i in range(size):
+        b += _dump(t._fields[i])
+        b += _dump(t[i])
     return b
 
 def _load_namedtuple(b):    
@@ -217,11 +273,17 @@ def _load_namedtuple(b):
     class_name, len_ob = _load(b[5:])
     idx = 5 + len_ob
     t = []
+    fields = []
     for i in range(size):
+        ob, len_ob = _load(b[idx:])
+        fields.append(ob)
+        idx += len_ob
+        
         ob, len_ob = _load(b[idx:])
         t.append(ob)
         idx += len_ob
-    return (class_name, tuple(t)), idx
+        
+    return (class_name, tuple(t), tuple(fields)), idx
 
 def _dump_list(t):
     b = init_BYTES([_LIST])
@@ -356,15 +418,135 @@ def _load(b):
     else:
         raise BFLoadError("unknown identifier '{}'".format(hex(identifier)))
     
-def dump(ob):
+def dump(ob, vers=_VERS):
     """
         returns the binary footprint of the object 'ob' as bytes
     """
-    return _dump(ob)
+    global _dump    
+    if vers == _VERS:
+        return init_BYTES([_VERS]) + _dump(ob)
+    elif vers < 0x80:
+        __dump_tmp = _dump
+        _dump = _dump_00
+        res = _dump(ob)
+        _dump = __dump_tmp
+        
+        return res
 
 def load(b):
     """
         reconstruct the object from the binary footprint given an bytes 'ba'
     """
-    return _load(b)[0]
+    global _load
+    vers = b[0]
+    if byte_to_ord(vers) == _VERS:
+        return _load(b[1:])[0]
+    elif byte_to_ord(vers) < 0x80:
+        # very first version
+        # has not even a version tag
+        __load_tmp = _load
+        _load = _load_00
+        res = _load(b)[0]
+        _load = __load_tmp
         
+        return res
+    else:
+        raise RuntimeError("unknown version tag found!")
+    
+    
+##################################################################
+####
+####  VERY FIRST VERSION -- NO VERSION TAG
+####
+##################################################################
+#
+# so the first two bytes must correspond to an identifier which are assumed
+# to be < 128 = 0x80
+    
+def _load_namedtuple_00(b):    
+    assert comp_id(b[0], _NAMEDTUPLE)
+    size = struct.unpack('>I', b[1:5])[0]
+    class_name, len_ob = _load(b[5:])
+    idx = 5 + len_ob
+    t = []
+    for i in range(size):
+        ob, len_ob = _load(b[idx:])
+        t.append(ob)
+        idx += len_ob
+    return (class_name, tuple(t)), idx    
+    
+    
+def _dump_namedtuple_00(t):   
+    b = init_BYTES([_NAMEDTUPLE])
+    size = len(t)
+    b += struct.pack('>I', size)
+    b += _dump(t.__class__.__name__)    
+    for ti in t:
+        b += _dump(ti)
+    return b    
+        
+    
+def _load_00(b):
+    identifier = b[0]
+    if isinstance(identifier, str):
+        identifier = ord(identifier)    
+    if identifier == _SPEC:
+        return _load_spec(b)
+    elif identifier == _INT_32:
+        return _load_int_32(b)
+    elif (identifier == _INT) or (identifier == _INT_NEG):
+        return _load_int(b)    
+    elif identifier == _FLOAT:
+        return _load_float(b)
+    elif identifier == _COMPLEX:
+        return _load_complex(b)
+    elif identifier == _STR:
+        return _load_str(b)
+    elif identifier == _BYTES:
+        return _load_bytes(b)    
+    elif identifier == _TUPLE:
+        return _load_tuple(b)
+    elif identifier == _NAMEDTUPLE:
+        return _load_namedtuple_00(b)    
+    elif identifier == _LIST:
+        return _load_list(b)    
+    elif identifier == _NPARRAY:
+        return _load_np_array(b)
+    elif identifier == _DICT:
+        return _load_dict(b)    
+    elif identifier == _GETSTATE:
+        return _load_getstate(b)    
+    else:
+        raise BFLoadError("unknown identifier '{}'".format(hex(identifier)))       
+    
+def _dump_00(ob):
+    if isinstance(ob, _spec_types):
+        return _dump_spec(ob)
+    elif isinstance(ob, (int, LONG_TYPE)):
+        if (__min_int32 <= ob) and (ob <= __max_int32):
+            return _dump_int_32(ob)
+        else:
+            return _dump_int(ob)
+    elif isinstance(ob, float):
+        return _dump_float(ob)
+    elif isinstance(ob, complex):
+        return _dump_complex(ob)
+    elif isinstance(ob, str):
+        return _dump_str(ob)
+    elif isinstance(ob, bytes):
+        return _dump_bytes(ob)    
+    elif isinstance(ob, tuple):
+        if hasattr(ob, '_fields'):
+            return _dump_namedtuple_00(ob)
+        else:
+            return _dump_tuple(ob)    
+    elif isinstance(ob, list):
+        return _dump_list(ob)
+    elif isinstance(ob, np.ndarray):
+        return _dump_np_array(ob)
+    elif isinstance(ob, dict):
+        return _dump_dict(ob)    
+    elif hasattr(ob, '__getstate__'):
+        return _dump_getstate(ob)    
+    else:
+        raise RuntimeError("unsupported type for dump '{}'".format(type(ob)))     
