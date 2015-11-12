@@ -1,3 +1,5 @@
+from __future__ import division, print_function
+
 import sqlitedict as sqd
 from os.path import abspath, join, exists
 import os
@@ -183,6 +185,8 @@ class PersistentDataStructure(object):
         finally:
             self.close()
 
+        if self.verbose > 1:
+            print("remove", self._filename)
         os.remove(path = self._filename)
         try:
             os.rmdir(path = self._dirname)

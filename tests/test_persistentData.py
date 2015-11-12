@@ -23,7 +23,7 @@ if sys.version_info[0] == 2:
     # fixes keyword problems with python 2.x
     old_open = open
     def new_open(file, mode):
-        old_open(name = file, mode = mode)
+        return old_open(name = file, mode = mode)
     open = new_open
     
 rmtree('__test_data', ignore_errors=True)
@@ -140,12 +140,12 @@ def test_pd_bytes():
     finally:
         base_data.erase()
 
-def test_directory_removal():
+def test_directory_removal():    
     try:
         with PDS(name='data', verbose=VERBOSE) as data:
             with data.newSubData('s1') as s1:
                 s1['bla'] = 9
-                
+
             f = open(file=data._dirname + '/other_file', mode='w')
             f.close()
             
