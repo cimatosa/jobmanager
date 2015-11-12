@@ -2,7 +2,7 @@
 # Go to script directory
 cd $(dirname $0)
 
-OUTFILE='pytest.html'
+OUTFILE='pytest_out'
 
 
 PYTHON="python"
@@ -71,11 +71,14 @@ touch $OUTFILE
 for py in ${PYLIST[@]}; do
     $py --version
     echo "Running py.test ..."
-    (echo ""; date; $py runtests.py --color=yes) | tee -a $OUTFILE
-    echo "Done!"
+    #(echo ""; date; $py runtests.py --color=yes) 2>&1 > $OUTFILE  #| tee -a $OUTFILE
+    #(echo ""; date; $py runtests.py --color=yes) | tee -a $OUTFILE
+    (echo ""; date; $py /usr/local/bin/py.test -v --color=yes) | tee -a $OUTFILE
+    #(echo ""; date; $py /usr/bin/py.test -v --color=yes) | tee -a $OUTFILE
+    echo "Done!" 
 done
 
-cat $OUTFILE | aha --black --title "pytest output for jobmanager module" > $OUTFILE
+cat $OUTFILE | aha --black --title "pytest output for jobmanager module" > $OUTFILE.html
 
 if [ "$CLEAN" = "yes" ]; then
     rm -f *.trb
@@ -83,4 +86,4 @@ if [ "$CLEAN" = "yes" ]; then
     rm -f *.db
 fi
 
-echo "ALL DONE! (output written to $OUTFILE)"
+echo "ALL DONE! (output written to $OUTFILE.html)"

@@ -20,6 +20,9 @@ except ImportError:
     warnings.warn("Plotting options not available."+\
                   " Reason: {}.".format(sys.exc_info()[1]))
 
+
+warnings.filterwarnings('error')
+
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
@@ -112,7 +115,7 @@ def test_distributed_mathieu():
     N = q_N
     
     # t0, t1, N, f, args, x0, integrator, verbose
-    const_arg = jm.hashDict()
+    const_arg = {}
     const_arg['t0'] = t0
     const_arg['t1'] = t1
     const_arg['N'] = N
@@ -134,7 +137,7 @@ def test_distributed_mathieu():
                              show_statusbar_for_jobs=False) as jm_int:
         q_list = np.linspace(q_min, q_max, q_N)
         for q in q_list:
-            arg = jm.hashDict()
+            arg = {}
             a = mathieu_a(m, q)
             arg['args'] = (a, q)
             arg['x0'] = mathieu_cem(m, q, 0) # gives value and its derivative

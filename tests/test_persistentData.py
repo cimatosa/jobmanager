@@ -6,6 +6,10 @@ import sys
 import pickle
 import os
 from os.path import abspath, dirname, split, exists
+from shutil import rmtree
+
+import warnings
+warnings.filterwarnings('error')
 
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
@@ -19,9 +23,12 @@ if sys.version_info[0] == 2:
     # fixes keyword problems with python 2.x
     old_open = open
     def new_open(file, mode):
-        old_open(name = file, mode = mode)
+        return old_open(name = file, mode = mode)
     open = new_open
     
+rmtree('__test_data', ignore_errors=True)
+rmtree('__data', ignore_errors=True)
+rmtree('__base', ignore_errors=True)
 
 def test_pd():
     try:
@@ -133,19 +140,22 @@ def test_pd_bytes():
     finally:
         base_data.erase()
 
-def test_directory_removal():
+def test_directory_removal():    
     try:
         with PDS(name='data', verbose=VERBOSE) as data:
             with data.newSubData('s1') as s1:
                 s1['bla'] = 9
-                
+
             f = open(file=data._dirname + '/other_file', mode='w')
             f.close()
             
             print("now there should be a warning, because there is an unknown file in the directory!")
     finally:
-        data.erase()
-        
+        try:
+            data.erase()
+        except UserWarning:
+            pass
+
     assert exists(data._dirname)
     os.remove(data._dirname + '/other_file')
     os.rmdir(data._dirname)
@@ -393,15 +403,14 @@ def test_not_in():
         
       
 if __name__ == "__main__":
-#     test_reserved_key_catch()
-#     test_pd()
-#     test_pd_bytes()
-#     test_directory_removal()
-#     test_mp_read_from_sqlite()
-#     test_dict_dump()
-#     test_from_existing_sub_data()
-#     test_remove_sub_data_and_check_len()
-#     test_show_stat()
-#     test_len()
-#     test_clear()
+    test_reserved_key_catch()
+    test_pd()
+    test_pd_bytes()
+    test_directory_removal()
+    test_mp_read_from_sqlite()
+    test_from_existing_sub_data()
+    test_remove_sub_data_and_check_len()
+    test_show_stat()
+    test_len()
+    test_clear()
     test_not_in()

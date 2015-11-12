@@ -1,3 +1,5 @@
+from __future__ import division, print_function
+
 import sqlitedict as sqd
 from os.path import abspath, join, exists
 import os
@@ -27,9 +29,13 @@ KEY_SUB_DATA_KEYS = '1'
 RESERVED_KEYS = (KEY_COUNTER, KEY_SUB_DATA_KEYS)
 
 def key_to_str(key, max_len = 255):
+    if isinstance(key, (bytearray, bytes)):
+        return "<binary key>"
     s = str(key)
-    l = min(max_len, len(s))
-    return s[:l]
+    if len(s) > max_len:
+        return s[:max_len] + ' ...'
+    else:
+        return s
     
 
 class PersistentDataStructure(object):
@@ -179,6 +185,8 @@ class PersistentDataStructure(object):
         finally:
             self.close()
 
+        if self.verbose > 1:
+            print("remove", self._filename)
         os.remove(path = self._filename)
         try:
             os.rmdir(path = self._dirname)

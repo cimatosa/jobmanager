@@ -43,15 +43,17 @@ import socket
 import sys
 import time
 import traceback
+import warnings
+from . import binfootprint as bf
 
 # This is a list of all python objects that will be imported upon
 # initialization during module import (see __init__.py)
 __all__ = ["JobManager_Client",
            "JobManager_Local",
            "JobManager_Server",
+           "getDateForFileName",
            "hashDict",
-           "hashableCopyOfNumpyArray",
-           "getDateForFileName"
+           "hashableCopyOfNumpyArray"
           ]
            
 
@@ -77,9 +79,6 @@ if sys.version_info[0] == 2:
         pass
     
     class JMConnectionResetError(JMConnectionError):
-        pass
-
-    class BrokenPipeError(JMConnectionError):
         pass
     
 else:
@@ -404,7 +403,8 @@ class JobManager_Client(object):
                 except SystemExit as e:
                     raise e
                 # job_q.get failed -> server down?             
-                except Exception as e: 
+                except Exception as e:
+                    print("Error when calling 'job_q_get'") 
                     JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                     break
                 
@@ -423,7 +423,7 @@ class JobManager_Client(object):
                 except:
                     err, val, trb = sys.exc_info()
                     if verbose > 0:
-                        print("{}: caught exception '{}'".format(identifier, err.__name__))
+                        print("{}: caught exception '{}' when crunching 'func'".format(identifier, err.__name__))
                     
                     if verbose > 1:
                         traceback.print_exc()
@@ -476,6 +476,7 @@ class JobManager_Client(object):
                         raise e
                     
                     except Exception as e:
+                        print("Error when calling 'result_q_put'")
                         JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                         break
                     
@@ -725,12 +726,13 @@ class JobManager_Server(object):
         self.speed_calc_cycles = speed_calc_cycles
 
         # to do some redundant checking, might be removed
-        # the args_set holds all arguments to be processed
+        # the args_dict holds all arguments to be processed
         # in contrast to the job_q, an argument will only be removed
         # from the set if it was caught by the result_q
         # so iff all results have been processed successfully,
-        # the args_set will be empty
-        self.args_set = set()
+        # the args_dict will be empty
+        self.args_dict = dict()   # has the bin footprint in it
+        self.args_list = []     # hat the actual args object
         
         # thread safe integer values  
         self._numresults = mp.Value('i', 0)  # count the successfully processed jobs
@@ -925,52 +927,47 @@ class JobManager_Server(object):
             print("{}  not processed     : {}".format(id2, all_not_processed))
             print("{}    queried         : {}".format(id2, queried_but_not_processed))
             print("{}    not queried yet : {}".format(id2, not_queried))
-            print("{}len(args_set) : {}".format(id2, len(self.args_set)))
-            if (all_not_processed + failed) != len(self.args_set):
-                raise RuntimeWarning(
-                    "'all_not_processed != len(self.args_set)' "+\
-                    "something is inconsistent! Make sure you did "+\
-                    "not set any duplicate arguments.")
+            print("{}len(args_dict) : {}".format(id2, len(self.args_dict)))
+            if (all_not_processed + failed) != len(self.args_dict):
+                raise RuntimeWarning("'all_not_processed != len(self.args_dict)' something is inconsistent!")
             
 
     @staticmethod
     def static_load(f):
         data = {}
         data['numjobs'] = pickle.load(f)
-#         print(data['numjobs'])
-        
-        data['numresults'] = pickle.load(f)
-#         print(data['numresults'])
-        
-        data['final_result'] = pickle.load(f)
-        
-        data['args_set'] = pickle.load(f)
-#         print(len(data['args_set']))
+        data['numresults'] = pickle.load(f)        
+        data['final_result'] = pickle.load(f)        
+        data['args_dict'] = pickle.load(f)
+        data['args_list'] = pickle.load(f)
         
         fail_list = pickle.load(f)
-        data['fail_set'] = {fail_item[0] for fail_item in fail_list}
+        data['fail_set'] = {bf.dump(fail_item[0]) for fail_item in fail_list}
         
         data['fail_q'] = myQueue()
         data['job_q'] = myQueue()
         
         for fail_item in fail_list:
             data['fail_q'].put_nowait(fail_item)
-        for arg in (data['args_set'] - data['fail_set']):
-            data['job_q'].put_nowait(arg)
+        for arg in data['args_dict']:
+            if arg not in data['fail_set']:
+                arg_idx = data['args_dict'][arg] 
+                data['job_q'].put_nowait(data['args_list'][arg_idx])
 
         return data
 
     def __load(self, f):
         data = JobManager_Server.static_load(f)
         for key in ['numjobs', 'numresults', 'final_result',
-                    'args_set', 'fail_q','job_q']:
+                    'args_dict', 'args_list', 'fail_q','job_q']:
             self.__setattr__(key, data[key])
         
     def __dump(self, f):
         pickle.dump(self.numjobs, f, protocol=pickle.HIGHEST_PROTOCOL)
         pickle.dump(self.numresults, f, protocol=pickle.HIGHEST_PROTOCOL)
         pickle.dump(self.final_result, f, protocol=pickle.HIGHEST_PROTOCOL)
-        pickle.dump(self.args_set, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(self.args_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(self.args_list, f, protocol=pickle.HIGHEST_PROTOCOL)
         fail_list = []
         try:
             while True:
@@ -978,12 +975,7 @@ class JobManager_Server(object):
         except queue.Empty:
             pass
         pickle.dump(fail_list, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
-#         print('numjobs', self.numjobs)
-#         print('numresults', self.numresults)
-#         print('final_result', self.final_result)
-#         print('args_set', self.args_set)
-#         print('fail_list', fail_list)
+
         
     def read_old_state(self, fname_dump=None):
         
@@ -1006,16 +998,20 @@ class JobManager_Server(object):
     def put_arg(self, a):
         """add argument a to the job_q
         """
-        if (not hasattr(a, '__hash__')) or (a.__hash__ == None):
-            # try to add hashability
-            if isinstance(a, dict):
-                a = hashDict(a)
-            elif isinstance(a, np.ndarray):
-                a = hashableCopyOfNumpyArray(a)
-            else:
-                raise AttributeError("'{}' is not hashable".format(type(a)))
+#         if (not hasattr(a, '__hash__')) or (a.__hash__ == None):
+#             # try to add hashability
+#             if isinstance(a, dict):
+#                 a = hashDict(a)
+#             elif isinstance(a, np.ndarray):
+#                 a = hashableCopyOfNumpyArray(a)
+#             else:
+#                 raise AttributeError("'{}' is not hashable".format(type(a)))
         
-        self.args_set.add(copy.copy(a))
+        bfa = bf.dump(a)
+        if bfa in self.args_dict:
+            raise ValueError("do not add the same argument twice! If you are sure, they are not the same, there might be an error with the binfootprint mehtods!")
+        self.args_dict[bfa] = len(self.args_list)
+        self.args_list.append(a)
         self.job_q.put(copy.copy(a))
         
         with self._numjobs.get_lock():
@@ -1052,13 +1048,13 @@ class JobManager_Server(object):
         if self._pid != os.getpid():
             raise RuntimeError("do not run JobManager_Server.start() in a subprocess")
 
-        if (self.numjobs - self.numresults) != len(self.args_set):
+        if (self.numjobs - self.numresults) != len(self.args_dict):
             if self.verbose > 1:
                 print("numjobs: {}".format(self.numjobs))
                 print("numresults: {}".format(self.numresults))
-                print("len(self.args_set): {}".format(len(self.args_set)))
+                print("len(self.args_dict): {}".format(len(self.args_dict)))
                 
-            raise RuntimeError("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_set)! use JobManager_Server.put_arg to put arguments to the job_q")
+            raise RuntimeError("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
         
         if self.numjobs == 0:
             print("{}: WARNING no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q".format(self._identifier))
@@ -1090,12 +1086,12 @@ class JobManager_Server(object):
 
             stat.start()
         
-            while (len(self.args_set) - self.fail_q.qsize()) > 0:
+            while (len(self.args_dict) - self.fail_q.qsize()) > 0:
                 try:
                     info_line.value = "result_q size: {}".format(self.result_q.qsize()).encode('utf-8')
                     arg, result = self.result_q.get(timeout=1)
-                    self.args_set.remove(arg)
-                    self.numresults = self.numjobs - len(self.args_set)
+                    del self.args_dict[bf.dump(arg)]
+                    self.numresults = self.numjobs - len(self.args_dict)
                     self.process_new_result(arg, result)
                 except queue.Empty:
                     pass
@@ -1280,6 +1276,10 @@ class Signal_to_terminate_process_list(object):
 
 
 class hashDict(dict):
+    def __init__(self, **kwargs):
+        warnings.warn("'hashDict' is obsolete, not needed anymore, use regular 'dict' instead!")
+        dict.__init__(self, **kwargs)
+    
     def __hash__(self):
         try:
             return hash(tuple(sorted(self.items())))
@@ -1290,18 +1290,19 @@ class hashDict(dict):
                 except Exception as e:
                     print("item '{}' of dict is not hashable".format(i))
                     raise e
-                    
-    
+                     
+     
 class hashableCopyOfNumpyArray(np.ndarray):
     def __new__(self, other):
         return np.ndarray.__new__(self, shape=other.shape, dtype=other.dtype)
-
+ 
     def __init__(self, other):
+        warnings.warn("'hashableCopyOfNumpyArray' is obsolete, not needed anymore, use regular 'np.ndarray' instead!")
         self[:] = other[:]
-    
+     
     def __hash__(self):
         return hash(self.shape + tuple(self.flat))
-
+ 
     def __eq__(self, other):
         return np.all(np.equal(self, other))
 
@@ -1531,14 +1532,14 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
                     
-                if e is ConnectionResetError:
+                if type(e) is ConnectionResetError:
                     if verbose > 0:
                         traceback.print_exc(limit=1)
                         print("{}try to reconnect".format(identifier))
                     call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
-                elif e is BrokenPipeError:
+                elif type(e) is BrokenPipeError:
                     handler_broken_pipe_error(e, verbose)
-                elif e is EOFError:
+                elif type(e) is EOFError:
                     handler_eof_error(e, verbose)
                 else:
                     handler_unexpected_error(e, verbose)
@@ -1566,7 +1567,7 @@ def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier=''
                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
                     
-                if e is IOError:
+                if type(e) is IOError:
                     if verbose > 0:
                         print("{} with args {}".format(type(e), e.args))
                     err_code = e.args[0]
@@ -1578,9 +1579,9 @@ def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier=''
                     else:
                         handler_unexpected_error(e, verbose)                    
                     
-                elif e is BrokenPipeError:
+                elif type(e) is BrokenPipeError:
                     handler_broken_pipe_error(e, verbose)
-                elif e is EOFError:
+                elif type(e) is EOFError:
                     handler_eof_error(e, verbose)
                 else:
                     handler_unexpected_error(e, verbose)            
