@@ -17,7 +17,7 @@ import jobmanager as jm
 
 class Example_Client(jm.JobManager_Client):
     def __init__(self):
-        # start quiet client (verbose=0)
+        # start quiet client (verbopse=0)
         super(Example_Client, self).__init__(server="localhost", 
                          authkey='simple example', 
                          verbose=0)
