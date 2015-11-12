@@ -6,6 +6,10 @@ import sys
 import pickle
 import os
 from os.path import abspath, dirname, split, exists
+from shutil import rmtree
+
+import warnings
+warnings.filterwarnings('error')
 
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
@@ -22,6 +26,9 @@ if sys.version_info[0] == 2:
         old_open(name = file, mode = mode)
     open = new_open
     
+rmtree('__test_data', ignore_errors=True)
+rmtree('__data', ignore_errors=True)
+rmtree('__base', ignore_errors=True)
 
 def test_pd():
     try:
@@ -144,8 +151,11 @@ def test_directory_removal():
             
             print("now there should be a warning, because there is an unknown file in the directory!")
     finally:
-        data.erase()
-        
+        try:
+            data.erase()
+        except UserWarning:
+            pass
+
     assert exists(data._dirname)
     os.remove(data._dirname + '/other_file')
     os.rmdir(data._dirname)

@@ -522,41 +522,41 @@ def test_jobmanager_read_old_stat():
      
     assert len(intersect) == 0, "final result does not contain all arguments!"
     print("[+] all arguments found in final_results")    
-        
-def test_hashedViewOnNumpyArray():
-    s = set()
-    
-    a = np.ones(4)
-    ah = jobmanager.hashableCopyOfNumpyArray(a)
-    
-    s.add(ah)
-    
-    b = np.ones(4, dtype=np.int32)
-    bh = jobmanager.hashableCopyOfNumpyArray(b)
 
-    # hash function independent of dtype    
-    assert hash(ah) == hash(bh)
-    # overwritten equal operator ...
-    assert ah == bh
-    # ... makes such statements possible!
-    assert bh in s
-     
-    # check if it is truly a copy, not just a view
-    b[0] = 2
-    assert bh[0] == 1
-    
-    c = np.ones(5)
-    ch = jobmanager.hashableCopyOfNumpyArray(c)
-    # different array
-    assert not ch in s
-    
-    # check if shape is included in hash calculation
-    bh2 = bh.reshape((2,2))
-    assert bh2 not in s
-    
-    # just some redundant back conversion an checking  
-    bh2 = bh2.reshape((4,))
-    assert bh2 in s
+# def test_hashedViewOnNumpyArray():
+#     s = set()
+#     
+#     a = np.ones(4)
+#     ah = jobmanager.hashableCopyOfNumpyArray(a)
+#     
+#     s.add(ah)
+#     
+#     b = np.ones(4, dtype=np.int32)
+#     bh = jobmanager.hashableCopyOfNumpyArray(b)
+# 
+#     # hash function independent of dtype    
+#     assert hash(ah) == hash(bh)
+#     # overwritten equal operator ...
+#     assert ah == bh
+#     # ... makes such statements possible!
+#     assert bh in s
+#      
+#     # check if it is truly a copy, not just a view
+#     b[0] = 2
+#     assert bh[0] == 1
+#     
+#     c = np.ones(5)
+#     ch = jobmanager.hashableCopyOfNumpyArray(c)
+#     # different array
+#     assert not ch in s
+#     
+#     # check if shape is included in hash calculation
+#     bh2 = bh.reshape((2,2))
+#     assert bh2 not in s
+#     
+#     # just some redundant back conversion an checking  
+#     bh2 = bh2.reshape((4,))
+#     assert bh2 in s
 
 def test_client_status():
     global PORT
