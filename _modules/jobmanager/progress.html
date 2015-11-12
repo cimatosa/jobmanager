@@ -76,6 +76,12 @@
     
     <span class="n">math</span><span class="o">.</span><span class="n">ceil</span> <span class="o">=</span> <span class="n">my_int_ceil</span>
 
+<span class="c"># Magic conversion from 3 to 2</span>
+<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+    <span class="n">_jm_compatible_bytearray</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">_jm_compatible_bytearray</span> <span class="o">=</span> <span class="nb">bytearray</span>
+
 
 <div class="viewcode-block" id="Loop"><a class="viewcode-back" href="../../index.html#jobmanager.progress.Loop">[docs]</a><span class="k">class</span> <span class="nc">Loop</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
@@ -1259,8 +1265,9 @@
 <span class="k">def</span> <span class="nf">UnsignedIntValue</span><span class="p">(</span><span class="n">val</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">mp</span><span class="o">.</span><span class="n">Value</span><span class="p">(</span><span class="s">&#39;I&#39;</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">lock</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
 
+
 <span class="k">def</span> <span class="nf">StringValue</span><span class="p">(</span><span class="n">num_of_bytes</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">mp</span><span class="o">.</span><span class="n">Array</span><span class="p">(</span><span class="s">&#39;c&#39;</span><span class="p">,</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">num_of_bytes</span><span class="p">),</span> <span class="n">lock</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">mp</span><span class="o">.</span><span class="n">Array</span><span class="p">(</span><span class="s">&#39;c&#39;</span><span class="p">,</span> <span class="n">_jm_compatible_bytearray</span><span class="p">(</span><span class="n">num_of_bytes</span><span class="p">),</span> <span class="n">lock</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
 
 
 <span class="k">def</span> <span class="nf">check_process_termination</span><span class="p">(</span><span class="n">proc</span><span class="p">,</span> <span class="n">identifier</span><span class="p">,</span> <span class="n">timeout</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">auto_kill_on_last_resort</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span>
