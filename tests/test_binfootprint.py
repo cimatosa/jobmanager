@@ -104,6 +104,13 @@ def test_getstate():
     bin_ob_prime = bfp.dump(ob_prime)
     assert bin_ob == bin_ob_prime
     
+    try:
+        ob_prime = bfp.load(bin_ob)
+    except bfp.BFUnkownClassError:
+        pass
+    else:
+        assert False, "binfootprint.BFUnkownClassError should have been raised"
+    
 def test_named_tuple():
     obj_type = namedtuple('obj_type', ['a','b','c'])
     
@@ -111,14 +118,9 @@ def test_named_tuple():
     
     bin_obj = bfp.dump(obj)
     assert type(bin_obj) is bfp.BIN_TYPE
-    obj_prime = bfp.load(bin_obj)
-    obj_prime_name, obj_prime_data_values, obj_prime_data_fields = obj_prime      
-    
-    assert obj_prime_name == obj.__class__.__name__
-    obj_prime = obj_type(*obj_prime_data_values)
-    
-    assert obj_prime._fields == obj_prime_data_fields
-        
+    obj_prime = bfp.load(bin_obj)   
+    assert obj_prime.__class__.__name__ == obj.__class__.__name__
+    assert obj_prime._fields == obj._fields
     assert obj_prime == obj
     bin_ob_prime = bfp.dump(obj_prime)
     assert bin_obj == bin_ob_prime

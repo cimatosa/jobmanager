@@ -34,10 +34,13 @@ from __future__ import division, print_function
           is the same among different python versions (they should be though!)    
 """
 
-import struct
-import numpy as np
-import sys
+from collections import namedtuple
 from math import ceil
+import numpy as np
+import struct
+from sys import version_info
+
+
 
 _spec_types = (bool, type(None))
 
@@ -86,7 +89,7 @@ def byte_eq_byte(b1, b2):
  
 
 
-if sys.version_info.major > 2:
+if version_info.major > 2:
     BIN_TYPE = bytes
     str_to_bytes = lambda s: bytes(s, 'utf8')
     bytes_to_str = lambda b: str(b, 'utf8')
@@ -126,6 +129,9 @@ except AttributeError:
 assert bytes_to_int(__b_tmp) == 2**77
 
 class BFLoadError(Exception):
+    pass
+
+class BFUnkownClassError(Exception):
     pass
 
 def _dump_spec(ob):
@@ -283,7 +289,10 @@ def _load_namedtuple(b, classes):
         t.append(ob)
         idx += len_ob
         
-    return (class_name, tuple(t), tuple(fields)), idx
+    np_class = namedtuple(class_name, fields)
+    np_obj = np_class(*t)
+        
+    return np_obj, idx
 
 def _dump_list(t):
     b = init_BYTES([_LIST])
@@ -331,7 +340,12 @@ def _load_getstate(b, classes):
     assert comp_id(b[0], _GETSTATE)
     obj_type, l_obj_type = _load_str(b[1:])
     state, l_state = _load(b[l_obj_type+1:], classes)
-    cls = classes[obj_type]
+    try:
+        cls = classes[obj_type]
+    except KeyError:
+        raise BFUnkownClassError("could not load object of type '{}', no class definition found in classes\n".format(obj_type)+
+                                 "Please provide the lookup 'classes' when calling load, that maps the class name of the object to the actual "+
+                                 "class definition (class object).")
     obj = cls.__new__(cls)
     obj.__setstate__(state)
     return obj, l_obj_type+l_state+1
@@ -436,7 +450,7 @@ def dump(ob, vers=_VERS):
         
         return res
 
-def load(b, classes=None):
+def load(b, classes={}):
     """
         reconstruct the object from the binary footprint given an bytes 'ba'
     """
