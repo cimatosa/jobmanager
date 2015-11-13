@@ -147,21 +147,31 @@ def test_versions():
     ob = [3, n, n2]
     
     binob = bfp.dump(ob, vers = 0)
-    rest_ob = bfp.load(binob)
+    try:
+        bfp.load(binob)
+    except bfp.BFUnkownClassError:
+        pass
+    else:
+        assert False, "binfootprint.BFUnkownClassError should have been raised"
+         
+    rest_ob = bfp.load(binob, {'nt': nt})
+    assert rest_ob == ob        
     
     binob = bfp.dump(ob, vers = 0x80)
     rest_ob = bfp.load(binob)
+    assert rest_ob == ob
+      
      
 if __name__ == "__main__":
-    test_version_tag()    
-    test_atom()
-    test_tuple()
-    test_nparray()
-    test_list()
-    test_getstate()
-    test_named_tuple()
-    test_complex()
-    test_dict()
+#     test_version_tag()    
+#     test_atom()
+#     test_tuple()
+#     test_nparray()
+#     test_list()
+#     test_getstate()
+#     test_named_tuple()
+#     test_complex()
+#     test_dict()
     test_versions()
 
 

@@ -16,20 +16,19 @@ from __future__ import division, print_function
         - list
         - tuple
         - dictionary
+        - namedtuple (new since version 0x80, before it also need the 'classes' lookup when loaded)
         
     For any nested combination of these objects it is also guaranteed that the
-    original objects can be restored.
+    original objects can be restored without any extra information.
     
     Additionally
-        - namedtuple
-        - 'getstate' (objects that implement __getstate__ and return a state that can be dumped as well)
-    can be dumped, but these objects can NOT be restored automatically.
     
-    Restoring these objects will lead to
-        namedtuple: return a tuple with 3 elements (namedtuple_class_name, namedtuple_values. namedtuple_fields)
-                    where namedtuple_values and namedtuple_fields itself are tuples
-        'getstate': return a tuple with 2 elements (object_class_name, state)
-        
+        - 'getstate' (objects that implement __getstate__ and return a state that can be dumped as well)
+    
+    can be dumped. To Restore these objects the load function needs a lookup given by the argument 'classes'
+    which maps the objects class name (obj.__class__.__name__) to the actual class definition (the class object).
+    Of course for these objects the __setstate__ method needs to be implemented. 
+            
     NOTE: the tests pass python2.7 and python 3.4 so far, but it not yet been tested if the binary representation
           is the same among different python versions (they should be though!)    
 """
@@ -39,8 +38,6 @@ from math import ceil
 import numpy as np
 import struct
 from sys import version_info
-
-
 
 _spec_types = (bool, type(None))
 
@@ -132,7 +129,10 @@ class BFLoadError(Exception):
     pass
 
 class BFUnkownClassError(Exception):
-    pass
+    def __init__(self, classname):
+        Exception.__init__(self, "could not load object of type '{}', no class definition found in classes\n".format(classname)+
+                                 "Please provide the lookup 'classes' when calling load, that maps the class name of the object to the actual "+
+                                 "class definition (class object).")
 
 def _dump_spec(ob):
     if ob == True:
@@ -343,9 +343,7 @@ def _load_getstate(b, classes):
     try:
         cls = classes[obj_type]
     except KeyError:
-        raise BFUnkownClassError("could not load object of type '{}', no class definition found in classes\n".format(obj_type)+
-                                 "Please provide the lookup 'classes' when calling load, that maps the class name of the object to the actual "+
-                                 "class definition (class object).")
+        raise BFUnkownClassError(obj_type)
     obj = cls.__new__(cls)
     obj.__setstate__(state)
     return obj, l_obj_type+l_state+1
@@ -445,8 +443,10 @@ def dump(ob, vers=_VERS):
     elif vers < 0x80:
         __dump_tmp = _dump
         _dump = _dump_00
-        res = _dump(ob)
-        _dump = __dump_tmp
+        try:
+            res = _dump(ob)
+        finally:
+            _dump = __dump_tmp
         
         return res
 
@@ -463,8 +463,10 @@ def load(b, classes={}):
         # has not even a version tag
         __load_tmp = _load
         _load = _load_00
-        res = _load(b, classes)[0]
-        _load = __load_tmp
+        try:
+            res = _load(b, classes)[0]
+        finally:
+            _load = __load_tmp
         
         return res
     else:
@@ -490,7 +492,14 @@ def _load_namedtuple_00(b, classes):
         ob, len_ob = _load(b[idx:], classes)
         t.append(ob)
         idx += len_ob
-    return (class_name, tuple(t)), idx    
+    try:
+        np_class = classes[class_name]
+    except KeyError:
+        raise BFUnkownClassError(class_name)
+        
+    obj = np_class(*t)
+        
+    return obj, idx    
     
     
 def _dump_namedtuple_00(t):   
