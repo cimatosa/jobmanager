@@ -422,7 +422,7 @@ def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
     Decorating nested functions in a module might lead to unexpected
     behavior.
     """
-    if kwargs.has_key("override_count"):
+    if "override_count" in kwargs:
         warnings.warn("`override_count` will be removed. Please use "+\
                   "`decorator=jm.decorators.ProgressBarOverrideCount`.",
                   FutureWarning)
@@ -447,7 +447,7 @@ def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
                     wrapper = decorator(getattr(module, newid), **kwargs)
                     # set new function
                     setattr(module, key, wrapper)
-                    if (kwargs.has_key("verbose") and
+                    if ("verbose" in kwargs and
                         kwargs["verbose"] > 0):
                         print("Jobmanager wrapped {}.{}".format(
                                                   module.__name__, key))
