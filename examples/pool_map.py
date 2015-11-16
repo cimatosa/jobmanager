@@ -22,7 +22,7 @@ def func(x):
 # Create list of parameters
 a = list()
 for i in range(10):
-    a.append((i,2.34))
+    a.append([i,2.34])
 
 # mp.Pool example:
 p_mp = mp.Pool()
