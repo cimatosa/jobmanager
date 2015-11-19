@@ -436,6 +436,7 @@ def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
             decorator = ProgressBar
         kwargs.pop("override_count")
     
+  
     vdict = module.__dict__
     for key in list(vdict.keys()):
         if hasattr(vdict[key], "__call__"):
@@ -456,13 +457,13 @@ def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
                         print("Jobmanager wrapped {}.{}".format(
                                                   module.__name__, key))
 
-        elif vdict[key] == mp.Pool:
+        # Decorate Pool
+        if vdict[key] == mp.Pool:
             # replace mp.Pool
-            setattr(module, vdict[key], Pool)
+            setattr(module, key, Pool)
         elif isinstance(vdict[key], ModuleType):
             # replace mp.Pool in submodules
             subdict = vdict[key].__dict__
             for skey in list(subdict.keys()):
-                if subdict[skey] == mp.pool.Pool:
-                    setattr(vdict[key], subdict[skey], Pool)
-                
+                if subdict[skey] == mp.Pool:
+                    setattr(vdict[key], skey, Pool)
