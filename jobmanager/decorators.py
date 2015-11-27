@@ -465,5 +465,5 @@ def decorate_module_ProgressBar(module, decorator=ProgressBar, **kwargs):
             # replace mp.Pool in submodules
             subdict = vdict[key].__dict__
             for skey in list(subdict.keys()):
-                if subdict[skey] == mp.Pool:
+                if hasattr(subdict[skey], "__call__") and subdict[skey] == mp.Pool:
                     setattr(vdict[key], skey, Pool)
