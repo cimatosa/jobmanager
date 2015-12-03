@@ -55,6 +55,7 @@ _LIST       = 0x0a
 _GETSTATE   = 0x0b
 _DICT       = 0x0c
 _INT_NEG    = 0x0d
+_BFSTATE    = 0x0e
 
 _VERS       = 0x80
 
@@ -336,6 +337,15 @@ def _dump_getstate(ob):
     
     return b
 
+def _dump_bfstate(ob):
+    b = init_BYTES([_BFSTATE]) 
+    state = ob.__bfstate__()
+    obj_type = ob.__class__.__name__
+    b += _dump(str(obj_type))
+    b += _dump(state)
+    
+    return b
+
 def _load_getstate(b, classes):
     assert comp_id(b[0], _GETSTATE)
     obj_type, l_obj_type = _load_str(b[1:])
@@ -397,6 +407,8 @@ def _dump(ob):
         return _dump_dict(ob)    
     elif hasattr(ob, '__getstate__'):
         return _dump_getstate(ob)    
+    elif hasattr(ob, '__bfstate__'):
+        return _dump_bfstate(ob)    
     else:
         raise RuntimeError("unsupported type for dump '{}'".format(type(ob)))
     
@@ -429,7 +441,9 @@ def _load(b, classes):
     elif identifier == _DICT:
         return _load_dict(b, classes)    
     elif identifier == _GETSTATE:
-        return _load_getstate(b, classes)    
+        return _load_getstate(b, classes)
+    elif identifier == _BFSTATE:
+        raise BFLoadError("BFSTATE objects can not be loaded")
     else:
         raise BFLoadError("unknown identifier '{}'".format(hex(identifier)))
     
