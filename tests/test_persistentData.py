@@ -8,6 +8,8 @@ import os
 from os.path import abspath, dirname, split, exists
 from shutil import rmtree
 
+import numpy as np
+
 import warnings
 warnings.filterwarnings('error')
 
@@ -264,7 +266,8 @@ def test_remove_sub_data_and_check_len():
                 with sub_data.getData(key = 'subsub1', create_sub_data = True) as sub_sub_data:
                     sub_sub_data['t'] = 'hallo Welt'
                     
-                assert len(sub_data) == 3
+                    
+                assert len(sub_data) == 3, "len = {}".format(len(sub_data))
             
     
     
@@ -400,7 +403,26 @@ def test_not_in():
                 
     finally:
         data.erase()
+
+def test_npa():
+    a = np.linspace(0, 1, 100).reshape(10,10)
+    with PDS(name='data_npa', verbose=VERBOSE) as data:
+        data.clear()
+        data['a'] = a
         
+    with PDS(name='data_npa', verbose=VERBOSE) as data:
+        b = data['a']
+        assert np.all(b == a)
+
+    assert os.path.exists('__data_npa/0.npy')        
+        
+    with PDS(name='data_npa', verbose=VERBOSE) as data:
+        del data['a']
+        data['a'] = a
+        
+    assert not os.path.exists('__data_npa/0.npy')
+    assert os.path.exists('__data_npa/1.npy')
+    
       
 if __name__ == "__main__":
     test_reserved_key_catch()
@@ -414,3 +436,4 @@ if __name__ == "__main__":
     test_len()
     test_clear()
     test_not_in()
+    test_npa()
