@@ -423,17 +423,76 @@ def test_npa():
     assert not os.path.exists('__data_npa/0.npy')
     assert os.path.exists('__data_npa/1.npy')
     
+def test_merge():
+    with PDS(name='d1', verbose=VERBOSE) as d1:
+        d1['k1'] = 1
+        d1['k2'] = 2
+        d1['k3'] = 3
+        with d1.newSubData('sub1') as sub1:
+            sub1['s1'] = 11
+            sub1['s2'] = 12
+            sub1['s3'] = 13
+            
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2['2k1'] = 1
+        d2.mergeOtherPDS(other_db_name = "d1")
+
+    try:
+        with PDS(name='d2', verbose=VERBOSE) as d2:
+            assert 'k1' in d2
+            assert d2['k1'] == 1
+            assert 'k2' in d2
+            assert d2['k2'] == 2
+            assert 'k3' in d2
+            assert d2['k3'] == 3
+                
+            assert "sub1" in d2
+            assert isinstance(d2["sub1"], PDS)
+            with d2["sub1"] as sub:
+                assert 's1' in sub
+                assert sub['s1'] == 11
+                assert 's2' in sub
+                assert sub['s2'] == 12
+                assert 's3' in sub
+                assert sub['s3'] == 13
+                
+        try:
+            with PDS(name='d2', verbose=VERBOSE) as d2:
+                d2.mergeOtherPDS(other_db_name = "d1", update='error')
+        except KeyError as e:
+            print(e)
+            print("this is ok!")
+            pass
+        
+        with PDS(name='d2', verbose=VERBOSE) as d2:
+            d2['k1'] = 'k1'
+            d2.mergeOtherPDS(other_db_name = "d1", update='ignore')
+            assert d2['k1'] == 'k1'
+            
+        with PDS(name='d2', verbose=VERBOSE) as d2:
+            d2['k1'] = 'k1'
+            d2.mergeOtherPDS(other_db_name = "d1", update='update')
+            assert d2['k1'] == 1        
+            
+    finally:
+        with PDS(name='d1', verbose=VERBOSE) as d1:
+            d1.erase()
+            
+        with PDS(name='d2', verbose=VERBOSE) as d2:
+            d2.erase()        
+    
       
 if __name__ == "__main__":
-    test_reserved_key_catch()
-    test_pd()
-    test_pd_bytes()
-    test_directory_removal()
-    test_mp_read_from_sqlite()
-    test_from_existing_sub_data()
-    test_remove_sub_data_and_check_len()
-    test_show_stat()
-    test_len()
-    test_clear()
-    test_not_in()
-    test_npa()
+#     test_reserved_key_catch()
+#     test_pd()
+#     test_pd_bytes()
+#     test_directory_removal()
+#     test_mp_read_from_sqlite()
+#     test_from_existing_sub_data()
+#     test_remove_sub_data_and_check_len()
+#     test_show_stat()
+#     test_len()
+#     test_clear()
+#     test_not_in()
+#     test_npa()
+    test_merge()

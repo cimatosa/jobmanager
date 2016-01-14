@@ -476,6 +476,50 @@ class PersistentDataStructure(object):
         
         shutil.copytree(src=subData._dirname, dst=dir_name)
         os.rename(src=os.path.join(dir_name, subData._name+'.db'), dst=os.path.join(dir_name, name+'.db'))
+        
+    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error'):
+        """
+            update determines the update scheme
+                error : raise error when key exists
+                ignore: do nothing when key exists, keep old value
+                update: update value when key exists with value from otherData 
+        """
+        error = False
+        if update == 'error':
+            error = True
+        elif update == 'ignore':
+            ignore = True
+        elif update == 'update':
+            ignore = False
+        else:
+            raise TypeError("update must be one of the following: 'error', 'ignore', 'update'")
+        
+        with PersistentDataStructure(name = other_db_name, 
+                                     path = other_db_path, 
+                                     verbose = self.verbose) as otherData:
+                
+            for k in otherData:
+    
+                if k in self:
+                    if error:
+                        raise KeyError("merge error, key already found in PDS")
+                    else:
+                        if ignore:
+                            if self.verbose > 1:
+                                print("ignore key", k)
+                            continue
+                        else:
+                            if self.verbose > 1:
+                                print("replace key", k)
+                            del self[k]
+    
+                value = otherData[k]
+                try:
+                    self[k] = value
+                finally:
+                    if isinstance(value, PersistentDataStructure):
+                        value.close()
+        
 
     def __len__(self):
         self.need_open()
