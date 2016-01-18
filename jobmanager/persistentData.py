@@ -8,6 +8,9 @@ import shutil
 import traceback
 import pickle
 import warnings
+
+import progress
+
 try:
     import numpy as np
     _NP = True
@@ -133,8 +136,12 @@ class PersistentDataStructure(object):
             if self.__is_sub_data(value):
                 c += 1
                 assert key in self.sub_data_keys
+                with self[key] as sub:
+                    sub._consistency_check()
         
         assert len(self.sub_data_keys) == c
+        
+        
         
     def _nparray_file_name(self, i):
         fname = join(self._dirname, "{}.npy".format(i))
@@ -477,7 +484,7 @@ class PersistentDataStructure(object):
         shutil.copytree(src=subData._dirname, dst=dir_name)
         os.rename(src=os.path.join(dir_name, subData._name+'.db'), dst=os.path.join(dir_name, name+'.db'))
         
-    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error'):
+    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status=True):
         """
             update determines the update scheme
                 error : raise error when key exists
@@ -497,29 +504,43 @@ class PersistentDataStructure(object):
         with PersistentDataStructure(name = other_db_name, 
                                      path = other_db_path, 
                                      verbose = self.verbose) as otherData:
-                
-            for k in otherData:
-    
-                if k in self:
-                    if error:
-                        raise KeyError("merge error, key already found in PDS")
-                    else:
-                        if ignore:
-                            if self.verbose > 1:
-                                print("ignore key", k)
-                            continue
-                        else:
-                            if self.verbose > 1:
-                                print("replace key", k)
-                            del self[k]
-    
-                value = otherData[k]
-                try:
-                    self[k] = value
-                finally:
-                    if isinstance(value, PersistentDataStructure):
-                        value.close()
+            c = progress.UnsignedIntValue(val=0)
+            m = progress.UnsignedIntValue(val=len(otherData))
+            transfered = 0
+            ignored = 0
+            with progress.ProgressBarFancy(c, m, verbose=self.verbose, interval=5) as pb:
+                pb.start()
+                for k in otherData:
         
+                    if k in self:
+                        if error:
+                            raise KeyError("merge error, key already found in PDS")
+                        else:
+                            if ignore:
+                                if self.verbose > 1:
+                                    print("ignore key", k)
+                                ignored += 1
+                                continue
+                            else:
+                                if self.verbose > 1:
+                                    print("replace key", k)
+                                del self[k]
+        
+                    value = otherData[k]
+                    try:
+                        self[k] = value
+                        transfered += 1
+                    finally:
+                        if isinstance(value, PersistentDataStructure):
+                            value.close()
+                    
+                    with c.get_lock():
+                        c.value += 1
+                    sys.stdout.flush()
+            
+            print("merge summary:")
+            print("   transfered values:", transfered)
+            print("      ignored values:", ignored)
 
     def __len__(self):
         self.need_open()

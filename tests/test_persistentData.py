@@ -8,10 +8,10 @@ import os
 from os.path import abspath, dirname, split, exists
 from shutil import rmtree
 
-import numpy as np
-
 import warnings
 warnings.filterwarnings('error')
+    
+import numpy as np
 
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
@@ -31,6 +31,8 @@ if sys.version_info[0] == 2:
 rmtree('__test_data', ignore_errors=True)
 rmtree('__data', ignore_errors=True)
 rmtree('__base', ignore_errors=True)
+
+
 
 def test_pd():
     try:
@@ -495,4 +497,5 @@ if __name__ == "__main__":
 #     test_clear()
 #     test_not_in()
 #     test_npa()
-    test_merge()
+#     test_merge()
+    pass
