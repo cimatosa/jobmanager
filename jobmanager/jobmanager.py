@@ -124,17 +124,17 @@ class JobManager_Client(object):
     """
     
     def __init__(self, 
-                  server, 
-                  authkey, 
-                  port=42524, 
-                  nproc=0,
-                  njobs=0,
-                  nice=19, 
-                  no_warnings=False, 
-                  verbose=1,
-                  show_statusbar_for_jobs=True,
-                  show_counter_only=False,
-                  interval=0.3):
+                 server, 
+                 authkey, 
+                 port=42524, 
+                 nproc=0,
+                 njobs=0,
+                 nice=19, 
+                 no_warnings=False, 
+                 verbose=1,
+                 show_statusbar_for_jobs=True,
+                 show_counter_only=False,
+                 interval=0.3):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         

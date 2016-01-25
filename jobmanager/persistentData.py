@@ -8,6 +8,7 @@ import shutil
 import traceback
 import pickle
 import warnings
+import random
 
 import progress
 
@@ -49,6 +50,14 @@ def key_to_str(key, max_len = 255):
         return s[:max_len] + ' ...'
     else:
         return s
+    
+RAND_STR_ASCII_IDX_LIST = list(range(48,58)) + list(range(65,91)) + list(range(97,123)) 
+def rand_str(l = 8):
+    s = ''
+    for i in range(l):
+        s += chr(random.choice(RAND_STR_ASCII_IDX_LIST))
+    return s
+   
     
 
 class PersistentDataStructure(object):
@@ -130,7 +139,6 @@ class PersistentDataStructure(object):
         self.need_open()
         
         c = 0
-        
         for key in self.db:
             value = self.db[key]
             if self.__is_sub_data(value):
@@ -138,6 +146,7 @@ class PersistentDataStructure(object):
                 assert key in self.sub_data_keys
                 with self[key] as sub:
                     sub._consistency_check()
+                        
         
         assert len(self.sub_data_keys) == c
         
@@ -313,7 +322,6 @@ class PersistentDataStructure(object):
         """
         try:
             assert value['magic'] == MAGIC_SIGN
-            value.pop('magic')
             return True
         except:
             return False
@@ -337,12 +345,11 @@ class PersistentDataStructure(object):
         return (key in self.db)
     
     def is_subdata(self, key):
-        return key in self.sub_data_keys
-        # return self.__is_sub_data(self.db[key])
+        #return key in self.sub_data_keys
+        return self.__is_sub_data(self.db[key])
         
     def is_NPA(self, key):
         return key in self.nparray_keys
-        # return self.__is_sub_data(self.db[key])        
         
     def setData(self, key, value, overwrite=False):
         """
