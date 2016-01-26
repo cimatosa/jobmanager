@@ -35,12 +35,9 @@ if sys.version_info[0] == 2:
 MAGIC_SIGN = 0xff4a87
 MAGIC_SIGN_NPARRAY = 0xee4a87
 
-KEY_COUNTER = '0'
-KEY_SUB_DATA_KEYS = '1'
-KEY_NPARRAY_COUNTER = 'np0'
-KEY_NPARRAY_KEYS = 'np1'
-
-RESERVED_KEYS = (KEY_COUNTER, KEY_SUB_DATA_KEYS, KEY_NPARRAY_COUNTER, KEY_NPARRAY_KEYS)
+TYPE_ORD = 0x00
+TYPE_SUB = 0x01
+TYPE_NPA = 0x02
 
 def key_to_str(key, max_len = 255):
     if isinstance(key, (bytearray, bytes)):
@@ -92,69 +89,37 @@ class PersistentDataStructure(object):
         
         # open actual sqltedict
         self._filename = join(self._dirname, self._name + '.db')
+        self._l = 8
         self.open()
         
         
-        
-        if KEY_COUNTER not in self.db:
-            self.db[KEY_COUNTER] = 0 
-           
-        if KEY_SUB_DATA_KEYS not in self.db:
-            self.db[KEY_SUB_DATA_KEYS] = set()
-            
-        if KEY_NPARRAY_COUNTER not in self.db:
-            self.db[KEY_NPARRAY_COUNTER] = 0
-
-        if KEY_NPARRAY_KEYS not in self.db:
-            self.db[KEY_NPARRAY_KEYS] = set()      
-            
-        self.db.commit()
-            
-        self.counter = self.db[KEY_COUNTER]
-        self.sub_data_keys = self.db[KEY_SUB_DATA_KEYS]
-        self.nparray_counter = self.db[KEY_NPARRAY_COUNTER]
-        self.nparray_keys = self.db[KEY_NPARRAY_KEYS]
-        
+                
     def _repair(self):
-        self.need_open()
-        c = 0
-        for key in self.db:
-            value = self.db[key]
-            if self.__is_sub_data(value):
-                c = max(c, int(value['name']))
-                if key not in self.sub_data_keys:
-                    print("subdata found which is not in sub_data_keys -> will be added {}".format(value))
-                    self.sub_data_keys.add(key)
-        
-        if c != self.counter:
-            print('set counter to {}'.format(c))
-            self.counter = c
-        
-        self.db[KEY_COUNTER] = self.counter
-        self.db[KEY_SUB_DATA_KEYS] = self.sub_data_keys
-        self.db.commit()        
-        
+        raise DeprecationWarning        
             
     def _consistency_check(self):
-        self.need_open()
+        raise DeprecationWarning
         
+    def _new_rand_file_name(self, make_dir = False, end=''):
         c = 0
-        for key in self.db:
-            value = self.db[key]
-            if self.__is_sub_data(value):
-                c += 1
-                assert key in self.sub_data_keys
-                with self[key] as sub:
-                    sub._consistency_check()
-                        
-        
-        assert len(self.sub_data_keys) == c
-        
-        
-        
-    def _nparray_file_name(self, i):
-        fname = join(self._dirname, "{}.npy".format(i))
-        return fname 
+        while True:
+            fname = rand_str(self._l) + end
+            if not make_dir:
+                full_name = join(self._dirname, fname)
+                if not os.path.exists(full_name):
+                    open(full_name, 'a').close()
+                    return fname
+            else:
+                full_name = join(self._dirname, '__'+fname)
+                if not os.path.exists(full_name):
+                    os.mkdir(full_name)
+                    return fname
+                
+            c += 1
+            if c > 10:
+                self._l += 2
+                c = 0
+                print("INFO: increase random file name length to", self._l)
         
     def __enter__(self):
         return self
@@ -213,14 +178,13 @@ class PersistentDataStructure(object):
 
             if self.verbose > 1:
                 print("sub_data_keys:", self.sub_data_keys)
-            for key in self.sub_data_keys:
-                if self.verbose > 1:
-                    print("call erase for key:", key, "on file", self._filename)
-                sub_data = self.getData(key)
-                sub_data.erase()
-            for k in self.nparray_keys:
-                fname = self.getNPA_filename(k)
-                os.remove(self._nparray_file_name(fname))
+            for key in self:
+                t, v = self.get_value_and_value_type(key)
+                if t == TYPE_SUB:
+                    with self.getData(key) as sub_data:
+                        sub_data.erase()
+                elif t == TYPE_NPA:
+                    os.remove(os.path.join(self._dirname, v['fname']))
 
         except:
             traceback.print_exc()
@@ -241,30 +205,16 @@ class PersistentDataStructure(object):
             delete all entries from the db
         """
         self.need_open()
-        
-        # delete all sub data
-        for k in self.sub_data_keys:
-            with self[k] as sub_data:
-                sub_data.erase()
-
-        for i in range(self.nparray_counter):
-            try:
-                os.remove(self._nparray_file_name(i))
-            except FileNotFoundError:
-                pass        
+               
+        for key in self:
+            t, v = self.get_value_and_value_type(key)
+            if t == TYPE_SUB:
+                with self.getData(key) as sub_data:
+                    sub_data.erase()
+            elif t == TYPE_NPA:
+                os.remove(os.path.join(self._dirname, v['fname']))
                         
-        self.db.clear()
-        
-        self.db[KEY_COUNTER] = 0 
-        self.db[KEY_SUB_DATA_KEYS] = set()
-        self.db[KEY_NPARRAY_COUNTER] = 0
-        self.db[KEY_NPARRAY_KEYS] = set()
-        self.db.commit()
-        
-        self.sub_data_keys = set()
-        self.counter = 0
-        self.nparray_counter = 0
-        self.nparray_keys = set()        
+        self.db.clear()        
 
     def show_stat(self, recursive = False, prepend = ""):
         prepend += self._name
@@ -278,6 +228,11 @@ class PersistentDataStructure(object):
         bin_key = 0
         oth_key = 0
         
+        sub_c = 0
+        npa_c = 0
+        
+        sub_data_keys = set()
+        
         for k in self:
             if isinstance(k, str):
                 str_key += 1
@@ -286,31 +241,29 @@ class PersistentDataStructure(object):
             else:
                 oth_key += 1
                 
+            t, v = self.get_value_and_value_type(k)
+            if t == TYPE_NPA:
+                npa_c += 1
+            elif t == TYPE_SUB:
+                sub_c += 1
+                sub_data_keys.add(k)
+                
         print("{}:     number of string keys: {}".format(prepend, str_key))
         print("{}:     number of byte   keys: {}".format(prepend, bin_key))
         if oth_key > 0:
             print("{}:     number of other  keys: {}".format(prepend, oth_key))
-        print("{}:     number of subdata: {}".format(prepend, len(self.sub_data_keys)))
-        print("{}:     nparray counter: {}".format(prepend, self.nparray_counter))
+        print("{}:     number of subdata: {}".format(prepend, sub_c))
+        print("{}:     nparray counter: {}".format(prepend, npa_c))
         print()
         sys.stdout.flush()
         if recursive:
-            for k in self.sub_data_keys:
+            for k in sub_data_keys:
                 print("show stat for subdata with key {}".format(key_to_str(k)))
                 sys.stdout.flush()
                 with self.getData(k) as subdata:
                     subdata.show_stat(recursive = recursive,
                                       prepend = prepend + "->")
             
-       
-    def __check_key(self, key):
-        """
-            returns True if the key does NOT collide with some reserved keys
-            
-            otherwise a RuntimeError will be raised
-        """
-        if str(key) in RESERVED_KEYS:
-            raise RuntimeError("key must not be in {} (reserved key)".format(RESERVED_KEYS))
     
     def __is_sub_data(self, value):
         """
@@ -345,11 +298,19 @@ class PersistentDataStructure(object):
         return (key in self.db)
     
     def is_subdata(self, key):
-        #return key in self.sub_data_keys
-        return self.__is_sub_data(self.db[key])
+        return (key in self) and self.__is_sub_data(self.db[key])
         
     def is_NPA(self, key):
-        return key in self.nparray_keys
+        return (key in self) and self.__is_nparray(self.db[key])
+    
+    def get_value_and_value_type(self, key):
+        v = self.db[key]
+        if self.__is_nparray(v):
+            return TYPE_NPA, v
+        elif self.__is_sub_data(v):
+            return TYPE_SUB, v
+        else:
+            return TYPE_ORD, v
         
     def setData(self, key, value, overwrite=False):
         """
@@ -360,7 +321,6 @@ class PersistentDataStructure(object):
             that key in the database 
         """
         self.need_open()
-        self.__check_key(key)
         
         if overwrite:
             if self.verbose > 1:
@@ -388,24 +348,24 @@ class PersistentDataStructure(object):
 
     
     def _setNPA(self, key, nparray):
-        d = {'fname': self._nparray_file_name(self.nparray_counter),
+        d = {'fname': self._new_rand_file_name(end='.npy'),
              'magic': MAGIC_SIGN_NPARRAY}
-        self.nparray_keys.add(key)
-        self.nparray_counter += 1        
-        
-        self.db[KEY_NPARRAY_COUNTER] = self.nparray_counter
-        self.db[KEY_NPARRAY_KEYS] = self.nparray_keys  
         self.db[key] = d
         self.db.commit()
 
-        np.save(d['fname'], nparray)
+        full_name = os.path.join(self._dirname, d['fname'])
+        np.save(full_name, nparray)
         return True
+    
+    def _loadNPA(self, fname):
+        return np.load(os.path.join(self._dirname, fname))
     
     def _getNPA(self, key):
         d = self.db[key]
         assert d['magic'] == MAGIC_SIGN_NPARRAY
         fname = d['fname']
-        return np.load(fname)
+        return self._loadNPA(fname)
+        
         
             
     def newSubData(self, key):
@@ -421,22 +381,11 @@ class PersistentDataStructure(object):
         """
         self.need_open()
         if not key in self.db:
-            self.counter += 1
-            self.sub_data_keys.add(key)
-            if self.verbose > 1:
-                print("new sub_data with key", key)
-                print("sub_data_keys are now", self.sub_data_keys)
-
-            new_name = "{}".format(self.counter)
-            kwargs = {'name': new_name, 'magic': MAGIC_SIGN}
-            
-            self.db[KEY_COUNTER] = self.counter
-            self.db[KEY_SUB_DATA_KEYS] = self.sub_data_keys
-            self.db[key] = kwargs
+            d = {'name': self._new_rand_file_name(make_dir=True),
+                 'magic': MAGIC_SIGN}
+            self.db[key] = d
             self.db.commit()
-
-            kwargs.pop('magic')
-            return PersistentDataStructure(name = new_name, path = os.path.join(self._dirname) , verbose = self.verbose)
+            return PersistentDataStructure(name = d['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
         else:
             raise RuntimeError("can NOT create new SubData, key already found!")
         
@@ -445,21 +394,23 @@ class PersistentDataStructure(object):
         if key in self.db:
             if self.verbose > 1:
                 print("getData key exists")
+                
+            t, v = self.get_value_and_value_type(key)
  
-            if self.is_subdata(key): 
-                sub_db_name = self.db[key]['name']
+            if t == TYPE_SUB: 
+                sub_db_name = v['name']
             
                 if self.verbose > 1:
                     print("return subData stored as key", key, "using name", sub_db_name)
                 return PersistentDataStructure(name = sub_db_name, path = os.path.join(self._dirname) , verbose = self.verbose)
-            elif self.is_NPA(key):
+            elif t == TYPE_NPA:
                 if self.verbose > 1:
                     print("return nparray value")
-                return self._getNPA(key)
+                return self._loadNPA(v['fname'])
             else:
                 if self.verbose > 1:
                     print("return normal value")
-                return self.db[key] 
+                return v 
         else:
             if not create_sub_data:
                 raise KeyError("key not found\n{}".format(key_to_str(key)))
@@ -476,7 +427,6 @@ class PersistentDataStructure(object):
             and rename them
         """
         self.need_open()
-        self.__check_key(key)                                       # see if key is valid
         if self.is_subdata(key):                                    # check if key points to existing PDS 
             with self[key] as pds:                                  #
                 name = pds._name                                    #    remember its name
@@ -491,7 +441,7 @@ class PersistentDataStructure(object):
         shutil.copytree(src=subData._dirname, dst=dir_name)
         os.rename(src=os.path.join(dir_name, subData._name+'.db'), dst=os.path.join(dir_name, name+'.db'))
         
-    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status=True):
+    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status_interval=0):
         """
             update determines the update scheme
                 error : raise error when key exists
@@ -508,14 +458,22 @@ class PersistentDataStructure(object):
         else:
             raise TypeError("update must be one of the following: 'error', 'ignore', 'update'")
         
+        transfered = 0
+        ignored = 0
+        
+        if status_interval == 0:
+            PB = progress.ProgressSilentDummy
+        else:
+            PB = progress.ProgressBarFancy   
+        
         with PersistentDataStructure(name = other_db_name, 
                                      path = other_db_path, 
                                      verbose = self.verbose) as otherData:
+
             c = progress.UnsignedIntValue(val=0)
             m = progress.UnsignedIntValue(val=len(otherData))
-            transfered = 0
-            ignored = 0
-            with progress.ProgressBarFancy(c, m, verbose=self.verbose, interval=5) as pb:
+            
+            with PB(c=c, m=m, verbose=self.verbose, interval=status_interval) as pb:
                 pb.start()
                 for k in otherData:
         
@@ -551,7 +509,7 @@ class PersistentDataStructure(object):
 
     def __len__(self):
         self.need_open()
-        return len(self.db) - len(RESERVED_KEYS)
+        return len(self.db)
             
     # implements the iterator
     def __iter__(self):
@@ -559,8 +517,6 @@ class PersistentDataStructure(object):
         db_iter = self.db.__iter__()
         while True:
             next_item = db_iter.__next__()
-            while next_item in RESERVED_KEYS: 
-                next_item = db_iter.__next__()
             yield next_item 
     
     # implements the 'in' statement 
@@ -571,7 +527,6 @@ class PersistentDataStructure(object):
     # implements '[]' operator getter
     def __getitem__(self, key):
         self.need_open()
-        self.__check_key(key)
         return self.getData(key, create_sub_data=False)
     
     # implements '[]' operator setter
@@ -588,19 +543,13 @@ class PersistentDataStructure(object):
     # implements '[]' operator deletion
     def __delitem__(self, key):
         self.need_open()
-        self.__check_key(key)
-        
-        if self.is_subdata(key):
+        t, v = self.get_value_and_value_type(key)
+        if t == TYPE_SUB:
             with self[key] as pds:
                 pds.erase()
-            
-            self.sub_data_keys.remove(key)
-            self.db[KEY_SUB_DATA_KEYS] = self.sub_data_keys
-        elif self.is_NPA(key):
-            d = self.db[key]
-            assert d['magic'] == MAGIC_SIGN_NPARRAY
-            fname = d['fname']
-            os.remove(fname)
+        elif t == TYPE_NPA:
+            fname = v['fname']
+            os.remove(os.path.join(self._dirname, fname))
                 
         del self.db[key]
         self.db.commit()
