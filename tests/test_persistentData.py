@@ -41,6 +41,7 @@ def test_pd():
             value = 1
             data.setData(key=key, value=value)
             assert data.getData(key) == value
+            assert len(data) == 1
             
             
             key_sub = 'zz'
@@ -61,60 +62,9 @@ def test_pd():
                     assert sub_data.getData(key) == 3
                     assert data.getData(key) == 1
     
-            data._consistency_check()
     finally:
         data.erase()
-    
-def test_reserved_key_catch():
-    try:
-        with PDS(name='data', verbose=VERBOSE) as data:
-            # TRY TO READ RESERVED KEYS
-            try:
-                a = data[pd.KEY_COUNTER]
-            except RuntimeError:
-                pass
-            else:
-                assert False
-                
-            try:
-                b = data[pd.KEY_SUB_DATA_KEYS]
-            except RuntimeError:
-                pass
-            else:
-                assert False
-            
-            # TRY TO SET RESERVED KEYS
-            try:
-                data[pd.KEY_COUNTER] = 4
-            except RuntimeError:
-                pass
-            else:
-                assert False
-                
-            try:
-                data[pd.KEY_SUB_DATA_KEYS] = 4
-            except RuntimeError:
-                pass
-            else:
-                assert False
-    
-            # TRY TO REMOVE RESERVED KEYS
-            try:
-                del data[pd.KEY_COUNTER]
-            except RuntimeError:
-                pass
-            else:
-                assert False
-            
-            try:
-                del data[pd.KEY_SUB_DATA_KEYS]
-            except RuntimeError:
-                pass
-            else:
-                assert False            
-    finally:
-        data.erase()
-                
+                   
 def test_pd_bytes():
     t1 = (3.4, 4.5, 5.6, 6.7, 7.8, 8.9)
     t2 = (3.4, 4.5, 5.6, 6.7, 7.8, 8.9, 9,1)
@@ -140,7 +90,6 @@ def test_pd_bytes():
             
             assert base_data[b2] == t1
             
-            base_data._consistency_check()
     finally:
         base_data.erase()
 
@@ -255,7 +204,6 @@ def test_from_existing_sub_data():
                 assert sub_data[100] == "sub2:t1"  
                 assert sub_data[200] == "sub2:t2"                
     
-            base_data._consistency_check()
     finally:
         base_data.erase()
     
@@ -286,9 +234,7 @@ def test_remove_sub_data_and_check_len():
                 with sub_data.getData(key = 'subsub1', create_sub_data = True) as sub_sub_data:
                     assert sub_sub_data['t'] == 'hallo Welt'
                 
-            
             assert ('sub1' not in base_data)
-            base_data._consistency_check()
     finally:
         base_data.erase()
     
@@ -319,8 +265,6 @@ def test_show_stat():
                     assert sub_sub_data.getData(key) == 4
                     assert sub_data.getData(key) == 3
                     assert data.getData(key) == 1
-    
-            data._consistency_check()
             
             data.show_stat(recursive=True)
     finally:
@@ -408,35 +352,38 @@ def test_not_in():
 
 def test_npa():
     a = np.linspace(0, 1, 100).reshape(10,10)
-    with PDS(name='data_npa', verbose=VERBOSE) as data:
-        data.clear()
-        data['a'] = a
-        
-    with PDS(name='data_npa', verbose=VERBOSE) as data:
-        b = data['a']
-        assert np.all(b == a)
-
-    assert os.path.exists('__data_npa/0.npy')        
-        
-    with PDS(name='data_npa', verbose=VERBOSE) as data:
-        del data['a']
-        data['a'] = a
-        
-    assert not os.path.exists('__data_npa/0.npy')
-    assert os.path.exists('__data_npa/1.npy')
+    try:
+        with PDS(name='data_npa', verbose=VERBOSE) as data:
+            data['a'] = a
+            
+        with PDS(name='data_npa', verbose=VERBOSE) as data:
+            b = data['a']
+            assert np.all(b == a)      
+            
+        with PDS(name='data_npa', verbose=VERBOSE) as data:
+            del data['a']
+            data['a'] = a
+    finally:
+        data.erase()
     
 def test_merge():
+    
+    a = np.random.rand(5)
+    
     with PDS(name='d1', verbose=VERBOSE) as d1:
         d1['k1'] = 1
         d1['k2'] = 2
         d1['k3'] = 3
+        d1['aa'] = a
         with d1.newSubData('sub1') as sub1:
             sub1['s1'] = 11
             sub1['s2'] = 12
             sub1['s3'] = 13
+            sub1['a'] = a
             
     with PDS(name='d2', verbose=VERBOSE) as d2:
         d2['2k1'] = 1
+        
         d2.mergeOtherPDS(other_db_name = "d1")
 
     try:
@@ -447,6 +394,8 @@ def test_merge():
             assert d2['k2'] == 2
             assert 'k3' in d2
             assert d2['k3'] == 3
+            assert 'aa' in d2
+            assert np.all(d2['aa'] == a)            
                 
             assert "sub1" in d2
             assert isinstance(d2["sub1"], PDS)
@@ -457,6 +406,8 @@ def test_merge():
                 assert sub['s2'] == 12
                 assert 's3' in sub
                 assert sub['s3'] == 13
+                assert 'a' in sub
+                assert np.all(sub['a'] == a)
                 
         try:
             with PDS(name='d2', verbose=VERBOSE) as d2:
@@ -485,7 +436,6 @@ def test_merge():
     
       
 if __name__ == "__main__":
-#     test_reserved_key_catch()
 #     test_pd()
 #     test_pd_bytes()
 #     test_directory_removal()
@@ -497,5 +447,5 @@ if __name__ == "__main__":
 #     test_clear()
 #     test_not_in()
 #     test_npa()
-#     test_merge()
+    test_merge()
     pass
