@@ -396,7 +396,7 @@ class JobManager_Client(object):
                  
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
-                    if verbose > 1:
+                    if verbose > 0:
                         print("{}: finds empty job queue, processed {} jobs".format(identifier, cnt))
                     break
                 # handle SystemExit in outer try ... except
@@ -511,7 +511,7 @@ class JobManager_Client(object):
                 
         if verbose > 0:
             try:
-                print("{}: pure calculation time: {}".format(identifier, progress.humanize_time(time_calc) ))
+                print("{}: pure calculation time: {}  single task average: {}".format(identifier, progress.humanize_time(time_calc), progress.humanize_time(time_calc / cnt) ))
                 print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
             except:
                 pass
@@ -607,7 +607,7 @@ class JobManager_Client(object):
                 while p.is_alive():
                     if self.verbose > 2:
                         print("{}: still alive {} PID {}".format(self._identifier, p, p.pid))
-                    p.join(timeout=1)
+                    p.join(timeout=self.interval)
 
                 if self.verbose > 2:
                     print("{}: process {} PID {} was joined".format(self._identifier, p, p.pid))
@@ -1528,12 +1528,12 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
                 res = o(*args, **kwargs)
                 
             except Exception as e:
-                if verbose > 0:
+                if verbose > 1:
                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
                     
                 if type(e) is ConnectionResetError:
-                    if verbose > 0:
+                    if verbose > 1:
                         traceback.print_exc(limit=1)
                         print("{}try to reconnect".format(identifier))
                     call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)

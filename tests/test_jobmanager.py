@@ -883,22 +883,22 @@ if __name__ == "__main__":
         pass
     else:    
         func = [
-        test_Signal_to_SIG_IGN,
-        test_Signal_to_sys_exit,
-        test_Signal_to_terminate_process_list,
+#         test_Signal_to_SIG_IGN,
+#         test_Signal_to_sys_exit,
+#         test_Signal_to_terminate_process_list,
                   
-        test_jobmanager_basic,
-        test_jobmanager_server_signals,
-        test_shutdown_server_while_client_running,
-        test_shutdown_client,
-        test_check_fail,
-        test_jobmanager_read_old_stat,
+#         test_jobmanager_basic,
+#         test_jobmanager_server_signals,
+#         test_shutdown_server_while_client_running,
+#         test_shutdown_client,
+#         test_check_fail,
+#         test_jobmanager_read_old_stat,
         test_client_status,
-        test_jobmanager_local,
-        test_start_server_on_used_port,
-        test_shared_const_arg,
-        test_digest_rejected,
-        test_exception,
+#         test_jobmanager_local,
+#         test_start_server_on_used_port,
+#         test_shared_const_arg,
+#         test_digest_rejected,
+#         test_exception,
 
         lambda : print("END")
         ]
