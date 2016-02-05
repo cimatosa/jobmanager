@@ -441,7 +441,7 @@ class PersistentDataStructure(object):
         shutil.copytree(src=subData._dirname, dst=dir_name)
         os.rename(src=os.path.join(dir_name, subData._name+'.db'), dst=os.path.join(dir_name, name+'.db'))
         
-    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status_interval=0):
+    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status_interval=5):
         """
             update determines the update scheme
                 error : raise error when key exists
