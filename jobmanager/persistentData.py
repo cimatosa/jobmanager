@@ -473,7 +473,7 @@ class PersistentDataStructure(object):
             c = progress.UnsignedIntValue(val=0)
             m = progress.UnsignedIntValue(val=len(otherData))
             
-            with PB(c=c, m=m, verbose=self.verbose, interval=status_interval) as pb:
+            with PB(count=c, max_count=m, verbose=self.verbose, interval=status_interval) as pb:
                 pb.start()
                 for k in otherData:
         
