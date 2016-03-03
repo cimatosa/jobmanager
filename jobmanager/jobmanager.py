@@ -766,13 +766,12 @@ class JobManager_Server(object):
                                   auto_kill_on_last_resort=True)
 
     def __check_bind(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.bind((self.hostname, self.port))
-        except:
-            print("{}: test bind to {}:{} failed".format(progress.ESC_RED + self._identifier, self.hostname, self.port))
-            raise
-        s.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((self.hostname, self.port))
+            except:
+                print("{}: test bind to {}:{} failed".format(progress.ESC_RED + self._identifier, self.hostname, self.port))
+                raise
                 
     def __start_SyncManager(self):
         self.__check_bind()
@@ -1088,7 +1087,7 @@ class JobManager_Server(object):
         
             while (len(self.args_dict) - self.fail_q.qsize()) > 0:
                 try:
-                    info_line.value = "result_q size: {}".format(self.result_q.qsize()).encode('utf-8')
+                    info_line.value = "result_q size:{}, job_q size:{}".format(self.result_q.qsize(), self.job_q.qsize()).encode('utf-8')
                     arg, result = self.result_q.get(timeout=1)
                     del self.args_dict[bf.dump(arg)]
                     self.numresults = self.numjobs - len(self.args_dict)
@@ -1317,12 +1316,13 @@ def call_connect_python3(connect, dest, verbose=1, identifier='', reconnect_wait
     identifier = mod_id(identifier)
     c = 0
     while True:
+        print("test c", c)
         
         try:                                # here we try re establish the connection
             if verbose > 1:
                 print("{}try connecting to {}".format(identifier, dest))
             connect()
-        
+    
         except Exception as e:
             if verbose > 0:   
                 print("{}connection to {} could not be established due to '{}'".format(identifier, dest, type(e)))
@@ -1519,24 +1519,48 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
     identifier = mod_id(identifier)
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
+    c = 0
     
     def _operation(*args, **kwargs):
         while True:
-            try:                                # here we try to put new data to the queue
-                if verbose > 1:
-                    print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
-                res = o(*args, **kwargs)
-                
+            if verbose > 1:
+                print("{}establish connection to {}".format(identifier, dest))
+            try: 
+                o._connect()
             except Exception as e:
-                if verbose > 1:
+                if verbose > 0:
+                    print("{}establishing connection to {} FAILED due to '{}'".format(identifier, dest, type(e)))
+                    print(traceback.format_stack()[-3].strip())
+                    print("wait {} seconds and retry".format(reconnect_wait))
+                c += 1
+                if c > reconnect_tries:
+                    if verbose > 0:
+                        print("reached maximum number of reconnect tries, raise exception")
+                    raise e
+                time.sleep(reconnect_wait)
+                continue
+                
+            if verbose > 1:
+                print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
+            
+            try:
+                res = o(*args, **kwargs)
+            except Exception as e:
+                if verbose > 0:
                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
                     
                 if type(e) is ConnectionResetError:
-                    if verbose > 1:
+                    if verbose > 0:
                         traceback.print_exc(limit=1)
-                        print("{}try to reconnect".format(identifier))
-                    call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
+                        print("wait {} seconds and retry".format(reconnect_wait))
+                    c += 1
+                    if c > reconnect_tries:
+                        if verbose > 0:
+                            print("reached maximum number of reconnect tries, raise exception")
+                        raise e
+                    time.sleep(reconnect_wait)
+                    continue
                 elif type(e) is BrokenPipeError:
                     handler_broken_pipe_error(e, verbose)
                 elif type(e) is EOFError:
@@ -1547,6 +1571,15 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
                 if verbose > 1:
                     print("{}operation '{}' successfully executed".format(identifier, operation))
                 return res
+        
+            if verbose > 1:
+                print("{}close connection to {}".format(identifier, dest))
+            try:
+                o._tls.connection.close()
+            except Exception as e:
+                if verbose > 0:
+                    print("{}closeing connection to {} FAILED due to {}".format(identifier, dest, type(e)))
+                    print(traceback.format_stack()[-3].strip())
             
     return _operation
 
@@ -1554,44 +1587,117 @@ def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier=''
     identifier = mod_id(identifier)
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
+    c = 0
     
     def _operation(*args, **kwargs):
         while True:
-            try:                                # here we try to put new data to the queue
-                if verbose > 1:
-                    print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
-                res = o(*args, **kwargs)
+            if verbose > 1:
+                print("{}establish connection to {}".format(identifier, dest))
+            try: 
+                o._connect()
+            except Exception as e:
+                if verbose > 0:
+                    print("{}establishing connection to {} FAILED due to '{}'".format(identifier, dest, type(e)))
+                    print(traceback.format_stack()[-3].strip())
+                    print("wait {} seconds and retry".format(reconnect_wait))
+                c += 1
+                if c > reconnect_tries:
+                    if verbose > 0:
+                        print("reached maximum number of reconnect tries, raise exception")
+                    raise e
+                time.sleep(reconnect_wait)
+                continue
                 
+            if verbose > 1:
+                print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
+            
+            try:
+                res = o(*args, **kwargs)
             except Exception as e:
                 if verbose > 0:
                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
-                    
+
                 if type(e) is IOError:
                     if verbose > 0:
                         print("{} with args {}".format(type(e), e.args))
                     err_code = e.args[0]
                     if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
                         if verbose > 0:
-                            traceback.print_exc(limit=1)
-                            print("{}try to reconnect".format(identifier))
-                        call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
+                            print("wait {} seconds and retry".format(reconnect_wait))
+                        c += 1
+                        if c > reconnect_tries:
+                            if verbose > 0:
+                                print("reached maximum number of reconnect tries, raise exception")
+                            raise e
+                        time.sleep(reconnect_wait)
+                        continue
                     else:
-                        handler_unexpected_error(e, verbose)                    
-                    
+                        handler_unexpected_error(e, verbose) 
                 elif type(e) is BrokenPipeError:
                     handler_broken_pipe_error(e, verbose)
                 elif type(e) is EOFError:
                     handler_eof_error(e, verbose)
                 else:
-                    handler_unexpected_error(e, verbose)            
-                
+                    handler_unexpected_error(e, verbose)
             else:                               # SUCCESS -> return True  
                 if verbose > 1:
                     print("{}operation '{}' successfully executed".format(identifier, operation))
                 return res
+        
+            if verbose > 1:
+                print("{}close connection to {}".format(identifier, dest))
+            try:
+                o._tls.connection.close()
+            except Exception as e:
+                if verbose > 0:
+                    print("{}closeing connection to {} FAILED due to {}".format(identifier, dest, type(e)))
+                    print(traceback.format_stack()[-3].strip())
             
     return _operation
+
+# def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
+#     identifier = mod_id(identifier)
+#     o = getattr(proxy, operation)
+#     dest = address_authkey_from_proxy(proxy)
+#     
+#     def _operation(*args, **kwargs):
+#         while True:
+#             try:                                # here we try to put new data to the queue
+#                 if verbose > 1:
+#                     print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
+#                 res = o(*args, **kwargs)
+#                 
+#             except Exception as e:
+#                 if verbose > 0:
+#                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
+#                     print(traceback.format_stack()[-3].strip())
+#                     
+#                 if type(e) is IOError:
+#                     if verbose > 0:
+#                         print("{} with args {}".format(type(e), e.args))
+#                     err_code = e.args[0]
+#                     if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
+#                         if verbose > 0:
+#                             traceback.print_exc(limit=1)
+#                             print("{}try to reconnect".format(identifier))
+#                         call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
+#                     else:
+#                         handler_unexpected_error(e, verbose)                    
+#                     
+#                 elif type(e) is BrokenPipeError:
+#                     handler_broken_pipe_error(e, verbose)
+#                 elif type(e) is EOFError:
+#                     handler_eof_error(e, verbose)
+#                 else:
+#                     handler_unexpected_error(e, verbose)            
+#                 
+#             else:                               # SUCCESS -> return True  
+#                 if verbose > 1:
+#                     print("{}operation '{}' successfully executed".format(identifier, operation))
+#                 return res
+#             
+#     return _operation
 
 proxy_operation_decorator = proxy_operation_decorator_python2 if sys.version_info[0] == 2 else proxy_operation_decorator_python3
 

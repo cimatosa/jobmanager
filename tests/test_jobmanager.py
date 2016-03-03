@@ -875,8 +875,6 @@ def test_exception():
                     for l in outfile:
                         print("    {}".format(l[:-1]))
                     print("+"*40)
-            
-    
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
