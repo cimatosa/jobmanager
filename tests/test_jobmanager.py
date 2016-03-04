@@ -273,6 +273,7 @@ def test_shutdown_server_while_client_running():
     
     stop server -> client should catch exception, but can't do anything, 
         writing to fail won't work, because server went down
+        except do emergency dump
     
     check if the final_result and the args dump end up to include
     all arguments given 
@@ -287,7 +288,6 @@ def test_shutdown_server_while_client_running():
     
     time.sleep(1)
     
-    PORT += 1
     p_client = mp.Process(target=start_client, args=(2,))
     p_client.start()
     
@@ -319,7 +319,7 @@ def test_shutdown_server_while_client_running():
     args_set = set(data['args_dict'].keys())
     final_result = data['final_result']
 
-    final_res_args = {a[0] for a in final_result}
+    final_res_args = {binfootprint.dump(a[0]) for a in final_result}
         
     args_ref = range(1,n)
     set_ref = set()
@@ -900,14 +900,14 @@ if __name__ == "__main__":
 #         test_jobmanager_basic,
 #         test_jobmanager_server_signals,
 #         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
+        test_shutdown_client,
 #         test_check_fail,
 #         test_jobmanager_read_old_stat,
-        test_client_status,
-        test_jobmanager_local,
-        test_start_server_on_used_port,
-        test_shared_const_arg,
-        test_digest_rejected,
+#         test_client_status,
+#         test_jobmanager_local,
+#         test_start_server_on_used_port,
+#         test_shared_const_arg,
+#         test_digest_rejected,
 #         test_exception,
 
         lambda : print("END")

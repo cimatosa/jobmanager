@@ -31,7 +31,7 @@ The class JobManager_Client
 from __future__ import division, print_function
 
 import copy
-import functools
+#import functools
 import inspect
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager, RemoteError
@@ -46,6 +46,8 @@ import time
 import traceback
 import warnings
 from . import binfootprint as bf
+
+from datetime import datetime
 
 # This is a list of all python objects that will be imported upon
 # initialization during module import (see __init__.py)
@@ -128,15 +130,16 @@ class JobManager_Client(object):
     def __init__(self, 
                  server, 
                  authkey, 
-                 port=42524, 
-                 nproc=0,
-                 njobs=0,
-                 nice=19, 
-                 no_warnings=False, 
-                 verbose=1,
-                 show_statusbar_for_jobs=True,
-                 show_counter_only=False,
-                 interval=0.3):
+                 port                    = 42524, 
+                 nproc                   = 0,
+                 njobs                   = 0,
+                 nice                    = 19, 
+                 no_warnings             = False, 
+                 verbose                 = 1,
+                 show_statusbar_for_jobs = True,
+                 show_counter_only       = False,
+                 interval                = 0.3,
+                 emergency_dump_path     = '.'):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -201,6 +204,7 @@ class JobManager_Client(object):
         if njobs == 0:
             njobs -= 1
         self.njobs = njobs
+        self.emergency_dump_path = emergency_dump_path
         
         self.procs = []
         
@@ -303,7 +307,18 @@ class JobManager_Client(object):
             traceback.print_exc()
 
     @staticmethod
-    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs):
+    def __emergency_dump(arg, res, path, identifier):
+        now = datetime.now().isoformat()
+        pid = os.getpid()
+        fname = "{}_pid_{}".format(now, pid)
+        full_path = os.path.join(path, fname)
+        print("{}: emergency dump (arg, res) to {}".format(identifier, full_path))
+        with open(full_path, 'wb') as f:
+            pickle.dump(arg, f)
+            pickle.dump(res, f)
+
+    @staticmethod
+    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs, emergency_dump_path):
         """
         the wrapper spawned nproc times calling and handling self.func
         """
@@ -406,7 +421,7 @@ class JobManager_Client(object):
                     raise e
                 # job_q.get failed -> server down?             
                 except Exception as e:
-                    print("Error when calling 'job_q_get'") 
+                    print("{}: Error when calling 'job_q_get'".format(identifier)) 
                     JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                     break
                 
@@ -478,7 +493,8 @@ class JobManager_Client(object):
                         raise e
                     
                     except Exception as e:
-                        print("Error when calling 'result_q_put'")
+                        print("{}: Error when calling 'result_q_put'".format(identifier))
+                        JobManager_Client.__emergency_dump(arg, res, emergency_dump_path, identifier)
                         JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                         break
                     
@@ -583,7 +599,8 @@ class JobManager_Client(object):
                                                                 c[i],
                                                                 m_set_by_function[i],
                                                                 reset_pbc,
-                                                                self.njobs))
+                                                                self.njobs,
+                                                                self.emergency_dump_path))
                 self.procs.append(p)
                 p.start()
                 time.sleep(0.3)
@@ -734,7 +751,7 @@ class JobManager_Server(object):
         # so iff all results have been processed successfully,
         # the args_dict will be empty
         self.args_dict = dict()   # has the bin footprint in it
-        self.args_list = []     # hat the actual args object
+        self.args_list = []       # has the actual args object
         
         # thread safe integer values  
         self._numresults = mp.Value('i', 0)  # count the successfully processed jobs
@@ -1011,8 +1028,13 @@ class JobManager_Server(object):
         bfa = bf.dump(a)
         if bfa in self.args_dict:
             raise ValueError("do not add the same argument twice! If you are sure, they are not the same, there might be an error with the binfootprint mehtods!")
+        
+        # this dict associates an unique index with each argument 'a'
+        # or better with its binary footprint
         self.args_dict[bfa] = len(self.args_list)
+        
         self.args_list.append(a)
+        # the actual shared queue
         self.job_q.put(copy.copy(a))
         
         with self._numjobs.get_lock():
@@ -1537,11 +1559,11 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
                 if verbose > 0:
                     print("{}establishing connection to {} FAILED due to '{}'".format(identifier, dest, type(e)))
                     print(traceback.format_stack()[-3].strip())
-                    print("wait {} seconds and retry".format(reconnect_wait))
+                    print("{}wait {} seconds and retry".format(identifier, reconnect_wait))
                 c += 1
                 if c > reconnect_tries:
                     if verbose > 0:
-                        print("reached maximum number of reconnect tries, raise exception")
+                        print("{}reached maximum number of reconnect tries, raise exception".format(identifier))
                     raise e
                 time.sleep(reconnect_wait)
                 continue
@@ -1559,11 +1581,11 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
                 if type(e) is ConnectionResetError:
                     if verbose > 0:
                         traceback.print_exc(limit=1)
-                        print("wait {} seconds and retry".format(reconnect_wait))
+                        print("{}wait {} seconds and retry".format(identifier, reconnect_wait))
                     c += 1
                     if c > reconnect_tries:
                         if verbose > 0:
-                            print("reached maximum number of reconnect tries, raise exception")
+                            print("{}reached maximum number of reconnect tries, raise exception".format(identifier))
                         raise e
                     time.sleep(reconnect_wait)
                     continue
