@@ -35,6 +35,7 @@ import functools
 import inspect
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager, RemoteError
+import subprocess
 import numpy as np
 import os
 import pickle
@@ -89,7 +90,8 @@ else:
     JMConnectionRefusedError = ConnectionRefusedError
     JMConnectionResetError = ConnectionResetError
     
-
+class JMHostNotReachableError(JMConnectionError):
+    pass
 
 sys.path.append(os.path.dirname(__file__))
 from . import progress
@@ -248,7 +250,7 @@ class JobManager_Client(object):
         ServerQueueManager.register('get_const_arg')
     
         manager = ServerQueueManager(address=(server, port), authkey=authkey)
-        
+
         try:
             call_connect(connect         = manager.connect,
                          dest            = address_authkey_from_manager(manager),
@@ -264,7 +266,7 @@ class JobManager_Client(object):
         job_q = manager.get_job_q()
         if verbose > 1:
             print("{}: found job_q with {} jobs".format(identifier, job_q.qsize()))
-            
+        
         result_q = manager.get_result_q()
         fail_q = manager.get_fail_q()
         # deep copy const_arg from manager -> non shared object in local memory
@@ -1086,14 +1088,11 @@ class JobManager_Server(object):
             stat.start()
         
             while (len(self.args_dict) - self.fail_q.qsize()) > 0:
-                try:
-                    info_line.value = "result_q size:{}, job_q size:{}".format(self.result_q.qsize(), self.job_q.qsize()).encode('utf-8')
-                    arg, result = self.result_q.get(timeout=1)
-                    del self.args_dict[bf.dump(arg)]
-                    self.numresults = self.numjobs - len(self.args_dict)
-                    self.process_new_result(arg, result)
-                except queue.Empty:
-                    pass
+                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(), self.job_q.qsize(), self.numresults).encode('utf-8')
+                arg, result = self.result_q.get()
+                del self.args_dict[bf.dump(arg)]
+                self.numresults += 1
+                self.process_new_result(arg, result)
         
         if self.verbose > 1:
             print("{}: wait {}s before trigger clean up".format(self._identifier, self.__wait_before_stop))
@@ -1307,7 +1306,7 @@ class hashableCopyOfNumpyArray(np.ndarray):
 
 
 def address_authkey_from_proxy(proxy):
-    return list(proxy._address_to_local.keys())[0], proxy._authkey.decode()
+    return proxy._token.address, proxy._authkey.decode()
 
 def address_authkey_from_manager(manager):
     return manager.address, manager._authkey.decode()
@@ -1316,8 +1315,6 @@ def call_connect_python3(connect, dest, verbose=1, identifier='', reconnect_wait
     identifier = mod_id(identifier)
     c = 0
     while True:
-        print("test c", c)
-        
         try:                                # here we try re establish the connection
             if verbose > 1:
                 print("{}try connecting to {}".format(identifier, dest))
@@ -1515,18 +1512,27 @@ def mod_id(identifier):
         
     return identifier
 
+def check_if_host_is_reachable_unix_ping(adr, timeout=5):
+    try:
+        subprocess.check_call(['ping', '-c 1', '-W {}'.format(int(timeout)), adr], stdout=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as e:
+        raise JMHostNotReachableError("could not reach host '{}'".format(adr))
+        
+
 def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
     identifier = mod_id(identifier)
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
-    c = 0
     
     def _operation(*args, **kwargs):
+        c = 0
         while True:
+            check_if_host_is_reachable_unix_ping(adr=dest[0][0])
+            
             if verbose > 1:
                 print("{}establish connection to {}".format(identifier, dest))
             try: 
-                o._connect()
+                proxy._connect()
             except Exception as e:
                 if verbose > 0:
                     print("{}establishing connection to {} FAILED due to '{}'".format(identifier, dest, type(e)))
@@ -1575,7 +1581,7 @@ def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier=''
             if verbose > 1:
                 print("{}close connection to {}".format(identifier, dest))
             try:
-                o._tls.connection.close()
+                proxy._tls.connection.close()
             except Exception as e:
                 if verbose > 0:
                     print("{}closeing connection to {} FAILED due to {}".format(identifier, dest, type(e)))
@@ -1587,10 +1593,12 @@ def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier=''
     identifier = mod_id(identifier)
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
-    c = 0
     
     def _operation(*args, **kwargs):
+        c = 0
         while True:
+            check_if_host_is_reachable_unix_ping(adr=dest[0])
+            
             if verbose > 1:
                 print("{}establish connection to {}".format(identifier, dest))
             try: 

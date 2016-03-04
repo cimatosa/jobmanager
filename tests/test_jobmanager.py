@@ -176,9 +176,21 @@ def test_jobmanager_basic():
      
     p_client.join(30)
     p_server.join(30)
- 
-    assert not p_client.is_alive(), "the client did not terminate on time!"
-    assert not p_server.is_alive(), "the server did not terminate on time!"
+    
+    try:
+        assert not p_client.is_alive(), "the client did not terminate on time!"
+        assert not p_server.is_alive(), "the server did not terminate on time!"
+    finally:
+        try:
+            os.kill(p_client.pid, signal.SIGINT)
+        except ProcessLookupError:
+            pass
+        
+        try:
+            os.kill(p_server.pid, signal.SIGINT)
+        except ProcessLookupError:
+            pass
+    
     print("[+] client and server terminated")
      
     fname = 'jobmanager.dump'
@@ -718,7 +730,7 @@ def test_digest_rejected():
         
     p_server.join()            
     
-def test_exception():   
+def _test_exception():   
     global PORT
     class MyManager_Client(jobmanager.BaseManager):
         pass
@@ -892,10 +904,10 @@ if __name__ == "__main__":
 #         test_check_fail,
 #         test_jobmanager_read_old_stat,
         test_client_status,
-#         test_jobmanager_local,
-#         test_start_server_on_used_port,
-#         test_shared_const_arg,
-#         test_digest_rejected,
+        test_jobmanager_local,
+        test_start_server_on_used_port,
+        test_shared_const_arg,
+        test_digest_rejected,
 #         test_exception,
 
         lambda : print("END")
