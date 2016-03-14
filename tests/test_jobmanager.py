@@ -151,7 +151,7 @@ def start_client(verbose=1):
     jm_client = jobmanager.JobManager_Client(server = SERVER, 
                                              authkey = AUTHKEY, 
                                              port    = PORT, 
-                                             nproc   = 0,
+                                             nproc   = 3,
                                              verbose = verbose)
     jm_client.start()
     if verbose > 1:
@@ -887,17 +887,28 @@ def _test_exception():
                     for l in outfile:
                         print("    {}".format(l[:-1]))
                     print("+"*40)
-
+            
+def test_hum_size():    
+    print(jobmanager.humanize_size(1))
+    print(jobmanager.humanize_size(110))
+    print(jobmanager.humanize_size(1000))
+    print(jobmanager.humanize_size(1024))
+    print(jobmanager.humanize_size(1024**2))
+    print(jobmanager.humanize_size(1024**3))
+    print(jobmanager.humanize_size(1024**4))
+    
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         pass
     else:    
         func = [
+        
+#         test_hum_size,
 #         test_Signal_to_SIG_IGN,
 #         test_Signal_to_sys_exit,
 #         test_Signal_to_terminate_process_list,
                   
-#         test_jobmanager_basic,
+        test_jobmanager_basic,
 #         test_jobmanager_server_signals,
 #         test_shutdown_server_while_client_running,
         test_shutdown_client,

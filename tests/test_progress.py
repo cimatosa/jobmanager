@@ -747,6 +747,19 @@ def test_info_line():
             if c1.value >= m1.value:
                 break
             
+def test_change_prepend():
+    c1 = progress.UnsignedIntValue(val=0)
+    m1 = progress.UnsignedIntValue(val=30)    
+    with progress.ProgressBarFancy(count=c1, max_count=m1, verbose=1, interval=0.2) as sc:
+        sc.start()
+        while True:
+            c1.value = c1.value + 1
+            sc.prepend = [str(c1.value)]
+            time.sleep(0.1)
+            if c1.value >= m1.value:
+                break
+    
+            
 if __name__ == "__main__":
     func = [    
 #     test_loop_basic,
@@ -773,7 +786,8 @@ if __name__ == "__main__":
 #     test_progress_bar_counter_fancy,
 #     test_progress_bar_counter_fancy_non_max,
 #     test_progress_bar_counter_fancy_hide_bar,
-    test_info_line,
+#     test_info_line,
+    test_change_prepend,
     lambda: print("END")
     ]
     

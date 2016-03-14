@@ -34,6 +34,7 @@ import copy
 #import functools
 import inspect
 import multiprocessing as mp
+import subprocess as sp
 from multiprocessing.managers import BaseManager, RemoteError
 import subprocess
 import numpy as np
@@ -99,7 +100,19 @@ sys.path.append(os.path.dirname(__file__))
 from . import progress
 
 myQueue = mp.Queue
-AuthenticationError = mp.AuthenticationError 
+AuthenticationError = mp.AuthenticationError
+
+def humanize_size(size_in_bytes):
+    """convert a speed in counts per second to counts per [s, min, h, d], choosing the smallest value greater zero.
+    """
+    thr = 999
+    scales = [1024, 1024, 1024]
+    units = ['k', 'M', 'G', 'T']
+    i = 0
+    while (size_in_bytes > thr) and (i < len(scales)):
+        size_in_bytes = size_in_bytes / scales[i]
+        i += 1
+    return "{:.2f}{}B".format(size_in_bytes, units[i]) 
 
 class JobManager_Client(object):
     """
@@ -177,6 +190,7 @@ class JobManager_Client(object):
         self.verbose = verbose
         
         self._pid = os.getpid()
+        self._sid = os.getsid(self._pid)
         self._identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid) 
         if self.verbose > 1:
             print("{}: init".format(self._identifier))
@@ -277,6 +291,20 @@ class JobManager_Client(object):
         const_arg = copy.deepcopy(manager.get_const_arg())
             
         return job_q, result_q, fail_q, const_arg, manager
+    
+    def get_overall_memory_cunsumption(self):
+        vsize = 0
+        # Example: /bin/ps -o vsize= --sid 23928
+        #proc = sp.Popen(['ps', '-o', 'vsize=', '--sid', str(self._sid)], stdout=sp.PIPE, stderr=None, shell=False)
+        proc = sp.Popen(['ps', '-o', 'rss=', '--sid', str(self._sid)], stdout=sp.PIPE, stderr=None, shell=False)
+        (stdout, _stderr) = proc.communicate()
+        print("sid", self._sid)
+        print(stdout)
+        # Iterate over each process within the process tree of our process session
+        # (this ensures that we include processes launched by a child bash script, etc.)
+        for line in stdout.split():
+            vsize += int(line.strip())
+        return vsize*1024   # in bytes
         
     @staticmethod
     def func(arg, const_arg):
@@ -574,6 +602,8 @@ class JobManager_Client(object):
             Progress = progress.ProgressSilentDummy
             
         prepend = []
+        infoline = progress.StringValue(num_of_bytes=12)
+        infoline = None
         l = len(str(self.nproc))
         for i in range(self.nproc):
             prepend.append("w{0:0{1}}:".format(i+1, l))
@@ -584,7 +614,8 @@ class JobManager_Client(object):
                       prepend   = prepend, 
                       verbose   = self.verbose,
                       sigint    = 'ign',
-                      sigterm   = 'ign' ) as self.pbc :
+                      sigterm   = 'ign',
+                      info_line  = infoline) as self.pbc :
             self.pbc.start()
             for i in range(self.nproc):
                 reset_pbc = lambda: self.pbc.reset(i)
@@ -621,6 +652,8 @@ class JobManager_Client(object):
                                                                      verbose=self.verbose)
         
             for p in self.procs:
+#                 s = self.get_overall_memory_cunsumption()
+#                 infoline.value = bytes(humanize_size(s), encoding='ascii')
                 if self.verbose > 2:
                     print("{}: join {} PID {}".format(self._identifier, p, p.pid))
                 while p.is_alive():

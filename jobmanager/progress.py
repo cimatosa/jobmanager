@@ -1073,11 +1073,11 @@ class ProgressBarCounterFancy(ProgressBarCounter):
         counter_tet = time.time() - kwargs['init_time']
         
         s_c = "{}{}{}{} {:>12} #{}".format(ESC_RED,
-                                         prepend, 
-                                         ESC_NO_CHAR_ATTR,
-                                         humanize_time(counter_tet),
-                                         '['+humanize_speed(counter_speed.value)+']', 
-                                         counter_count.value)
+                                           prepend, 
+                                           ESC_NO_CHAR_ATTR,
+                                           humanize_time(counter_tet),
+                                           '['+humanize_speed(counter_speed.value)+']', 
+                                           counter_count.value)
 
         if width == 'auto':
             width = get_terminal_width()        
