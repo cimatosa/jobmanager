@@ -920,6 +920,7 @@ if __name__ == "__main__":
 #         test_shared_const_arg,
 #         test_digest_rejected,
 #         test_exception,
+        test_hum_size,
 
         lambda : print("END")
         ]

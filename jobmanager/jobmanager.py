@@ -1144,7 +1144,13 @@ class JobManager_Server(object):
         
             while (len(self.args_dict) - self.fail_q.qsize()) > 0:
                 info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(), self.job_q.qsize(), self.numresults).encode('utf-8')
-                arg, result = self.result_q.get()
+        
+                # allows for update of the info line
+                try:
+                    arg, result = self.result_q.get(timeout = self.msg_interval)
+                except queue.Empty:
+                    continue
+                
                 del self.args_dict[bf.dump(arg)]
                 self.numresults += 1
                 self.process_new_result(arg, result)
