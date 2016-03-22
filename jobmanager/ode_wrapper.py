@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import warnings
+from time import time
 
 try:
     from scipy.integrate import ode
@@ -74,33 +75,91 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
     
     if res_dim is None:
         res_dim = (len(x0), )
+    else:
+        try:
+            res_list_len = len(res_dim)
+            assert res_list_len == len(x_to_res)
+        except TypeError:
+            res_list_len = None 
     
     if x_to_res is None:
-        x_to_res = lambda t_, x_: x_ 
+        x_to_res = lambda t_, x_: x_
+        
+    # the usual case with only one result type
+    if res_list_len is None: 
     
-    # complex array for result
-    x = np.empty(shape=(N,) + res_dim, dtype=np.complex128)
-    x[0] = x_to_res(t0, x0)
+        # complex array for result
+        x = np.empty(shape=(N,) + res_dim, dtype=np.complex128)
+        x[0] = x_to_res(t0, x0)
+        
+    #         print(args.eta._Z)
     
-#         print(args.eta._Z)
-    
-    i = 1        
-    while r.successful() and i < N:
-        r.integrate(t[i])
-        if integrator == 'zvode':
-            # complex integration -> yields complex values
-            x[i] = x_to_res(r.t, r.y)
-        else:
-            # real integration -> mapping from R^2 to C needed
-            x[i] = x_to_res(r.t, real_to_complex(r.y))
+        t_int = 0
+        t_conv = 0
+        
+        i = 1        
+        while r.successful() and i < N:
+            _t = time()
+            r.integrate(t[i])
+            t_int += (time()-_t)
             
-        t[i] = r.t
-        c.value = i
-        i += 1
-
-    if not r.successful():
-        print("INTEGRATION WARNING, NOT successful!")
+            _t = time()
+            if integrator == 'zvode':
+                # complex integration -> yields complex values
+                x[i] = x_to_res(r.t, r.y)
+            else:
+                # real integration -> mapping from R^2 to C needed
+                x[i] = x_to_res(r.t, real_to_complex(r.y))
+            t_conv += (time()-_t)            
+                
+            t[i] = r.t
+            c.value = i
+            i += 1
     
+        if not r.successful():
+            print("INTEGRATION WARNING, NOT successful!")
+            
+    # having to compute multiple result types
+    else:
+        # complex array for result
+        x = []
+        for a in range(res_list_len):
+            x.append(np.empty(shape=(N,) + res_dim[a], dtype=np.complex128))
+            x[-1][0] = x_to_res[a](t0, x0)
+        
+    #         print(args.eta._Z)
+    
+        t_int = 0
+        t_conv = 0
+        
+        i = 1        
+        while r.successful() and i < N:
+            _t = time()
+            r.integrate(t[i])
+            t_int += (time()-_t)
+            
+            _t = time()
+            if integrator == 'zvode':
+                # complex integration -> yields complex values
+                for a in range(res_list_len):
+                    x[a][i] = x_to_res[a](r.t, r.y)
+            else:
+                # real integration -> mapping from R^2 to C needed
+                for a in range(res_list_len):
+                    x[a][i] = x_to_res[a](r.t, real_to_complex(r.y))
+            t_conv += (time()-_t)            
+                
+            t[i] = r.t
+            c.value = i
+            i += 1
+    
+        if not r.successful():
+            print("INTEGRATION WARNING, NOT successful!")        
+    
+    if verbose > 1:
+        print("integration summary")
+        print("integration     time {:.2g}s ({:.2%})".format(t_int, t_int / (t_int + t_conv)))
+        print("data conversion time {:.2g}s ({:.2%})".format(t_conv, t_conv / (t_int + t_conv)))
     return t, x
         
 def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=None, x_to_res=None, **kwargs):
@@ -137,14 +196,29 @@ def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
     x = np.empty(shape=(N,) + res_dim, dtype=np.float64)
     x[0] = x_to_res(t0, x0)
     
+    t_int = 0
+    t_conv = 0
+    
     i = 1        
     while r.successful() and i < N:
+        _t = time()
         r.integrate(t[i])
+        t_int += (time()-_t)
+        
+        _t = time()
         x[i] = x_to_res(r.t, r.y)
+        t_conv += (time()-_t)
+        
         t[i] = r.t
         c.value = i
         i += 1
 
     if not r.successful():
-        print("INTEGRATION WARNING, NOT successful!")        
+        print("INTEGRATION WARNING, NOT successful!")
+
+    if verbose > 1:
+        print("integration summary")
+        print("integration     time {:.2g} ({:.2%})".format(t_int, t_int / (t_int + t_conv)))
+        print("data conversion time {:.2g} ({:.2%})".format(t_conv, t_conv / (t_int + t_conv)))        
+        
     return t, x
