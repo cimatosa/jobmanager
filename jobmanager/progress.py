@@ -1006,7 +1006,10 @@ class ProgressBarFancy(Progress):
             if width == 'auto':
                 width = get_terminal_width()
             # deduce relative progress
-            p = count_value / max_count_value
+            try:
+                p = count_value / max_count_value
+            except ZeroDivisionError:
+                p = 1
             if p < 1:
                 ps = " {:.1%} ".format(p)
             else:

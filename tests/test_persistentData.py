@@ -63,6 +63,7 @@ def test_pd():
                     assert data.getData(key) == 1
     
     finally:
+        print()
         data.erase()
                    
 def test_pd_bytes():
@@ -91,7 +92,9 @@ def test_pd_bytes():
             assert base_data[b2] == t1
             
     finally:
+        print()
         base_data.erase()
+
 
 def test_directory_removal():    
     try:
@@ -152,6 +155,8 @@ def test_mp_read_from_sqlite():
     
     
 def test_from_existing_sub_data():
+    print()
+    print('test_from_existing_sub_data')
     t1 = (3.4, 4.5, 5.6, 6.7, 7.8, 8.9)
     t2 = (3.4, 4.5, 5.6, 6.7, 7.8, 8.9, 9,1)
     
@@ -205,6 +210,7 @@ def test_from_existing_sub_data():
                 assert sub_data[200] == "sub2:t2"                
     
     finally:
+        print()
         base_data.erase()
     
 def test_remove_sub_data_and_check_len():
@@ -384,7 +390,7 @@ def test_merge():
     with PDS(name='d2', verbose=VERBOSE) as d2:
         d2['2k1'] = 1
         
-        d2.mergeOtherPDS(other_db_name = "d1")
+        d2.mergeOtherPDS(other_db_name = "d1", status_interval=0)
 
     try:
         with PDS(name='d2', verbose=VERBOSE) as d2:
@@ -411,7 +417,7 @@ def test_merge():
                 
         try:
             with PDS(name='d2', verbose=VERBOSE) as d2:
-                d2.mergeOtherPDS(other_db_name = "d1", update='error')
+                d2.mergeOtherPDS(other_db_name = "d1", update='error', status_interval=0)
         except KeyError as e:
             print(e)
             print("this is ok!")
@@ -419,12 +425,12 @@ def test_merge():
         
         with PDS(name='d2', verbose=VERBOSE) as d2:
             d2['k1'] = 'k1'
-            d2.mergeOtherPDS(other_db_name = "d1", update='ignore')
+            d2.mergeOtherPDS(other_db_name = "d1", update='ignore', status_interval=0)
             assert d2['k1'] == 'k1'
             
         with PDS(name='d2', verbose=VERBOSE) as d2:
             d2['k1'] = 'k1'
-            d2.mergeOtherPDS(other_db_name = "d1", update='update')
+            d2.mergeOtherPDS(other_db_name = "d1", update='update', status_interval=0)
             assert d2['k1'] == 1        
             
     finally:
@@ -433,19 +439,106 @@ def test_merge():
             
         with PDS(name='d2', verbose=VERBOSE) as d2:
             d2.erase()        
+
+def test_merge_fname_conflict():
     
+    class PDS_det_fname(PDS):
+        def newNPA(self, key, nparray):
+            d = {'fname': 'det_fname.npy',
+                 'magic': pd.MAGIC_SIGN_NPARRAY}
+            self.db[key] = d
+            self.db.commit()
+    
+            full_name = os.path.join(self._dirname, d['fname'])
+            np.save(full_name, nparray)
+            return True
+        
+        def newSubData(self, key):
+            self.need_open()
+            dirname = 'subDB'
+            i = 2
+            
+            while os.path.exists(os.path.join(self._dirname, '__'+dirname)):
+                dirname = 'subDB{}'.format(i)
+                i += 1
+            print(self._dirname, dirname)
+            
+            full_name = os.path.join(self._dirname, '__'+dirname)
+            os.mkdir(full_name)
+            if not key in self.db:
+                d = {'name': dirname,
+                     'magic': pd.MAGIC_SIGN}
+                self.db[key] = d
+                self.db.commit()
+                return self.__class__(name = d['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
+            else:
+                raise RuntimeError("can NOT create new SubData, key already found!")        
+
+    a = np.random.rand(5)
+    b = np.random.rand(5)
+    
+    with PDS_det_fname(name='d1', verbose=VERBOSE) as d1:
+        d1.newNPA('aa', a)
+        with d1.newSubData('sub1') as sub1:
+            sub1['s1'] = 11
+            sub1.newNPA('a', a)
+            
+    with PDS_det_fname(name='d2', verbose=VERBOSE) as d2:
+        d2['2k1'] = 1
+        d2.newNPA('2aa', b)
+        with d2.newSubData('sub2') as sub2:
+            sub2['s2'] = 22
+            sub2.newNPA('a2', b)
+            
+        assert np.all(d2['2aa'] == b)
+        d2.mergeOtherPDS(other_db_name = "d1", update='error', status_interval=0)
+        assert np.all(d2['2aa'] == b)
+        
+
+    try:
+        assert os.path.exists( os.path.join(d1._path, '__d1', '__subDB')) 
+        assert os.path.exists( os.path.join(d1._path, '__d1', 'det_fname.npy'))
+        assert os.path.exists( os.path.join(d1._path, '__d2', '__subDB')) 
+        assert os.path.exists( os.path.join(d1._path, '__d2', 'det_fname.npy'))
+        
+        with PDS_det_fname(name='d2', verbose=VERBOSE) as d2:
+            assert d2['2k1'] == 1
+            assert np.all(d2['2aa'] == b)
+            
+            assert np.all(d2['aa'] == a)
+            
+            assert d2.has_key('sub1')
+            with d2['sub1'] as sub1:
+                assert sub1['s1'] == 11
+                assert np.all(sub1['a'] == a)
+            
+            assert d2.has_key('sub2')
+            with d2['sub2'] as sub2:
+                assert sub2['s2'] == 22
+                assert np.all(sub2['a2'] == b)
+                
+            
+ 
+    finally:
+        with PDS(name='d1', verbose=VERBOSE) as d1:
+            d1.erase()
+             
+        with PDS(name='d2', verbose=VERBOSE) as d2:
+            d2.erase()     
+
       
 if __name__ == "__main__":
-#     test_pd()
-#     test_pd_bytes()
-#     test_directory_removal()
-#     test_mp_read_from_sqlite()
-#     test_from_existing_sub_data()
-#     test_remove_sub_data_and_check_len()
-#     test_show_stat()
-#     test_len()
-#     test_clear()
-#     test_not_in()
-#     test_npa()
+    test_pd()
+    test_pd_bytes()
+    test_directory_removal()
+    test_mp_read_from_sqlite()
+    test_from_existing_sub_data()
+    test_remove_sub_data_and_check_len()
+    test_show_stat()
+    test_len()
+    test_clear()
+    test_not_in()
+    test_npa()
     test_merge()
+    test_merge_fname_conflict()
     pass

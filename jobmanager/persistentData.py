@@ -107,7 +107,7 @@ class PersistentDataStructure(object):
             if not make_dir:
                 full_name = join(self._dirname, fname)
                 if not os.path.exists(full_name):
-                    open(full_name, 'a').close()
+                    #open(full_name, 'a').close()
                     return fname
             else:
                 full_name = join(self._dirname, '__'+fname)
@@ -176,8 +176,6 @@ class PersistentDataStructure(object):
             
         try:
 
-            if self.verbose > 1:
-                print("sub_data_keys:", self.sub_data_keys)
             for key in self:
                 t, v = self.get_value_and_value_type(key)
                 if t == TYPE_SUB:
@@ -322,11 +320,10 @@ class PersistentDataStructure(object):
         """
         self.need_open()
         
-        if overwrite:
+        if (overwrite) and (key in self.db):
             if self.verbose > 1:
                 print("overwrite True: del key")
-            if key in self.db:
-                self.__delitem__(key)         
+            self.__delitem__(key)         
          
         if not key in self.db:
             if _NP and isinstance(value, np.ndarray):
@@ -350,6 +347,8 @@ class PersistentDataStructure(object):
     def _setNPA(self, key, nparray):
         d = {'fname': self._new_rand_file_name(end='.npy'),
              'magic': MAGIC_SIGN_NPARRAY}
+        if self.verbose > 1:
+            print("set NPA (key)", key, " (fname)", d['fname'])
         self.db[key] = d
         self.db.commit()
 
@@ -364,6 +363,8 @@ class PersistentDataStructure(object):
         d = self.db[key]
         assert d['magic'] == MAGIC_SIGN_NPARRAY
         fname = d['fname']
+        if self.verbose > 1:
+            print("load NPA (key)", key, " (fname)", fname)
         return self._loadNPA(fname)
         
         
@@ -383,9 +384,13 @@ class PersistentDataStructure(object):
         if not key in self.db:
             d = {'name': self._new_rand_file_name(make_dir=True),
                  'magic': MAGIC_SIGN}
+            
+            if self.verbose > 1:
+                print("newSubData (key)", key, " (name)", d['name'])
+            
             self.db[key] = d
             self.db.commit()
-            return PersistentDataStructure(name = d['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
+            return self.__class__(name = d['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
         else:
             raise RuntimeError("can NOT create new SubData, key already found!")
         
@@ -402,7 +407,7 @@ class PersistentDataStructure(object):
             
                 if self.verbose > 1:
                     print("return subData stored as key", key, "using name", sub_db_name)
-                return PersistentDataStructure(name = sub_db_name, path = os.path.join(self._dirname) , verbose = self.verbose)
+                return self.__class__(name = sub_db_name, path = os.path.join(self._dirname) , verbose = self.verbose)
             elif t == TYPE_NPA:
                 if self.verbose > 1:
                     print("return nparray value")
@@ -419,7 +424,7 @@ class PersistentDataStructure(object):
                     print("getData key does NOT exists -> create subData")
                 return self.newSubData(key)
             
-    def setDataFromSubData(self, key, subData):
+    def setDataFromSubData(self, key, subData, overwrite=False):
         """
             set an entry of the PDS with data from an other PDS
             
@@ -427,19 +432,31 @@ class PersistentDataStructure(object):
             and rename them
         """
         self.need_open()
-        if self.is_subdata(key):                                    # check if key points to existing PDS 
-            with self[key] as pds:                                  #
-                name = pds._name                                    #    remember its name
-                dir_name = pds._dirname                             #    and the directory where it's in     
-                pds.erase()                                         #    remove the existing subData from hdd  
-        else:
-            with self.newSubData(key) as new_sub_data:              #    create a new subData
-                name = new_sub_data._name                           #    and remember name and directory
-                dir_name = new_sub_data._dirname
-                new_sub_data.erase()
         
-        shutil.copytree(src=subData._dirname, dst=dir_name)
-        os.rename(src=os.path.join(dir_name, subData._name+'.db'), dst=os.path.join(dir_name, name+'.db'))
+        if key in self.db:
+            if overwrite:
+                if self.verbose > 1:
+                    print("overwrite True: del key")
+                self.__delitem__(key) 
+            else:
+                raise RuntimeError("can NOT create new SubData from Data, key already found!") 
+                
+        
+        d = {'name': self._new_rand_file_name(make_dir=True),
+             'magic': MAGIC_SIGN}
+        self.db[key] = d
+        self.db.commit()
+        
+        if self.verbose > 1:
+            print("")
+            print("setDataFromSubData: orig SubData (name)", subData._name, "new SubData (key)", key, " (name)", d['name'])
+        
+        dest_dir = os.path.join(self._dirname, '__'+d['name'])
+        os.removedirs(dest_dir)
+
+        shutil.copytree(src=subData._dirname, dst=dest_dir)
+        os.rename(src=os.path.join(dest_dir, subData._name+'.db'), 
+                  dst=os.path.join(dest_dir, d['name']+'.db'))
         
     def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status_interval=5):
         """
@@ -466,9 +483,9 @@ class PersistentDataStructure(object):
         else:
             PB = progress.ProgressBarFancy   
         
-        with PersistentDataStructure(name = other_db_name, 
-                                     path = other_db_path, 
-                                     verbose = self.verbose) as otherData:
+        with self.__class__(name = other_db_name, 
+                            path = other_db_path, 
+                            verbose = self.verbose) as otherData:
 
             c = progress.UnsignedIntValue(val=0)
             m = progress.UnsignedIntValue(val=len(otherData))
@@ -496,7 +513,7 @@ class PersistentDataStructure(object):
                         self[k] = value
                         transfered += 1
                     finally:
-                        if isinstance(value, PersistentDataStructure):
+                        if isinstance(value, self.__class__):
                             value.close()
                     
                     with c.get_lock():
@@ -531,8 +548,8 @@ class PersistentDataStructure(object):
     
     # implements '[]' operator setter
     def __setitem__(self, key, value):
-        if isinstance(value, PersistentDataStructure):
-            self.setDataFromSubData(key, value)
+        if isinstance(value, self.__class__):
+            self.setDataFromSubData(key, value, overwrite=True)
         else:
             self.setData(key, value, overwrite=True)
             
