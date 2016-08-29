@@ -758,6 +758,19 @@ def test_change_prepend():
             time.sleep(0.1)
             if c1.value >= m1.value:
                 break
+            
+def test_stop_progress_with_large_interval():
+    c1 = progress.UnsignedIntValue(val=0)
+    m1 = progress.UnsignedIntValue(val=10)    
+    with progress.ProgressBarFancy(count=c1, max_count=m1, verbose=1, interval=3) as sc:
+        sc.start()
+        while True:
+            c1.value = c1.value + 1
+            time.sleep(0.1)
+            if c1.value >= m1.value:
+                break
+        print("done inner loop")
+    print("done progress")
     
             
 if __name__ == "__main__":
@@ -787,7 +800,8 @@ if __name__ == "__main__":
 #     test_progress_bar_counter_fancy_non_max,
 #     test_progress_bar_counter_fancy_hide_bar,
 #     test_info_line,
-    test_change_prepend,
+#     test_change_prepend,
+    test_stop_progress_with_large_interval,
     lambda: print("END")
     ]
     

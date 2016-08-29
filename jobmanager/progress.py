@@ -217,8 +217,10 @@ class Loop(object):
         the loop from repeating. Call __cleanup to make sure the process
         stopped. After that we could trigger start() again.
         """
-        self.run = False
-        if not self.is_alive():
+        #self.run = False#
+        if self.is_alive():
+            self._proc.terminate()
+        else:
             if self.verbose > 0:
                 print("PID None: there is no running loop to stop")
             return
@@ -1099,6 +1101,7 @@ class ProgressBarCounterFancy(ProgressBarCounter):
 
 class ProgressSilentDummy(Progress):
     def __init__(self, **kwargs):
+        raise DeprecationWarning("do not use this dummy class, if you want a silent progress, simply do not trigger 'start'!")
         pass
 
     def __exit__(self, *exc_args):
@@ -1159,7 +1162,7 @@ class SIG_handler_Loop(object):
         pass
 
     def _stop_on_signal(self, signal, frame):
-        if self.verbose > 0:
+        if self.verbose > 1:
             print("{}: received sig {} -> set run false".format(self.identifier, signal_dict[signal]))
         self.shared_mem_run.value = False
 
