@@ -1,6 +1,8 @@
 from __future__ import division, print_function
 
 import sqlitedict as sqd
+import h5py
+import hashlib
 from os.path import abspath, join, exists
 import os
 import sys
@@ -31,6 +33,7 @@ if sys.version_info[0] == 2:
     def new_rmdir(path):
         os_rmdir(path)
     os.rmdir = new_rmdir
+    
 
 MAGIC_SIGN = 0xff4a87
 MAGIC_SIGN_NPARRAY = 0xee4a87
@@ -572,3 +575,254 @@ class PersistentDataStructure(object):
         self.db.commit()
             
         
+class PersistentDataStructure_HDF5(object):
+    def __init__(self, name='', path="./", gr=None, verbose=1):
+        self.__classname = self.__class__.__name__
+        self.verbose = verbose
+        if gr is None:
+            self._open = False
+            self._name = name
+            self._path = abspath(path)
+            if not exists(self._path):
+                print("given path does not exists ({} -> {})".format(path, self._path))
+                print("create path")
+                os.makedirs(self._path)
+            self._filename = join(self._path, self._name + '.hdf5')
+            self.open()
+        else:
+            self._open = True
+            self._name = None
+            self._path = None
+            self._filename = None
+            self.db = gr
+        
+    def _md5(self, key):
+        if isinstance(key, str):
+            key = key.encode('utf8')
+        return hashlib.md5(key).hexdigest()        
+    
+    def _convkey(self, key):
+        if isinstance(key, str):
+            return key
+        elif isinstance(key, (bytearray, bytes)):
+            return np.void(key)
+        else:
+            raise TypeError("bad key type")
+                      
+                       
+    # implements '[]' operator getter
+    def __getitem__(self, key):
+        _md5 = self._md5(key)       
+        if self.verbose > 2:
+            print("__getitem__")
+            print("key : ", key)
+            print("md5 : ", _md5)        
+        try:
+            gr_md5 = self.db[_md5]
+            if self.verbose > 2:
+                print("gr_md5 found")            
+        except KeyError:
+            raise KeyError("key not found in {}".format(self.__classname))
+                           
+        for k in gr_md5:
+            test_key = gr_md5[k].attrs['key']
+            if isinstance(test_key, np.void):
+                test_key = test_key.tostring()
+            if self.verbose > 2:
+                print("test against key", test_key)
+
+            if key == test_key:
+                dat = gr_md5[k]
+                print(type(dat))
+                print()
+                if isinstance(dat, h5py.Dataset):
+                    return gr_md5[k].value
+                else:
+                    return PersistentDataStructure_HDF5(gr=gr_md5[k], verbose=self.verbose)
+        
+        raise KeyError("key not found in {}".format(self.__classnme))
+
+    # implements the 'in' statement
+    def __contains__(self, key):
+        try:
+            self.__getitem__(key)
+            return True
+        except KeyError:
+            return False
+        
+    def __create_group(self, key):
+        _md5 = self._md5(key)
+        if self.verbose > 2:
+            print("__create_group")
+            print("key : ", key)
+            print("md5 : ", _md5)
+        try:
+            gr_md5 = self.db[_md5]
+            if self.verbose > 2:
+                print("found md5 group")            
+        except KeyError:
+            gr_md5 = self.db.create_group(_md5)
+            if self.verbose > 2:
+                print("create md5 group")
+            
+        for dat in gr_md5:
+            test_key = dat.attrs['key']
+            if isinstance(test_key, np.void):
+                test_key = test_key.tostring()
+            if self.verbose > 2:
+                print("compare with test_key in md5_group: ", format(test_key))                    
+            if key == test_key:
+                raise RuntimeError("key must not exist when creating a group")
+
+        n = len(gr_md5)            
+        gr = gr_md5.create_group('gr{}'.format(n))
+        gr.attrs['key'] = self._convkey(key)
+        if self.verbose > 2:
+            print("create group as {}th object in gr_md5".format(n))        
+        return gr
+    
+    def __set_dataset(self, key, data):
+        _md5 = self._md5(key)
+        if self.verbose > 2:
+            print("__set_dataset")
+            print("key : ", key)
+            print("md5 : ", _md5)
+            print("data: ", data)
+        try:
+            gr_md5 = self.db[_md5]
+            if self.verbose > 2:
+                print("found md5 group")
+        except KeyError:
+            gr_md5 = self.db.create_group(_md5)
+            print("create md5 group")
+            
+        for k in gr_md5:
+            test_key = gr_md5[k].attrs['key']
+            if isinstance(test_key, np.void):
+                test_key = test_key.tostring()
+            if self.verbose > 2:
+                print("compare with test_key in md5_group: ", format(test_key))                
+                
+            if key == test_key:
+                raise RuntimeError("key must not exist when creating a dataset")
+
+        n = len(gr_md5)
+        try:
+            dat = gr_md5.create_dataset('dat{}'.format(n), data=data)
+            if self.verbose > 2:
+                print("set dataset from pure data")
+        except TypeError:
+            dat = gr_md5.create_dataset('dat{}'.format(n), data=np.void(pickle.dumps(data)))
+            if self.verbose > 2:
+                print("set dataset from binary data")
+            
+        
+        dat.attrs['key'] = self._convkey(key)
+        return dat
+    
+    # implements '[]' operator setter
+    def __setitem__(self, key, value):
+        if isinstance(value, self.__class__):
+            raise NotImplementedError
+        else:
+            self.__set_dataset(key, value)              
+        
+    def __len__(self):
+        l = 0
+        for gr_md5 in self.db:
+            l += len(self.db[gr_md5])
+        return l
+        
+    # implements '[]' operator deletion
+    def __delitem__(self, key):
+        _md5 = self._md5(key)
+        try:
+            gr_md5 = self.db[_md5]
+        except KeyError:
+            return
+            
+        for k in gr_md5:
+            test_key = gr_md5[k].attrs['key']
+            if isinstance(test_key, np.void):
+                test_key = test_key.tostring()
+                
+            if key == test_key:
+                del gr_md5[k]
+        
+        if len(gr_md5) == 0:
+            del self.db[_md5]
+
+    def open(self):
+        if self._filename is None:
+            raise RuntimeError("can not open a group")            
+        self.db = h5py.File(self._filename)
+        self._open = True
+        
+    def is_open(self):
+        return self._open
+        
+    def is_closed(self):
+        return not self._open
+    
+    def need_open(self):
+        if self.is_closed():
+            raise RuntimeError("{} needs to be open".format(self.__classname))
+        
+    def close(self):
+        if self._filename is None:
+            raise RuntimeError("can not close as group")
+        
+        self.db.close()
+        self._open = False
+                               
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self._filename is not None:
+            self.close()
+        
+                
+    def clear(self):
+        self.need_open()
+               
+        for k in self.db:
+            del self.db[k]
+        for k in self.db.attrs:
+            del self.db.attrs[k]
+            
+    def erase(self):
+        if self.verbose > 1:
+            print("remove", self._filename)
+        os.remove(path = self._filename)                           
+              
+    
+    def has_key(self, key):
+        return self.__contains__(key)
+        
+    def setData(self, key, value, overwrite=False):
+        if overwrite:
+            self.__delitem__(key)
+        self.__setitem__(key, value)
+            
+            
+            
+    def newSubData(self, key):
+        pass
+        
+    def getData(self, key, create_sub_data = False):
+        try:
+            return self.__getitem__(key)
+        except KeyError:
+            if create_sub_data:
+                return PersistentDataStructure_HDF5(gr = self.__create_group(key), verbose = self.verbose)
+            else:
+                raise
+            
+    def setDataFromSubData(self, key, subData, overwrite=False):
+        pass
+        
+    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status_interval=5):
+        pass
+
+       
