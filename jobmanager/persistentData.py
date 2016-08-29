@@ -12,6 +12,8 @@ import pickle
 import warnings
 import random
 
+from . import binfootprint as bf
+
 import progress
 
 try:
@@ -580,6 +582,7 @@ class PersistentDataStructure_HDF5(object):
         self.__classname = self.__class__.__name__
         self.verbose = verbose
         if gr is None:
+            self._is_group = False
             self._open = False
             self._name = name
             self._path = abspath(path)
@@ -590,57 +593,108 @@ class PersistentDataStructure_HDF5(object):
             self._filename = join(self._path, self._name + '.hdf5')
             self.open()
         else:
+            self._is_group = True
             self._open = True
             self._name = None
             self._path = None
             self._filename = None
             self.db = gr
-        
-    def _md5(self, key):
-        if isinstance(key, str):
-            key = key.encode('utf8')
-        return hashlib.md5(key).hexdigest()        
-    
+
     def _convkey(self, key):
-        if isinstance(key, str):
-            return key
-        elif isinstance(key, (bytearray, bytes)):
-            return np.void(key)
+        if not isinstance(key, (bytes, bytearray)):
+            key = bf.dump(key)
+        return key
+        
+    def _md5(self, binkey):
+        return hashlib.md5(binkey).hexdigest()
+    
+    def __create_group(self, key, overwrite):
+        binkey = self._convkey(key)
+        _md5 = self._md5(binkey)
+        try:
+            gr_md5 = self.db[_md5]
+        except KeyError:
+            gr_md5 = self.db.create_group(_md5)
+            gr_md5.attrs['cnt'] = 0        
+        
+        for k in gr_md5:
+            test_binkey = gr_md5[k].attrs['key'].tostring()        
+            if binkey == test_binkey:
+                if not overwrite:
+                    raise KeyError("key exists but overwrite == False")
+                del gr_md5[k]
+                break        
+            
+        name = "gr{}".format(gr_md5.attrs['cnt'])
+        gr = gr_md5.create_group(name)
+        gr_md5.attrs['cnt'] = gr_md5.attrs['cnt'] + 1
+        gr.attrs['key'] = np.void(binkey)
+        return gr, binkey
+
+    
+    def __set_dataset(self, key, data, overwrite):
+        binkey = self._convkey(key)
+        _md5 = self._md5(binkey)
+        try:
+            gr_md5 = self.db[_md5]
+        except KeyError:
+            gr_md5 = self.db.create_group(_md5)
+            gr_md5.attrs['cnt'] = 0        
+        
+        for k in gr_md5:
+            test_binkey = gr_md5[k].attrs['key'].tostring()        
+            if binkey == test_binkey:
+                if not overwrite:
+                    raise KeyError("key exists but overwrite == False")
+                del gr_md5[k]
+                break
+            
+        name = "ds{}".format(gr_md5.attrs['cnt'])
+        try:
+            dataset = gr_md5.create_dataset(name, data=data )
+            dataset.attrs['pickle'] = False
+        except ValueError: 
+            dataset = gr_md5.create_dataset(name, data=np.void(pickle.dumps(data)) )
+            dataset.attrs['pickle'] = True
+        gr_md5.attrs['cnt'] = gr_md5.attrs['cnt']+1            
+        dataset.attrs['key'] = np.void(binkey)
+        return dataset, binkey
+                        
+
+    # implements '[]' operator setter
+    def __setitem__(self, key, value, overwrite=True):
+        if isinstance(value, self.__class__):           
+            gr, binkey = self.__create_group(key, overwrite) 
+            gr.update(value.db)
+            gr.attrs['key'] = np.void(binkey)
         else:
-            raise TypeError("bad key type")
-                      
+            self.__set_dataset(key, value, overwrite)
+            
+    def __dataset_to_object(self, dataset):    
+        if isinstance(dataset, h5py.Dataset):                   
+            data = dataset.value
+            if dataset.attrs['pickle'] == True:
+                return pickle.loads(data)
+            else:
+                return data 
+        else:
+            return PersistentDataStructure_HDF5(gr=dataset, verbose=self.verbose)                    
                        
     # implements '[]' operator getter
     def __getitem__(self, key):
-        _md5 = self._md5(key)       
-        if self.verbose > 2:
-            print("__getitem__")
-            print("key : ", key)
-            print("md5 : ", _md5)        
+        binkey = self._convkey(key)
+        _md5 = self._md5(binkey)              
         try:
-            gr_md5 = self.db[_md5]
-            if self.verbose > 2:
-                print("gr_md5 found")            
+            gr_md5 = self.db[_md5]           
         except KeyError:
             raise KeyError("key not found in {}".format(self.__classname))
                            
         for k in gr_md5:
-            test_key = gr_md5[k].attrs['key']
-            if isinstance(test_key, np.void):
-                test_key = test_key.tostring()
-            if self.verbose > 2:
-                print("test against key", test_key)
-
-            if key == test_key:
-                dat = gr_md5[k]
-                print(type(dat))
-                print()
-                if isinstance(dat, h5py.Dataset):
-                    return gr_md5[k].value
-                else:
-                    return PersistentDataStructure_HDF5(gr=gr_md5[k], verbose=self.verbose)
+            test_binkey = gr_md5[k].attrs['key'].tostring()
+            if binkey == test_binkey:
+                return self.__dataset_to_object(gr_md5[k])
         
-        raise KeyError("key not found in {}".format(self.__classnme))
+        raise KeyError("key not found in {}".format(self.__classname))
 
     # implements the 'in' statement
     def __contains__(self, key):
@@ -648,84 +702,7 @@ class PersistentDataStructure_HDF5(object):
             self.__getitem__(key)
             return True
         except KeyError:
-            return False
-        
-    def __create_group(self, key):
-        _md5 = self._md5(key)
-        if self.verbose > 2:
-            print("__create_group")
-            print("key : ", key)
-            print("md5 : ", _md5)
-        try:
-            gr_md5 = self.db[_md5]
-            if self.verbose > 2:
-                print("found md5 group")            
-        except KeyError:
-            gr_md5 = self.db.create_group(_md5)
-            if self.verbose > 2:
-                print("create md5 group")
-            
-        for dat in gr_md5:
-            test_key = dat.attrs['key']
-            if isinstance(test_key, np.void):
-                test_key = test_key.tostring()
-            if self.verbose > 2:
-                print("compare with test_key in md5_group: ", format(test_key))                    
-            if key == test_key:
-                raise RuntimeError("key must not exist when creating a group")
-
-        n = len(gr_md5)            
-        gr = gr_md5.create_group('gr{}'.format(n))
-        gr.attrs['key'] = self._convkey(key)
-        if self.verbose > 2:
-            print("create group as {}th object in gr_md5".format(n))        
-        return gr
-    
-    def __set_dataset(self, key, data):
-        _md5 = self._md5(key)
-        if self.verbose > 2:
-            print("__set_dataset")
-            print("key : ", key)
-            print("md5 : ", _md5)
-            print("data: ", data)
-        try:
-            gr_md5 = self.db[_md5]
-            if self.verbose > 2:
-                print("found md5 group")
-        except KeyError:
-            gr_md5 = self.db.create_group(_md5)
-            print("create md5 group")
-            
-        for k in gr_md5:
-            test_key = gr_md5[k].attrs['key']
-            if isinstance(test_key, np.void):
-                test_key = test_key.tostring()
-            if self.verbose > 2:
-                print("compare with test_key in md5_group: ", format(test_key))                
-                
-            if key == test_key:
-                raise RuntimeError("key must not exist when creating a dataset")
-
-        n = len(gr_md5)
-        try:
-            dat = gr_md5.create_dataset('dat{}'.format(n), data=data)
-            if self.verbose > 2:
-                print("set dataset from pure data")
-        except TypeError:
-            dat = gr_md5.create_dataset('dat{}'.format(n), data=np.void(pickle.dumps(data)))
-            if self.verbose > 2:
-                print("set dataset from binary data")
-            
-        
-        dat.attrs['key'] = self._convkey(key)
-        return dat
-    
-    # implements '[]' operator setter
-    def __setitem__(self, key, value):
-        if isinstance(value, self.__class__):
-            raise NotImplementedError
-        else:
-            self.__set_dataset(key, value)              
+            return False            
         
     def __len__(self):
         l = 0
@@ -735,26 +712,34 @@ class PersistentDataStructure_HDF5(object):
         
     # implements '[]' operator deletion
     def __delitem__(self, key):
-        _md5 = self._md5(key)
+        binkey = self._convkey(key)
+        _md5 = self._md5(binkey)
         try:
             gr_md5 = self.db[_md5]
         except KeyError:
             return
             
         for k in gr_md5:
-            test_key = gr_md5[k].attrs['key']
-            if isinstance(test_key, np.void):
-                test_key = test_key.tostring()
+            test_binkey = gr_md5[k].attrs['key'].tostring()
                 
-            if key == test_key:
+            if binkey == test_binkey:
                 del gr_md5[k]
         
         if len(gr_md5) == 0:
             del self.db[_md5]
+            
+    # implements the iterator
+    def __iter__(self):
+        self.need_open()
+        for gr_md5 in self.db.values():
+            for ob in gr_md5.values():
+                yield self.__dataset_to_object(ob)             
 
     def open(self):
-        if self._filename is None:
-            raise RuntimeError("can not open a group")            
+        if self._is_group:
+            raise RuntimeError("can not open a group")
+        if self.verbose > 1:
+            print("open", self._filename)            
         self.db = h5py.File(self._filename)
         self._open = True
         
@@ -769,7 +754,7 @@ class PersistentDataStructure_HDF5(object):
             raise RuntimeError("{} needs to be open".format(self.__classname))
         
     def close(self):
-        if self._filename is None:
+        if self._is_group:
             raise RuntimeError("can not close as group")
         
         self.db.close()
@@ -779,17 +764,15 @@ class PersistentDataStructure_HDF5(object):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
-        if self._filename is not None:
+        if not self._is_group:
             self.close()
-        
                 
     def clear(self):
         self.need_open()
                
         for k in self.db:
             del self.db[k]
-        for k in self.db.attrs:
-            del self.db.attrs[k]
+        self.db.attrs['cnt'] = 0
             
     def erase(self):
         if self.verbose > 1:
@@ -803,26 +786,26 @@ class PersistentDataStructure_HDF5(object):
     def setData(self, key, value, overwrite=False):
         if overwrite:
             self.__delitem__(key)
-        self.__setitem__(key, value)
+        self.__setitem__(key, value, overwrite)          
             
             
-            
-    def newSubData(self, key):
-        pass
+    def newSubData(self, key, overwrite=False):
+        gr, binkey = self.__create_group(key, overwrite)
+        return PersistentDataStructure_HDF5(gr = gr, verbose = self.verbose)
         
     def getData(self, key, create_sub_data = False):
         try:
             return self.__getitem__(key)
         except KeyError:
             if create_sub_data:
-                return PersistentDataStructure_HDF5(gr = self.__create_group(key), verbose = self.verbose)
+                return self.newSubData(key)
             else:
                 raise
             
     def setDataFromSubData(self, key, subData, overwrite=False):
-        pass
+        self.setData(key, subData, overwrite)
         
     def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status_interval=5):
-        pass
+        raise NotImplementedError
 
        
