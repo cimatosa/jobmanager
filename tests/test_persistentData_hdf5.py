@@ -17,6 +17,7 @@ import numpy as np
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 from jobmanager.persistentData import PersistentDataStructure_HDF5 as PDS
+from jobmanager.persistentData import PersistentDataStructure as PDS_SQL
 
 VERBOSE = 1
 
@@ -356,6 +357,7 @@ def test_merge():
     a = np.random.rand(5)
     
     with PDS(name='d1', verbose=VERBOSE) as d1:
+        d1.clear()
         d1['k1'] = 1
         d1['k2'] = 2
         d1['k3'] = 3
@@ -367,158 +369,180 @@ def test_merge():
             sub1['a'] = a
             
     with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2.clear()
         d2['2k1'] = 1
-        
-        d2.mergeOtherPDS(other_db_name = "d1", status_interval=0)
+        with PDS(name='d1', verbose=VERBOSE) as d1:
+            d2.mergeOtherPDS(other_db = d1, status_interval=0)
 
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        assert 'k1' in d2
+        assert d2['k1'] == 1
+        assert 'k2' in d2
+        assert d2['k2'] == 2
+        assert 'k3' in d2
+        assert d2['k3'] == 3
+        assert 'aa' in d2
+        assert np.all(d2['aa'] == a)            
+            
+        assert "sub1" in d2
+        assert isinstance(d2["sub1"], PDS)
+        with d2["sub1"] as sub:
+            assert 's1' in sub
+            assert sub['s1'] == 11
+            assert 's2' in sub
+            assert sub['s2'] == 12
+            assert 's3' in sub
+            assert sub['s3'] == 13
+            assert 'a' in sub
+            assert np.all(sub['a'] == a)
+            
     try:
         with PDS(name='d2', verbose=VERBOSE) as d2:
-            assert 'k1' in d2
-            assert d2['k1'] == 1
-            assert 'k2' in d2
-            assert d2['k2'] == 2
-            assert 'k3' in d2
-            assert d2['k3'] == 3
-            assert 'aa' in d2
-            assert np.all(d2['aa'] == a)            
-                
-            assert "sub1" in d2
-            assert isinstance(d2["sub1"], PDS)
-            with d2["sub1"] as sub:
-                assert 's1' in sub
-                assert sub['s1'] == 11
-                assert 's2' in sub
-                assert sub['s2'] == 12
-                assert 's3' in sub
-                assert sub['s3'] == 13
-                assert 'a' in sub
-                assert np.all(sub['a'] == a)
-                
-        try:
-            with PDS(name='d2', verbose=VERBOSE) as d2:
-                d2.mergeOtherPDS(other_db_name = "d1", update='error', status_interval=0)
-        except KeyError as e:
-            print(e)
-            print("this is ok!")
-            pass
-        
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2['k1'] = 'k1'
-            d2.mergeOtherPDS(other_db_name = "d1", update='ignore', status_interval=0)
-            assert d2['k1'] == 'k1'
-            
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2['k1'] = 'k1'
-            d2.mergeOtherPDS(other_db_name = "d1", update='update', status_interval=0)
-            assert d2['k1'] == 1        
-            
-    finally:
+            with PDS(name='d1', verbose=VERBOSE) as d1:
+                d2.mergeOtherPDS(other_db = d1, update='error', status_interval=0)
+    except KeyError as e:
+        print(e)
+        print("this is ok!")
+        pass
+    
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2['k1'] = 'k1'
         with PDS(name='d1', verbose=VERBOSE) as d1:
-            d1.erase()
-            
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2.erase()        
+            d2.mergeOtherPDS(other_db = d1, update='ignore', status_interval=0)
+        assert d2['k1'] == 'k1'
+        
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2['k1'] = 'k1'
+        with PDS(name='d1', verbose=VERBOSE) as d1:
+            d2.mergeOtherPDS(other_db = d1, update='update', status_interval=0)
+        assert d2['k1'] == 1        
+
+def test_link_vs_copy():
+    data = np.arange(0,5)
+    with PDS(name='d', verbose=VERBOSE) as d:
+        d.clear()
+        gr1 = d.getData('gr1', create_sub_data=True)
+        gr1['data'] = data
+        gr1['str'] = 'gr1'
+        keys = [k for k in d['gr1']]
+        assert keys[0] == 'str'
+        assert keys[1] == 'data'
+
+                
+        d.setDataFromSubData('gr1_link', gr1, copy=False)
+        
+        keys = [k for k in d['gr1']]
+        assert keys[0] == 'str'
+        assert keys[1] == 'data'
+        keys = [k for k in d['gr1_link']]
+        assert keys[0] == 'str'
+        assert keys[1] == 'data'
+        
+        
+        d.setDataFromSubData('gr1_copy', gr1, copy=True)
+        keys = [k for k in d['gr1']]
+        assert keys[0] == 'str'
+        assert keys[1] == 'data'
+        keys = [k for k in d['gr1_copy']]
+        assert keys[0] == 'str'
+        assert keys[1] == 'data'
+    
+    with PDS(name='d', verbose=VERBOSE) as d:
+        assert np.all(d['gr1']['data'] == d['gr1_link']['data'])
+        assert np.all(d['gr1']['data'] == d['gr1_copy']['data'])
+        
+        d['gr1'].getH5Object('data')[0] = -3
+        assert d['gr1_link']['data'][0] == -3
+        assert d['gr1_copy']['data'][0] == 0
+        
+        keys = [k for k in d['gr1']]
+        assert keys[0] == 'str'
+        assert keys[1] == 'data'
+     
+    
+        
 
 def test_merge_fname_conflict():
-    
-    class PDS_det_fname(PDS):
-        def newNPA(self, key, nparray):
-            d = {'fname': 'det_fname.npy',
-                 'magic': pd.MAGIC_SIGN_NPARRAY}
-            self.db[key] = d
-            self.db.commit()
-    
-            full_name = os.path.join(self._dirname, d['fname'])
-            np.save(full_name, nparray)
-            return True
-        
-        def newSubData(self, key):
-            self.need_open()
-            dirname = 'subDB'
-            i = 2
-            
-            while os.path.exists(os.path.join(self._dirname, '__'+dirname)):
-                dirname = 'subDB{}'.format(i)
-                i += 1
-            print(self._dirname, dirname)
-            
-            full_name = os.path.join(self._dirname, '__'+dirname)
-            os.mkdir(full_name)
-            if not key in self.db:
-                d = {'name': dirname,
-                     'magic': pd.MAGIC_SIGN}
-                self.db[key] = d
-                self.db.commit()
-                return self.__class__(name = d['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
-            else:
-                raise RuntimeError("can NOT create new SubData, key already found!")        
-
     a = np.random.rand(5)
     b = np.random.rand(5)
     
-    with PDS_det_fname(name='d1', verbose=VERBOSE) as d1:
-        d1.newNPA('aa', a)
+    with PDS(name='d1', verbose=VERBOSE) as d1:
+        d1.clear()
+        d1['aa'] = a
         with d1.newSubData('sub1') as sub1:
             sub1['s1'] = 11
-            sub1.newNPA('a', a)
+            sub1['a'] = a
             
-    with PDS_det_fname(name='d2', verbose=VERBOSE) as d2:
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2.clear()
         d2['2k1'] = 1
-        d2.newNPA('2aa', b)
+        d2['2aa'] = b
         with d2.newSubData('sub2') as sub2:
             sub2['s2'] = 22
-            sub2.newNPA('a2', b)
+            sub2['a2'] = b
             
         assert np.all(d2['2aa'] == b)
-        d2.mergeOtherPDS(other_db_name = "d1", update='error', status_interval=0)
-        assert np.all(d2['2aa'] == b)
-        
-
-    try:
-        assert os.path.exists( os.path.join(d1._path, '__d1', '__subDB')) 
-        assert os.path.exists( os.path.join(d1._path, '__d1', 'det_fname.npy'))
-        assert os.path.exists( os.path.join(d1._path, '__d2', '__subDB')) 
-        assert os.path.exists( os.path.join(d1._path, '__d2', 'det_fname.npy'))
-        
-        with PDS_det_fname(name='d2', verbose=VERBOSE) as d2:
-            assert d2['2k1'] == 1
-            assert np.all(d2['2aa'] == b)
-            
-            assert np.all(d2['aa'] == a)
-            
-            assert d2.has_key('sub1')
-            with d2['sub1'] as sub1:
-                assert sub1['s1'] == 11
-                assert np.all(sub1['a'] == a)
-            
-            assert d2.has_key('sub2')
-            with d2['sub2'] as sub2:
-                assert sub2['s2'] == 22
-                assert np.all(sub2['a2'] == b)
-                
-            
- 
-    finally:
         with PDS(name='d1', verbose=VERBOSE) as d1:
-            d1.erase()
-             
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2.erase()     
-
+            d2.mergeOtherPDS(other_db = d1, update='error', status_interval=0)
+        assert np.all(d2['2aa'] == b)
+        
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        assert d2['2k1'] == 1
+        assert np.all(d2['2aa'] == b)
+        
+        assert np.all(d2['aa'] == a)
+        
+        assert d2.has_key('sub1')
+        with d2['sub1'] as sub1:
+            assert sub1['s1'] == 11
+            assert np.all(sub1['a'] == a)
+        
+        assert d2.has_key('sub2')
+        with d2['sub2'] as sub2:
+            assert sub2['s2'] == 22
+            assert np.all(sub2['a2'] == b)
+                
+     
+def test_convert_SQL_TO_H5():
+    data = np.empty((10,), dtype='<U2')
+    data[0] = 'd\U00008000' 
+    data[1] = 'ha'
+            
+    with PDS_SQL(name='pds_sql') as db:
+        db.clear()
+        db['a'] = 5
+        db[4] = (3, 's', [0])
+        db['uni'] = data 
+        db[b'\xff\xee'] = np.arange(4)
+        
+    
+    with PDS(name='pds_h5') as db_h5:
+        db_h5.clear()
+        db_h5['datautest'] = data
+        with PDS_SQL(name='pds_sql') as db_sql:
+            db_h5.mergeOtherPDS(db_sql, status_interval=0)
+            
+    with PDS(name='pds_h5') as db_h5:
+        assert db_h5['a'] == 5
+        assert db_h5['4'] == (3, 's', [0])
+        assert np.all(db_h5[b'\xff\xee'] == np.arange(4))
+        assert np.all(db_h5['uni'] == data)
       
 if __name__ == "__main__":
     test_clear()
     test_pd()
     test_md5_clash()
     test_pd_bytes()
-
+ 
     test_mp_read_from_sqlite()
     test_from_existing_sub_data()
     test_remove_sub_data_and_check_len()
     test_len()
-
+ 
     test_not_in()
     test_npa()
-#     test_merge()
-#     test_merge_fname_conflict()
+    test_merge()
+    test_merge_fname_conflict()
+    test_link_vs_copy()
+    test_convert_SQL_TO_H5()
     pass

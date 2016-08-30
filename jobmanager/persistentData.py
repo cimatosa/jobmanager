@@ -481,12 +481,7 @@ class PersistentDataStructure(object):
             raise TypeError("update must be one of the following: 'error', 'ignore', 'update'")
         
         transfered = 0
-        ignored = 0
-        
-        if status_interval == 0:
-            PB = progress.ProgressSilentDummy
-        else:
-            PB = progress.ProgressBarFancy   
+        ignored = 0  
         
         with self.__class__(name = other_db_name, 
                             path = other_db_path, 
@@ -495,8 +490,9 @@ class PersistentDataStructure(object):
             c = progress.UnsignedIntValue(val=0)
             m = progress.UnsignedIntValue(val=len(otherData))
             
-            with PB(count=c, max_count=m, verbose=self.verbose, interval=status_interval) as pb:
-                pb.start()
+            with progress.ProgressBarFancy(count=c, max_count=m, verbose=self.verbose, interval=status_interval) as pb:
+                if status_interval > 0:
+                    pb.start()
                 for k in otherData:
         
                     if k in self:
@@ -601,15 +597,17 @@ class PersistentDataStructure_HDF5(object):
             self.db = gr
 
     def _convkey(self, key):
+        dump = False
         if not isinstance(key, (bytes, bytearray)):
             key = bf.dump(key)
-        return key
+            dump = True
+        return key, dump
         
     def _md5(self, binkey):
         return hashlib.md5(binkey).hexdigest()
     
     def __create_group(self, key, overwrite):
-        binkey = self._convkey(key)
+        binkey, dump = self._convkey(key)
         _md5 = self._md5(binkey)
         try:
             gr_md5 = self.db[_md5]
@@ -629,11 +627,12 @@ class PersistentDataStructure_HDF5(object):
         gr = gr_md5.create_group(name)
         gr_md5.attrs['cnt'] = gr_md5.attrs['cnt'] + 1
         gr.attrs['key'] = np.void(binkey)
+        gr.attrs['dump'] = dump
         return gr, binkey
 
     
     def __set_dataset(self, key, data, overwrite):
-        binkey = self._convkey(key)
+        binkey, dump = self._convkey(key)
         _md5 = self._md5(binkey)
         try:
             gr_md5 = self.db[_md5]
@@ -651,22 +650,59 @@ class PersistentDataStructure_HDF5(object):
             
         name = "ds{}".format(gr_md5.attrs['cnt'])
         try:
-            dataset = gr_md5.create_dataset(name, data=data )
+            dataset = gr_md5.create_dataset(name, data=data)
             dataset.attrs['pickle'] = False
-        except ValueError: 
-            dataset = gr_md5.create_dataset(name, data=np.void(pickle.dumps(data)) )
+        except (ValueError, TypeError):
+            try: 
+                dataset = gr_md5.create_dataset(name, data=np.void(pickle.dumps(data)) )
+            except:
+                if not isinstance(key, (bytearray, bytes)):
+                    print(key)
+                                  
+                print("kes:", type(key), "data:", type(data))
             dataset.attrs['pickle'] = True
+            
         gr_md5.attrs['cnt'] = gr_md5.attrs['cnt']+1            
         dataset.attrs['key'] = np.void(binkey)
+        dataset.attrs['dump'] = dump
         return dataset, binkey
                         
 
     # implements '[]' operator setter
-    def __setitem__(self, key, value, overwrite=True):
-        if isinstance(value, self.__class__):           
-            gr, binkey = self.__create_group(key, overwrite) 
-            gr.update(value.db)
+    def __setitem__(self, key, value, overwrite=True, copy=True):
+        if isinstance(value, self.__class__):
+            binkey, dump = self._convkey(key)           
+
+            if copy:        
+                _md5 = self._md5(binkey)
+                try:
+                    gr_md5 = self.db[_md5]
+                except KeyError:
+                    gr_md5 = self.db.create_group(_md5)
+                    gr_md5.attrs['cnt'] = 0        
+                
+                for k in gr_md5:
+                    test_binkey = gr_md5[k].attrs['key'].tostring()        
+                    if binkey == test_binkey:
+                        if not overwrite:
+                            raise KeyError("key exists but overwrite == False")
+                        del gr_md5[k]
+                        break
+                
+                name = "gr{}".format(gr_md5.attrs['cnt'])
+                gr_md5.copy(source = value.db, 
+                            dest   = gr_md5, 
+                            name   = name, 
+                            expand_soft     = True, 
+                            expand_external = True)
+                gr_md5.attrs['cnt'] = gr_md5.attrs['cnt'] + 1
+                gr = gr_md5[name]
+            else:
+                gr = self.__create_group(key, overwrite)[0]
+                gr.update(value.db)
+                
             gr.attrs['key'] = np.void(binkey)
+            gr.attrs['dump'] = dump
         else:
             self.__set_dataset(key, value, overwrite)
             
@@ -681,8 +717,8 @@ class PersistentDataStructure_HDF5(object):
             return PersistentDataStructure_HDF5(gr=dataset, verbose=self.verbose)                    
                        
     # implements '[]' operator getter
-    def __getitem__(self, key):
-        binkey = self._convkey(key)
+    def __getitem__(self, key, h5obj=False):
+        binkey = self._convkey(key)[0]
         _md5 = self._md5(binkey)              
         try:
             gr_md5 = self.db[_md5]           
@@ -692,7 +728,10 @@ class PersistentDataStructure_HDF5(object):
         for k in gr_md5:
             test_binkey = gr_md5[k].attrs['key'].tostring()
             if binkey == test_binkey:
-                return self.__dataset_to_object(gr_md5[k])
+                if not h5obj:
+                    return self.__dataset_to_object(gr_md5[k])
+                else:
+                    return gr_md5[k]
         
         raise KeyError("key not found in {}".format(self.__classname))
 
@@ -712,7 +751,7 @@ class PersistentDataStructure_HDF5(object):
         
     # implements '[]' operator deletion
     def __delitem__(self, key):
-        binkey = self._convkey(key)
+        binkey = self._convkey(key)[0]
         _md5 = self._md5(binkey)
         try:
             gr_md5 = self.db[_md5]
@@ -733,14 +772,16 @@ class PersistentDataStructure_HDF5(object):
         self.need_open()
         for gr_md5 in self.db.values():
             for ob in gr_md5.values():
-                yield self.__dataset_to_object(ob)             
+                key = ob.attrs['key'].tostring()
+                if ob.attrs['dump']:
+                    key = bf.load(key)
+                yield key             
 
     def open(self):
-        if self._is_group:
-            raise RuntimeError("can not open a group")
-        if self.verbose > 1:
-            print("open", self._filename)            
-        self.db = h5py.File(self._filename)
+        if not self._is_group:
+            self.db = h5py.File(self._filename)
+            if self.verbose > 1:
+                print("open", self._filename)
         self._open = True
         
     def is_open(self):
@@ -754,18 +795,15 @@ class PersistentDataStructure_HDF5(object):
             raise RuntimeError("{} needs to be open".format(self.__classname))
         
     def close(self):
-        if self._is_group:
-            raise RuntimeError("can not close as group")
-        
-        self.db.close()
+        if not self._is_group:
+            self.db.close()
         self._open = False
                                
     def __enter__(self):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
-        if not self._is_group:
-            self.close()
+        self.close()
                 
     def clear(self):
         self.need_open()
@@ -778,21 +816,10 @@ class PersistentDataStructure_HDF5(object):
         if self.verbose > 1:
             print("remove", self._filename)
         os.remove(path = self._filename)                           
-              
     
     def has_key(self, key):
         return self.__contains__(key)
-        
-    def setData(self, key, value, overwrite=False):
-        if overwrite:
-            self.__delitem__(key)
-        self.__setitem__(key, value, overwrite)          
-            
-            
-    def newSubData(self, key, overwrite=False):
-        gr, binkey = self.__create_group(key, overwrite)
-        return PersistentDataStructure_HDF5(gr = gr, verbose = self.verbose)
-        
+    
     def getData(self, key, create_sub_data = False):
         try:
             return self.__getitem__(key)
@@ -802,10 +829,81 @@ class PersistentDataStructure_HDF5(object):
             else:
                 raise
             
-    def setDataFromSubData(self, key, subData, overwrite=False):
-        self.setData(key, subData, overwrite)
+    def getH5Object(self, key):
+        return self.__getitem__(key, h5obj=True)
         
-    def mergeOtherPDS(self, other_db_name, other_db_path = './', update = 'error', status_interval=5):
-        raise NotImplementedError
+    def setData(self, key, value, overwrite=False):
+        if overwrite:
+            self.__delitem__(key)
+        self.__setitem__(key, value, overwrite)
+        
+            
+    def newSubData(self, key, overwrite=False):
+        gr, binkey = self.__create_group(key, overwrite)
+        return PersistentDataStructure_HDF5(gr = gr, verbose = self.verbose)
+        
+            
+    def setDataFromSubData(self, key, subData, overwrite=False, copy=True):
+        if overwrite:
+            self.__delitem__(key)
+        self.__setitem__(key, subData, overwrite, copy)    
+        
+    def mergeOtherPDS(self, other_db, update = 'error', status_interval=5):
+        """
+            update determines the update scheme
+                error : raise error when key exists
+                ignore: do nothing when key exists, keep old value
+                update: update value when key exists with value from otherData 
+        """
+        error = False
+        if update == 'error':
+            error = True
+        elif update == 'ignore':
+            ignore = True
+        elif update == 'update':
+            ignore = False
+        else:
+            raise TypeError("update must be one of the following: 'error', 'ignore', 'update'")
+        
+        transfered = 0
+        ignored = 0
+        
+        c = progress.UnsignedIntValue(val=0)
+        m = progress.UnsignedIntValue(val=len(other_db))
+        
+        with progress.ProgressBarFancy(count=c, max_count=m, verbose=self.verbose, interval=status_interval) as pb:
+            if status_interval > 0:
+                pb.start()
+                
+            for k in other_db:       
+                if k in self:
+                    if error:
+                        raise KeyError("merge error, key already found in PDS")
+                    else:
+                        if ignore:
+                            if self.verbose > 1:
+                                print("ignore key", k)
+                            ignored += 1
+                            continue
+                        else:
+                            if self.verbose > 1:
+                                print("replace key", k)
+                            del self[k]
+    
+                value = other_db[k]
+                try:
+                    self[k] = value
+                    transfered += 1
+                finally:
+                    if isinstance(value, self.__class__):
+                        value.close()
+                
+                with c.get_lock():
+                    c.value += 1
+                sys.stdout.flush()
+        
+        print("merge summary:")
+        print("   transfered values:", transfered)
+        print("      ignored values:", ignored)
 
        

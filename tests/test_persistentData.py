@@ -377,6 +377,7 @@ def test_merge():
     a = np.random.rand(5)
     
     with PDS(name='d1', verbose=VERBOSE) as d1:
+        d1.clear()
         d1['k1'] = 1
         d1['k2'] = 2
         d1['k3'] = 3
@@ -388,57 +389,51 @@ def test_merge():
             sub1['a'] = a
             
     with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2.clear()
         d2['2k1'] = 1
         
         d2.mergeOtherPDS(other_db_name = "d1", status_interval=0)
 
+
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        assert 'k1' in d2
+        assert d2['k1'] == 1
+        assert 'k2' in d2
+        assert d2['k2'] == 2
+        assert 'k3' in d2
+        assert d2['k3'] == 3
+        assert 'aa' in d2
+        assert np.all(d2['aa'] == a)            
+            
+        assert "sub1" in d2
+        assert isinstance(d2["sub1"], PDS)
+        with d2["sub1"] as sub:
+            assert 's1' in sub
+            assert sub['s1'] == 11
+            assert 's2' in sub
+            assert sub['s2'] == 12
+            assert 's3' in sub
+            assert sub['s3'] == 13
+            assert 'a' in sub
+            assert np.all(sub['a'] == a)
+            
     try:
         with PDS(name='d2', verbose=VERBOSE) as d2:
-            assert 'k1' in d2
-            assert d2['k1'] == 1
-            assert 'k2' in d2
-            assert d2['k2'] == 2
-            assert 'k3' in d2
-            assert d2['k3'] == 3
-            assert 'aa' in d2
-            assert np.all(d2['aa'] == a)            
-                
-            assert "sub1" in d2
-            assert isinstance(d2["sub1"], PDS)
-            with d2["sub1"] as sub:
-                assert 's1' in sub
-                assert sub['s1'] == 11
-                assert 's2' in sub
-                assert sub['s2'] == 12
-                assert 's3' in sub
-                assert sub['s3'] == 13
-                assert 'a' in sub
-                assert np.all(sub['a'] == a)
-                
-        try:
-            with PDS(name='d2', verbose=VERBOSE) as d2:
-                d2.mergeOtherPDS(other_db_name = "d1", update='error', status_interval=0)
-        except KeyError as e:
-            print(e)
-            print("this is ok!")
-            pass
+            d2.mergeOtherPDS(other_db_name = "d1", update='error', status_interval=0)
+    except KeyError as e:
+        print(e)
+        print("this is ok!")
+        pass
+    
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2['k1'] = 'k1'
+        d2.mergeOtherPDS(other_db_name = "d1", update='ignore', status_interval=0)
+        assert d2['k1'] == 'k1'
         
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2['k1'] = 'k1'
-            d2.mergeOtherPDS(other_db_name = "d1", update='ignore', status_interval=0)
-            assert d2['k1'] == 'k1'
-            
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2['k1'] = 'k1'
-            d2.mergeOtherPDS(other_db_name = "d1", update='update', status_interval=0)
-            assert d2['k1'] == 1        
-            
-    finally:
-        with PDS(name='d1', verbose=VERBOSE) as d1:
-            d1.erase()
-            
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2.erase()        
+    with PDS(name='d2', verbose=VERBOSE) as d2:
+        d2['k1'] = 'k1'
+        d2.mergeOtherPDS(other_db_name = "d1", update='update', status_interval=0)
+        assert d2['k1'] == 1                
 
 def test_merge_fname_conflict():
     
@@ -478,12 +473,14 @@ def test_merge_fname_conflict():
     b = np.random.rand(5)
     
     with PDS_det_fname(name='d1', verbose=VERBOSE) as d1:
+        d1.clear()
         d1.newNPA('aa', a)
         with d1.newSubData('sub1') as sub1:
             sub1['s1'] = 11
             sub1.newNPA('a', a)
             
     with PDS_det_fname(name='d2', verbose=VERBOSE) as d2:
+        d2.clear()
         d2['2k1'] = 1
         d2.newNPA('2aa', b)
         with d2.newSubData('sub2') as sub2:
@@ -495,36 +492,27 @@ def test_merge_fname_conflict():
         assert np.all(d2['2aa'] == b)
         
 
-    try:
-        assert os.path.exists( os.path.join(d1._path, '__d1', '__subDB')) 
-        assert os.path.exists( os.path.join(d1._path, '__d1', 'det_fname.npy'))
-        assert os.path.exists( os.path.join(d1._path, '__d2', '__subDB')) 
-        assert os.path.exists( os.path.join(d1._path, '__d2', 'det_fname.npy'))
+
+    assert os.path.exists( os.path.join(d1._path, '__d1', '__subDB')) 
+    assert os.path.exists( os.path.join(d1._path, '__d1', 'det_fname.npy'))
+    assert os.path.exists( os.path.join(d1._path, '__d2', '__subDB')) 
+    assert os.path.exists( os.path.join(d1._path, '__d2', 'det_fname.npy'))
+    
+    with PDS_det_fname(name='d2', verbose=VERBOSE) as d2:
+        assert d2['2k1'] == 1
+        assert np.all(d2['2aa'] == b)
         
-        with PDS_det_fname(name='d2', verbose=VERBOSE) as d2:
-            assert d2['2k1'] == 1
-            assert np.all(d2['2aa'] == b)
-            
-            assert np.all(d2['aa'] == a)
-            
-            assert d2.has_key('sub1')
-            with d2['sub1'] as sub1:
-                assert sub1['s1'] == 11
-                assert np.all(sub1['a'] == a)
-            
-            assert d2.has_key('sub2')
-            with d2['sub2'] as sub2:
-                assert sub2['s2'] == 22
-                assert np.all(sub2['a2'] == b)
-                
-            
- 
-    finally:
-        with PDS(name='d1', verbose=VERBOSE) as d1:
-            d1.erase()
-             
-        with PDS(name='d2', verbose=VERBOSE) as d2:
-            d2.erase()     
+        assert np.all(d2['aa'] == a)
+        
+        assert d2.has_key('sub1')
+        with d2['sub1'] as sub1:
+            assert sub1['s1'] == 11
+            assert np.all(sub1['a'] == a)
+        
+        assert d2.has_key('sub2')
+        with d2['sub2'] as sub2:
+            assert sub2['s2'] == 22
+            assert np.all(sub2['a2'] == b)
 
       
 if __name__ == "__main__":

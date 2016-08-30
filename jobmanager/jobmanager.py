@@ -152,7 +152,10 @@ class JobManager_Client(object):
                  show_statusbar_for_jobs = True,
                  show_counter_only       = False,
                  interval                = 0.3,
-                 emergency_dump_path     = '.'):
+                 emergency_dump_path     = '.',
+                 result_q_timeout        = 30,                 
+                 job_q_timeout           = 0.1,
+                 fail_q_timeout          = 10):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -188,6 +191,10 @@ class JobManager_Client(object):
         self.show_counter_only = show_counter_only
         self.interval = interval
         self.verbose = verbose
+        
+        self._result_q_timeout = result_q_timeout
+        self._job_q_timeout    = job_q_timeout
+        self._fail_q_timeout   = fail_q_timeout
         
         self._pid = os.getpid()
         self._sid = os.getsid(self._pid)
@@ -346,7 +353,8 @@ class JobManager_Client(object):
             pickle.dump(res, f)
 
     @staticmethod
-    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs, emergency_dump_path):
+    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs, 
+                      emergency_dump_path, job_q_timeout, fail_q_timeout, result_q_timeout):
         """
         the wrapper spawned nproc times calling and handling self.func
         """
@@ -435,7 +443,7 @@ class JobManager_Client(object):
                 # try to get an item from the job_q                
                 try:
                     tg_0 = time.time()
-                    arg = job_q_get(block = True, timeout = 0.1)
+                    arg = job_q_get(block = True, timeout = job_q_timeout)
                     tg_1 = time.time()
                     time_queue += (tg_1-tg_0)
                  
@@ -491,7 +499,7 @@ class JobManager_Client(object):
                         print("{}: try to send send failed arg to fail_q ...".format(identifier), end='')
                         sys.stdout.flush()
                     try:
-                        fail_q_put((arg, err.__name__, hostname), timeout=10)
+                        fail_q_put((arg, err.__name__, hostname), block = True, timeout=fail_q_timeout)
                     # handle SystemExit in outer try ... except                        
                     except SystemExit as e:
                         if verbose > 1:
@@ -512,7 +520,7 @@ class JobManager_Client(object):
                 else:
                     try:
                         tp_0 = time.time()
-                        result_q_put((arg, res))
+                        result_q_put((arg, res), block = True, timeout=result_q_timeout)
                         tp_1 = time.time()
                         time_queue += (tp_1-tp_0)
                         
@@ -540,7 +548,7 @@ class JobManager_Client(object):
                 print("{}: try to put arg back to job_q ...".format(identifier), end='')
                 sys.stdout.flush()
             try:
-                job_q.put(arg, timeout=10)
+                job_q.put(arg, timeout=fail_q_timeout)
             # handle SystemExit in outer try ... except                        
             except SystemExit as e:
                 if verbose > 1:
@@ -631,7 +639,10 @@ class JobManager_Client(object):
                                                                 m_set_by_function[i],
                                                                 reset_pbc,
                                                                 self.njobs,
-                                                                self.emergency_dump_path))
+                                                                self.emergency_dump_path,
+                                                                self._job_q_timeout,
+                                                                self._fail_q_timeout,
+                                                                self._result_q_timeout))
                 self.procs.append(p)
                 p.start()
                 time.sleep(0.3)
