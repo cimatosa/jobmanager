@@ -798,6 +798,9 @@ class PersistentDataStructure_HDF5(object):
         if not self._is_group:
             self.db.close()
         self._open = False
+        
+    def is_subdata(self, key):
+        return isinstance(self.getH5Object(key), (h5py.Group))
                                
     def __enter__(self):
         return self
@@ -906,4 +909,54 @@ class PersistentDataStructure_HDF5(object):
         print("   transfered values:", transfered)
         print("      ignored values:", ignored)
 
-       
+def mergePDS(db_source, db_dest, update = 'error', status_interval=5, show_summary=True):
+    """
+        update determines the update scheme
+            error : raise error when key exists
+            ignore: do nothing when key exists, keep old value
+            update: update value when key exists with value from otherData 
+    """
+    overwrite = (update == 'update')
+    
+    transfered = 0
+    ignored = 0
+    
+    c = progress.UnsignedIntValue(val=0)
+    m = progress.UnsignedIntValue(val=len(db_source))
+    
+    with progress.ProgressBarFancy(count=c, max_count=m, interval=status_interval) as pb:
+        if status_interval > 0:
+            pb.start()
+            
+        for k in db_source:
+            if db_source.is_subdata(k):
+                try:
+                    sub_db_dest = db_dest.newSubData(k, overwrite)
+                except KeyError:
+                    if update == 'error':
+                        raise
+                sub_db_source = db_source[k]
+                t, i = mergePDS(sub_db_source, sub_db_dest, status_interval=0, show_summary=False)
+                transfered += t
+                ignored += i
+                sub_db_source.close()
+                sub_db_dest.close()
+            else:
+                try:
+                    db_dest.setData(k, db_source[k], overwrite)
+                    transfered += 1
+                except KeyError:
+                    if update == 'error':
+                        print(k)
+                        raise
+                    ignored += 1
+            
+            with c.get_lock():
+                c.value += 1
+            sys.stdout.flush()
+    
+    if show_summary:
+        print("merge summary:")
+        print("   transfered values:", transfered)
+        print("      ignored values:", ignored)
+    return transfered, ignored

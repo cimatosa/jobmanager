@@ -18,6 +18,7 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 from jobmanager.persistentData import PersistentDataStructure_HDF5 as PDS
 from jobmanager.persistentData import PersistentDataStructure as PDS_SQL
+from jobmanager.persistentData import mergePDS
 
 VERBOSE = 1
 
@@ -514,35 +515,41 @@ def test_convert_SQL_TO_H5():
         db[4] = (3, 's', [0])
         db['uni'] = data 
         db[b'\xff\xee'] = np.arange(4)
+        with db.newSubData('sub') as sub:
+            sub['d1'] = 1
+            sub['d2'] = data
         
     
     with PDS(name='pds_h5') as db_h5:
         db_h5.clear()
         db_h5['datautest'] = data
         with PDS_SQL(name='pds_sql') as db_sql:
-            db_h5.mergeOtherPDS(db_sql, status_interval=0)
+            mergePDS(db_sql, db_h5, status_interval=0)
             
     with PDS(name='pds_h5') as db_h5:
         assert db_h5['a'] == 5
         assert db_h5['4'] == (3, 's', [0])
         assert np.all(db_h5[b'\xff\xee'] == np.arange(4))
         assert np.all(db_h5['uni'] == data)
-      
+        sub = db_h5['sub']
+        assert sub['d1'] == 1
+        assert np.all(sub['d2'] == data)
+             
 if __name__ == "__main__":
-    test_clear()
-    test_pd()
-    test_md5_clash()
-    test_pd_bytes()
- 
-    test_mp_read_from_sqlite()
-    test_from_existing_sub_data()
-    test_remove_sub_data_and_check_len()
-    test_len()
- 
-    test_not_in()
-    test_npa()
-    test_merge()
-    test_merge_fname_conflict()
-    test_link_vs_copy()
+#     test_clear()
+#     test_pd()
+#     test_md5_clash()
+#     test_pd_bytes()
+#  
+#     test_mp_read_from_sqlite()
+#     test_from_existing_sub_data()
+#     test_remove_sub_data_and_check_len()
+#     test_len()
+#  
+#     test_not_in()
+#     test_npa()
+#     test_merge()
+#     test_merge_fname_conflict()
+#     test_link_vs_copy()
     test_convert_SQL_TO_H5()
     pass
