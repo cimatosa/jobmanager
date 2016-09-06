@@ -114,6 +114,36 @@ def humanize_size(size_in_bytes):
         i += 1
     return "{:.2f}{}B".format(size_in_bytes, units[i]) 
 
+def get_user():
+    try:
+        out = subprocess.check_output('id -un', shell=True).decode().strip()
+        return out
+    except Exception as e:
+        print("failed to determine user")
+        print(e)
+        return None
+    
+def get_user_process_limit():
+    try:
+        out = subprocess.check_output('ulimit -u', shell=True).decode().strip()
+        return int(out)
+    except Exception as e:
+        print("failed to determine maximum number of user processeses")
+        print(e)
+        return None
+    
+def get_user_num_process():
+    try:
+        out = subprocess.check_output('ps ut | wc -l', shell=True).decode().strip()
+        return int(out)-2
+    except Exception as e:
+        print("failed to determine current number of processes")
+        print(e)
+        return None    
+    
+    
+         
+
 class JobManager_Client(object):
     """
     Calls the functions self.func with arguments fetched from the job_q.
@@ -1131,6 +1161,8 @@ class JobManager_Server(object):
         
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
         pid = os.getpid()
+        user = get_user()
+        max_proc = get_user_process_limit()
         
         if self.verbose > 1:
             print("{}: start processing incoming results".format(self._identifier))
@@ -1140,7 +1172,7 @@ class JobManager_Server(object):
         else:
             Progress = progress.ProgressSilentDummy
   
-        info_line = progress.StringValue(num_of_bytes=80)
+        info_line = progress.StringValue(num_of_bytes=100)
   
         with Progress(count             = self._numresults,
                       max_count         = self._numjobs, 
@@ -1154,7 +1186,11 @@ class JobManager_Server(object):
             stat.start()
         
             while (len(self.args_dict) - self.fail_q.qsize()) > 0:
-                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(), self.job_q.qsize(), self.numresults).encode('utf-8')
+                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}, proc (curr/max): {}/{}".format(self.result_q.qsize(), 
+                                                                                                                        self.job_q.qsize(), 
+                                                                                                                        self.numresults,
+                                                                                                                        get_user_num_process(),
+                                                                                                                        max_proc).encode('utf-8')
         
                 # allows for update of the info line
                 try:
