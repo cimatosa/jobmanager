@@ -75,7 +75,8 @@ class PersistentDataStructure(object):
         If you want to use "complicated" python objects as binary keys make sure you
         implement your own pickle behavior without the need of dictionaries.   
     """
-    def __init__(self, name, path="./", verbose=1):
+    def __init__(self, name, path="./", verbose=1):        
+        warnings.warn("use PersistentDataStructure_HDF5 instead!", DeprecationWarning)
         self._open = False
         self._name = name
         self._path = abspath(path)
@@ -596,6 +597,15 @@ class PersistentDataStructure_HDF5(object):
             self._filename = None
             self.db = gr
 
+        if 'size' not in self.db.attrs:
+            self.db.attrs['size'] = 0
+            
+        if len(self.db) > self.db.attrs['size']:
+            print("correcting size, might take a while ...")
+            self.db.attrs['size'] = self.__calc_len()
+
+                
+
     def _convkey(self, key):
         dump = False
         if not isinstance(key, (bytes, bytearray)):
@@ -621,10 +631,12 @@ class PersistentDataStructure_HDF5(object):
                 if not overwrite:
                     raise KeyError("key exists but overwrite == False")
                 del gr_md5[k]
+                self.db.attrs['size'] = self.db.attrs['size']-1 
                 break        
             
         name = "gr{}".format(gr_md5.attrs['cnt'])
         gr = gr_md5.create_group(name)
+        self.db.attrs['size'] = self.db.attrs['size']+1
         gr_md5.attrs['cnt'] = gr_md5.attrs['cnt'] + 1
         gr.attrs['key'] = np.void(binkey)
         gr.attrs['dump'] = dump
@@ -646,22 +658,19 @@ class PersistentDataStructure_HDF5(object):
                 if not overwrite:
                     raise KeyError("key exists but overwrite == False")
                 del gr_md5[k]
+                self.db.attrs['size'] = self.db.attrs['size']-1
                 break
             
         name = "ds{}".format(gr_md5.attrs['cnt'])
         try:
             dataset = gr_md5.create_dataset(name, data=data)
+            self.db.attrs['size'] = self.db.attrs['size']+1
             dataset.attrs['pickle'] = False
         except (ValueError, TypeError):
-            try: 
-                dataset = gr_md5.create_dataset(name, data=np.void(pickle.dumps(data)) )
-            except:
-                if not isinstance(key, (bytearray, bytes)):
-                    print(key)
-                                  
-                print("kes:", type(key), "data:", type(data))
+            dataset = gr_md5.create_dataset(name, data=np.void(pickle.dumps(data)) )
+            self.db.attrs['size'] = self.db.attrs['size']+1
             dataset.attrs['pickle'] = True
-            
+        
         gr_md5.attrs['cnt'] = gr_md5.attrs['cnt']+1            
         dataset.attrs['key'] = np.void(binkey)
         dataset.attrs['dump'] = dump
@@ -687,6 +696,7 @@ class PersistentDataStructure_HDF5(object):
                         if not overwrite:
                             raise KeyError("key exists but overwrite == False")
                         del gr_md5[k]
+                        self.db.attrs['size'] = self.db.attrs['size']-1
                         break
                 
                 name = "gr{}".format(gr_md5.attrs['cnt'])
@@ -695,11 +705,13 @@ class PersistentDataStructure_HDF5(object):
                             name   = name, 
                             expand_soft     = True, 
                             expand_external = True)
+                self.db.attrs['size'] = self.db.attrs['size']+1
                 gr_md5.attrs['cnt'] = gr_md5.attrs['cnt'] + 1
                 gr = gr_md5[name]
             else:
                 gr = self.__create_group(key, overwrite)[0]
                 gr.update(value.db)
+                gr.attrs['size'] = value.db.attrs['size'] 
                 
             gr.attrs['key'] = np.void(binkey)
             gr.attrs['dump'] = dump
@@ -741,28 +753,42 @@ class PersistentDataStructure_HDF5(object):
             self.__getitem__(key)
             return True
         except KeyError:
-            return False            
-        
-    def __len__(self):
+            return False
+    
+    def calc_len(self):
+        return self.__calc_len()
+
+    def __calc_len(self):            
         l = 0
-        for gr_md5 in self.db:
-            l += len(self.db[gr_md5])
+        c = progress.UnsignedIntValue(val=0)
+        m = progress.UnsignedIntValue(val=len(self.db))
+    
+        with progress.ProgressBarFancy(count=c, max_count=m, interval=2) as pb:
+            if (self.verbose > 0) and (m.value > 100):
+                pb.start() 
+            for gr_md5 in self.db:
+                l += len(self.db[gr_md5])
+                with c.get_lock():
+                    c.value += 1
+                
         return l
+    
+    def __len__(self):
+        return self.db.attrs['size']        
         
     # implements '[]' operator deletion
     def __delitem__(self, key):
         binkey = self._convkey(key)[0]
         _md5 = self._md5(binkey)
-        try:
-            gr_md5 = self.db[_md5]
-        except KeyError:
-            return
+        
+        gr_md5 = self.db[_md5]
             
         for k in gr_md5:
             test_binkey = gr_md5[k].attrs['key'].tostring()
                 
             if binkey == test_binkey:
                 del gr_md5[k]
+                self.db.attrs['size'] = self.db.attrs['size']-1
         
         if len(gr_md5) == 0:
             del self.db[_md5]
@@ -813,7 +839,7 @@ class PersistentDataStructure_HDF5(object):
                
         for k in self.db:
             del self.db[k]
-        self.db.attrs['cnt'] = 0
+        self.db.attrs['size'] = 0
             
     def erase(self):
         if self.verbose > 1:
@@ -852,62 +878,11 @@ class PersistentDataStructure_HDF5(object):
         self.__setitem__(key, subData, overwrite, copy)    
         
     def mergeOtherPDS(self, other_db, update = 'error', status_interval=5):
-        """
-            update determines the update scheme
-                error : raise error when key exists
-                ignore: do nothing when key exists, keep old value
-                update: update value when key exists with value from otherData 
-        """
-        error = False
-        if update == 'error':
-            error = True
-        elif update == 'ignore':
-            ignore = True
-        elif update == 'update':
-            ignore = False
-        else:
-            raise TypeError("update must be one of the following: 'error', 'ignore', 'update'")
-        
-        transfered = 0
-        ignored = 0
-        
-        c = progress.UnsignedIntValue(val=0)
-        m = progress.UnsignedIntValue(val=len(other_db))
-        
-        with progress.ProgressBarFancy(count=c, max_count=m, verbose=self.verbose, interval=status_interval) as pb:
-            if status_interval > 0:
-                pb.start()
-                
-            for k in other_db:       
-                if k in self:
-                    if error:
-                        raise KeyError("merge error, key already found in PDS")
-                    else:
-                        if ignore:
-                            if self.verbose > 1:
-                                print("ignore key", k)
-                            ignored += 1
-                            continue
-                        else:
-                            if self.verbose > 1:
-                                print("replace key", k)
-                            del self[k]
-    
-                value = other_db[k]
-                try:
-                    self[k] = value
-                    transfered += 1
-                finally:
-                    if isinstance(value, self.__class__):
-                        value.close()
-                
-                with c.get_lock():
-                    c.value += 1
-                sys.stdout.flush()
-        
-        print("merge summary:")
-        print("   transfered values:", transfered)
-        print("      ignored values:", ignored)
+        mergePDS(db_source       = other_db, 
+                 db_dest         = self, 
+                 update          = update, 
+                 status_interval = status_interval, 
+                 show_summary    = True)
 
 def mergePDS(db_source, db_dest, update = 'error', status_interval=5, show_summary=True):
     """
@@ -935,6 +910,8 @@ def mergePDS(db_source, db_dest, update = 'error', status_interval=5, show_summa
                 except KeyError:
                     if update == 'error':
                         raise
+                    assert update == 'ignore'
+                    continue
                 sub_db_source = db_source[k]
                 t, i = mergePDS(sub_db_source, sub_db_dest, status_interval=0, show_summary=False)
                 transfered += t
@@ -943,7 +920,9 @@ def mergePDS(db_source, db_dest, update = 'error', status_interval=5, show_summa
                 sub_db_dest.close()
             else:
                 try:
-                    db_dest.setData(k, db_source[k], overwrite)
+                    value = db_source[k]
+                    db_dest.setData(k, value, overwrite)
+                    del value
                     transfered += 1
                 except KeyError:
                     if update == 'error':

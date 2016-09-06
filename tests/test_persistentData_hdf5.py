@@ -10,6 +10,8 @@ from shutil import rmtree
 
 import warnings
 warnings.filterwarnings('error')
+warnings.filterwarnings(action = "once", 
+                        category= DeprecationWarning)
     
 import numpy as np
 
@@ -39,7 +41,8 @@ def test_md5_clash():
             n += 1
         assert n == 200
 
-def test_pd():   
+def test_pd():
+   
     with PDS(name='test_data', verbose=VERBOSE) as data:
         data.clear()
         key = 'a'
@@ -420,6 +423,26 @@ def test_merge():
 
 def test_link_vs_copy():
     data = np.arange(0,5)
+    
+    with PDS(name='d', verbose=VERBOSE) as d:
+        d.clear()
+        sub = d.getData('sub', create_sub_data = True)
+        sub['3'] = 3
+        sub['4'] = 4
+
+        h5obj = d.getH5Object('sub')
+        assert h5obj.attrs['size'] == 2        
+        
+        d.setDataFromSubData('gr1_copy', sub, copy=False)
+        h5obj = d.getH5Object('gr1_copy')
+        assert h5obj.attrs['size'] == 2
+        
+        d.setDataFromSubData('gr1_link', sub, copy=True)
+        h5obj = d.getH5Object('gr1_link')
+        assert h5obj.attrs['size'] == 2
+        
+        assert len(d) == 3
+        
     with PDS(name='d', verbose=VERBOSE) as d:
         d.clear()
         gr1 = d.getData('gr1', create_sub_data=True)
@@ -428,19 +451,19 @@ def test_link_vs_copy():
         keys = [k for k in d['gr1']]
         assert keys[0] == 'str'
         assert keys[1] == 'data'
-
-                
+                        
         d.setDataFromSubData('gr1_link', gr1, copy=False)
+        assert len(d) == d.calc_len()
         
         keys = [k for k in d['gr1']]
         assert keys[0] == 'str'
         assert keys[1] == 'data'
         keys = [k for k in d['gr1_link']]
         assert keys[0] == 'str'
-        assert keys[1] == 'data'
-        
+        assert keys[1] == 'data'         
         
         d.setDataFromSubData('gr1_copy', gr1, copy=True)
+        assert len(d) == d.calc_len()
         keys = [k for k in d['gr1']]
         assert keys[0] == 'str'
         assert keys[1] == 'data'
@@ -534,22 +557,40 @@ def test_convert_SQL_TO_H5():
         sub = db_h5['sub']
         assert sub['d1'] == 1
         assert np.all(sub['d2'] == data)
+        
+def test_iterator():
+    with PDS(name='pds') as db:
+        db.clear()
+        db['a'] = 5
+        db[4] = (3, 's', [0])
+        db['uni'] = np.arange(10) 
+        db[b'\xff\xee'] = np.arange(4)
+        with db.newSubData('sub') as sub:
+            sub['d1'] = 1
+            sub['d2'] = np.arange(5)
+
+    db = PDS(name='pds')
+    for k in db:
+        print(k)
+    db.close()
+    
              
 if __name__ == "__main__":
-#     test_clear()
-#     test_pd()
-#     test_md5_clash()
-#     test_pd_bytes()
-#  
-#     test_mp_read_from_sqlite()
-#     test_from_existing_sub_data()
-#     test_remove_sub_data_and_check_len()
-#     test_len()
-#  
-#     test_not_in()
-#     test_npa()
-#     test_merge()
-#     test_merge_fname_conflict()
-#     test_link_vs_copy()
+    test_clear()
+    test_pd()
+    test_md5_clash()
+    test_pd_bytes()
+    
+    test_mp_read_from_sqlite()
+    test_from_existing_sub_data()
+    test_remove_sub_data_and_check_len()
+    test_len()
+    
+    test_not_in()
+    test_npa()
+    test_merge()
+    test_merge_fname_conflict()
+    test_link_vs_copy()
     test_convert_SQL_TO_H5()
+    test_iterator()
     pass
