@@ -1622,9 +1622,9 @@ def mod_id(identifier):
 
 def check_if_host_is_reachable_unix_ping(adr, timeout=5):
     try:
-        subprocess.check_call(['ping', '-c 1', '-W {}'.format(int(timeout)), adr], stdout=subprocess.DEVNULL)
+        subprocess.check_output(['ping', '-c 1', '-W {}'.format(int(timeout)), adr])
     except subprocess.CalledProcessError as e:
-        raise JMHostNotReachableError("could not reach host '{}'".format(adr))
+        raise JMHostNotReachableError("could not reach host '{}'\nping error reads: {}".format(adr, e.output))
         
 
 def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
