@@ -375,7 +375,7 @@ class PersistentDataStructure(object):
         
         
             
-    def newSubData(self, key):
+    def newSubData(self, key, overwrite=False):
         """
             if key is not in database
             create a new database (sqlitedict)
@@ -387,18 +387,23 @@ class PersistentDataStructure(object):
             managed (simple increasing number)   
         """
         self.need_open()
-        if not key in self.db:
-            d = {'name': self._new_rand_file_name(make_dir=True),
-                 'magic': MAGIC_SIGN}
+        if key in self.db:
+            if overwrite:
+                del self.db[key]
+            else:
+                raise KeyError("can NOT create new SubData, key already found!")
+        
+        d = {'name': self._new_rand_file_name(make_dir=True),
+             'magic': MAGIC_SIGN}
+        
+        if self.verbose > 1:
+            print("newSubData (key)", key, " (name)", d['name'])
+        
+        self.db[key] = d
+        self.db.commit()
+        return self.__class__(name = d['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
+
             
-            if self.verbose > 1:
-                print("newSubData (key)", key, " (name)", d['name'])
-            
-            self.db[key] = d
-            self.db.commit()
-            return self.__class__(name = d['name'], path = os.path.join(self._dirname) , verbose = self.verbose)
-        else:
-            raise RuntimeError("can NOT create new SubData, key already found!")
         
     def getData(self, key, create_sub_data = False):
         self.need_open()
