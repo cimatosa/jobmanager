@@ -564,6 +564,8 @@ class JobManager_Client(object):
                         JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
                         break
                     
+                    del res
+                    
                 cnt += 1
                 reset_pbc()
              
@@ -758,13 +760,14 @@ class JobManager_Server(object):
         a SIGKILL.  
     """
     def __init__(self, 
-                  authkey,
-                  const_arg=None, 
-                  port=42524, 
-                  verbose=1, 
-                  msg_interval=1,
-                  fname_dump='auto',
-                  speed_calc_cycles=50):
+                 authkey,
+                 const_arg=None, 
+                 port=42524, 
+                 verbose=1, 
+                 msg_interval=1,
+                 fname_dump='auto',
+                 speed_calc_cycles=50,
+                 keep_new_result_in_memory = False):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -817,6 +820,7 @@ class JobManager_Server(object):
         self.fname_dump = fname_dump        
         self.msg_interval = msg_interval
         self.speed_calc_cycles = speed_calc_cycles
+        self.keep_new_result_in_memory = keep_new_result_in_memory
 
         # to do some redundant checking, might be removed
         # the args_dict holds all arguments to be processed
@@ -1201,6 +1205,9 @@ class JobManager_Server(object):
                 del self.args_dict[bf.dump(arg)]
                 self.numresults += 1
                 self.process_new_result(arg, result)
+                if not self.keep_new_result_in_memory:
+                    del arg
+                    del result
         
         if self.verbose > 1:
             print("{}: wait {}s before trigger clean up".format(self._identifier, self.__wait_before_stop))
