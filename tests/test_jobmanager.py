@@ -166,12 +166,12 @@ def test_jobmanager_basic():
     global PORT
     PORT += 1
     n = 10
-    p_server = mp.Process(target=start_server, args=(n,))
+    p_server = mp.Process(target=start_server, args=(n,False,2))
     p_server.start()
     
     time.sleep(1)
      
-    p_client = mp.Process(target=start_client)
+    p_client = mp.Process(target=start_client, args=(2,))
     p_client.start()
      
     p_client.join(30)
@@ -911,7 +911,7 @@ if __name__ == "__main__":
         test_jobmanager_basic,
 #         test_jobmanager_server_signals,
 #         test_shutdown_server_while_client_running,
-        test_shutdown_client,
+#         test_shutdown_client,
 #         test_check_fail,
 #         test_jobmanager_read_old_stat,
 #         test_client_status,

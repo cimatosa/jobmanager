@@ -48,6 +48,25 @@ import traceback
 import warnings
 from . import binfootprint as bf
 
+import logging
+
+# taken from here: https://mail.python.org/pipermail/python-list/2010-November/591474.html
+class MultiLineFormatter(logging.Formatter):
+    def format(self, record):
+        _str = logging.Formatter.format(self, record)
+        header = str.split(record.message)[0]
+        _str = _str.replace('\n', '\n' + ' '*len(header))
+        return _str
+
+default_log = logging.getLogger(__name__)
+default_log.setLevel(logging.INFO)
+cons_hand = logging.StreamHandler(stream = sys.stderr)
+cons_hand.setLevel(logging.DEBUG)
+fmt = MultiLineFormatter('%(asctime)s %(name)s %(levelname)s : %(message)s')
+cons_hand.setFormatter(fmt)
+default_log.addHandler(cons_hand)
+
+
 from datetime import datetime
 
 # This is a list of all python objects that will be imported upon
@@ -55,9 +74,7 @@ from datetime import datetime
 __all__ = ["JobManager_Client",
            "JobManager_Local",
            "JobManager_Server",
-           "getDateForFileName",
-           "hashDict",
-           "hashableCopyOfNumpyArray"
+           "getDateForFileName"
           ]
            
 
@@ -115,33 +132,16 @@ def humanize_size(size_in_bytes):
     return "{:.2f}{}B".format(size_in_bytes, units[i]) 
 
 def get_user():
-    try:
-        out = subprocess.check_output('id -un', shell=True).decode().strip()
-        return out
-    except Exception as e:
-        print("failed to determine user")
-        print(e)
-        return None
+    out = subprocess.check_output('id -un', shell=True).decode().strip()
+    return out
     
 def get_user_process_limit():
-    try:
-        out = subprocess.check_output('ulimit -u', shell=True).decode().strip()
-        return int(out)
-    except Exception as e:
-        print("failed to determine maximum number of user processeses")
-        print(e)
-        return None
+    out = subprocess.check_output('ulimit -u', shell=True).decode().strip()
+    return int(out)
     
 def get_user_num_process():
-    try:
-        out = subprocess.check_output('ps ut | wc -l', shell=True).decode().strip()
-        return int(out)-2
-    except Exception as e:
-        print("failed to determine current number of processes")
-        print(e)
-        return None    
-    
-    
+    out = subprocess.check_output('ps ut | wc -l', shell=True).decode().strip()
+    return int(out)-2
          
 
 class JobManager_Client(object):
@@ -185,7 +185,12 @@ class JobManager_Client(object):
                  emergency_dump_path     = '.',
                  result_q_timeout        = 30,                 
                  job_q_timeout           = 0.1,
-                 fail_q_timeout          = 10):
+                 fail_q_timeout          = 10,
+                 logging_level           = None,
+                 reconnect_wait          = 2,
+                 reconnect_tries         = 3,
+                 ping_timeout            = 2,
+                 ping_retry              = 3):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -216,49 +221,77 @@ class JobManager_Client(object):
         
         verbose [int] - 0: quiet, 1: status only, 2: debug messages
         """
-        
-        self.show_statusbar_for_jobs = show_statusbar_for_jobs
-        self.show_counter_only = show_counter_only
-        self.interval = interval
-        self.verbose = verbose
-        
-        self._result_q_timeout = result_q_timeout
-        self._job_q_timeout    = job_q_timeout
-        self._fail_q_timeout   = fail_q_timeout
-        
+
         self._pid = os.getpid()
         self._sid = os.getsid(self._pid)
-        self._identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid) 
-        if self.verbose > 1:
-            print("{}: init".format(self._identifier))
-       
+        _identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid)
+        self.log = logging.getLogger(_identifier)
+        
+        if logging_level is None:
+            if verbose == 0:
+                self.log.setLevel(logging.ERROR)
+            elif verbose == 1:
+                self.log.setLevel(logging.INFO)
+            else:
+                self.log.setLevel(logging.DEBUG)
+        else:
+            self.log.setLevel(logging_level)
+        self.log.addHandler(cons_hand)   
+        
+        self.log.info("init JobManager Client instance")        
+        
+        self.show_statusbar_for_jobs = show_statusbar_for_jobs
+        self.log.debug("show_statusbar_for_jobs:{}", self.show_statusbar_for_jobs)
+        self.show_counter_only = show_counter_only
+        self.log.debug("show_counter_only:{}", self.show_counter_only)
+        self.interval = interval
+        self.log.debug("interval:{}", self.interval)
+            
+        self._result_q_timeout = result_q_timeout
+        self.log.debug("_result_q_timeout:{}", self._result_q_timeout)
+        self._job_q_timeout = job_q_timeout
+        self.log.debug("_job_q_timeout:{}", self._job_q_timeout)
+        self._fail_q_timeout = fail_q_timeout
+        self.log.debug("_fail_q_timeout:{}", self._fail_q_timeout)
+        self.reconnect_wait = reconnect_wait
+        self.log.debug("reconnect_wait:{}", self.reconnect_wait)
+        self.reconnect_tries = reconnect_tries
+        self.log.debug("reconnect_tries:{}", self.reconnect_tries)
+        self.ping_timeout = ping_timeout
+        self.log.debug("ping_timeout:{}", self.ping_timeout)
+        self.ping_retry = ping_retry
+        self.log.debug("ping_retry:{}", self.ping_retry)
+              
         if no_warnings:
-            import warnings
             warnings.filterwarnings("ignore")
-            if self.verbose > 1:
-                print("{}: ignore all warnings".format(self._identifier))
+            self.log.info("ignore all warnings")
 
         self.server = server
+        self.log.debug("server:{}", self.server)
         if isinstance(authkey, bytearray):
             self.authkey = authkey
         else: 
             self.authkey = bytearray(authkey, encoding='utf8')
+        self.log.debug("authkey:{}", self.authkey)
         self.port = port
+        self.log.debug("port:{}", self.port)
         self.nice = nice
+        self.log.debug("nice:{}", self.nice)
         if nproc > 0:
             self.nproc = nproc
         else:
             self.nproc = mp.cpu_count() + nproc
             if self.nproc <= 0:
                 raise RuntimeError("Invalid Number of Processes\ncan not spawn {} processes (cores found: {}, cores NOT to use: {} = -nproc)".format(self.nproc, mp.cpu_count(), abs(nproc)))
-        # internally, njobs must be negative for infinite jobs
-        if njobs == 0:
+        self.log.debug("nproc:{}", self.nproc)
+        if njobs == 0:        # internally, njobs must be negative for infinite jobs
             njobs -= 1
         self.njobs = njobs
+        self.log.debug("njobs:{}", self.njobs)
         self.emergency_dump_path = emergency_dump_path
+        self.log.debug("emergency_dump_path:{}", self.emergency_dump_path)
         
-        self.procs = []
-        
+        self.procs = []        
         self.manager_objects = None  # will be set via connect()
         self.connect()               # get shared objects from server
         
@@ -266,10 +299,9 @@ class JobManager_Client(object):
         
     def connect(self):
         if self.manager_objects is None:
-            self.manager_objects = self.get_manager_objects()
+            self.manager_objects = self.create_manager_objects()
         else:
-            if self.verbose > 0:
-                print("{}: already connected (at least shared object are available)".format(self._identifier))
+            self.log.info("already connected (at least shared object are available)")
 
     @property
     def connected(self):
@@ -278,17 +310,7 @@ class JobManager_Client(object):
     def _dump_result_to_local_storage(self, res):
         pass
        
-    def get_manager_objects(self):
-        return JobManager_Client._get_manager_objects(self.server, 
-                                                      self.port, 
-                                                      self.authkey, 
-                                                      self._identifier,
-                                                      self.verbose)
-#     @staticmethod
-#     def _get_sync_manager_data(manager):        
-       
-    @staticmethod
-    def _get_manager_objects(server, port, authkey, identifier, verbose=0, reconnect_wait=2, reconnect_tries=3):
+    def create_manager_objects(self):
         """
             connects to the server and get registered shared objects such as
             job_q, result_q, fail_q
@@ -304,23 +326,20 @@ class JobManager_Client(object):
         ServerQueueManager.register('get_fail_q')
         ServerQueueManager.register('get_const_arg')
     
-        manager = ServerQueueManager(address=(server, port), authkey=authkey)
+        manager = ServerQueueManager(address=(self.server, self.port), authkey=self.authkey)
 
         try:
             call_connect(connect         = manager.connect,
                          dest            = address_authkey_from_manager(manager),
-                         verbose         = verbose,
-                         identifier      = identifier, 
-                         reconnect_wait  = reconnect_wait, 
-                         reconnect_tries = reconnect_tries)
+                         reconnect_wait  = self.reconnect_wait, 
+                         reconnect_tries = self.reconnect_tries,
+                         log             = self.log)
         except:
-            print("{}: FAILED to connect to {}".format(identifier, address_authkey_from_manager(manager)))
+            self.log.warning("FAILED to connect to {}", address_authkey_from_manager(manager))
             return None
             
-            
         job_q = manager.get_job_q()
-        if verbose > 1:
-            print("{}: found job_q with {} jobs".format(identifier, job_q.qsize()))
+        self.log.info("found job_q with {} jobs", job_q.qsize())
         
         result_q = manager.get_result_q()
         fail_q = manager.get_fail_q()
@@ -329,19 +348,6 @@ class JobManager_Client(object):
             
         return job_q, result_q, fail_q, const_arg, manager
     
-    def get_overall_memory_cunsumption(self):
-        vsize = 0
-        # Example: /bin/ps -o vsize= --sid 23928
-        #proc = sp.Popen(['ps', '-o', 'vsize=', '--sid', str(self._sid)], stdout=sp.PIPE, stderr=None, shell=False)
-        proc = sp.Popen(['ps', '-o', 'rss=', '--sid', str(self._sid)], stdout=sp.PIPE, stderr=None, shell=False)
-        (stdout, _stderr) = proc.communicate()
-        print("sid", self._sid)
-        print(stdout)
-        # Iterate over each process within the process tree of our process session
-        # (this ensures that we include processes launched by a child bash script, etc.)
-        for line in stdout.split():
-            vsize += int(line.strip())
-        return vsize*1024   # in bytes
         
     @staticmethod
     def func(arg, const_arg):
@@ -366,29 +372,19 @@ class JobManager_Client(object):
         return os.getpid()
     
     @staticmethod
-    def _handle_unexpected_queue_error(e, verbose, identifier):
-        print("{}: unexpected Error {}, I guess the server went down, can't do anything, terminate now!".format(identifier, e))
-        if verbose > 0:
-            traceback.print_exc()
-
-    @staticmethod
-    def __emergency_dump(arg, res, path, identifier):
-        now = datetime.now().isoformat()
-        pid = os.getpid()
-        fname = "{}_pid_{}".format(now, pid)
-        full_path = os.path.join(path, fname)
-        print("{}: emergency dump (arg, res) to {}".format(identifier, full_path))
-        with open(full_path, 'wb') as f:
-            pickle.dump(arg, f)
-            pickle.dump(res, f)
-
-    @staticmethod
-    def __worker_func(func, nice, verbose, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs, 
-                      emergency_dump_path, job_q_timeout, fail_q_timeout, result_q_timeout):
+    def __worker_func(func, nice, loglevel, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs, 
+                      emergency_dump_path, job_q_timeout, fail_q_timeout, result_q_timeout, stdout_queue,
+                      reconnect_wait, reconnect_tries, ping_timeout, ping_retry):
         """
         the wrapper spawned nproc times calling and handling self.func
         """
-        identifier = progress.get_identifier(name='worker{}'.format(i+1))
+        log = logging.getLogger(progress.get_identifier(name='worker{}'.format(i+1)))
+        log.setLevel(loglevel)
+        
+        queue_hand = logging.handlers.QueueHandler(stdout_queue)
+        queue_hand.setFormatter(fmt)
+        log.addHandler(queue_hand)
+        
         Signal_to_sys_exit(signals=[signal.SIGTERM])
         Signal_to_SIG_IGN(signals=[signal.SIGINT])
 
@@ -398,11 +394,9 @@ class JobManager_Client(object):
         try:
             n = os.nice(nice - n)
         except PermissionError:
-            if verbose > 0:
-                print("{}: changing niceness not permitted! run with niceness {}".format(identifier, n))
+            log.warning("changing niceness not permitted! run with niceness {}", n)
 
-        if verbose > 1:
-            print("{}: now alive, niceness {}".format(identifier, n))
+        log.debug("worker function now alive, niceness {}", n)
         cnt = 0
         time_queue = 0.
         time_calc = 0.
@@ -415,13 +409,11 @@ class JobManager_Client(object):
         count_args = getCountKwargs(func)
 
         if count_args is None:
-            if verbose > 1:
-                print("{}: found function without status information".format(identifier))
+            log.warning("found function without status information (progress will not work)")
             m.value = 0  # setting max_count to -1 will hide the progress bar 
             _func = lambda arg, const_arg, c, m : func(arg, const_arg)
         elif count_args != ["c", "m"]:
-            if verbose > 1:
-                print("{}: found counter keyword arguments: {}".format(identifier, count_args))
+            log.debug("found counter keyword arguments: {}", count_args)
             # Allow other arguments, such as ["jmc", "jmm"] as defined
             # in `validCountKwargs`.
             # Here we translate to "c" and "m".
@@ -430,35 +422,20 @@ class JobManager_Client(object):
                           count_args[1]: m}
                 return func(arg, const_arg, **kwargs)
         else:
-            if verbose > 1:
-                print("{}: found standard keyword arguments: [c, m]".format(identifier))
+            log.debug("found standard keyword arguments: [c, m]")
             _func = func
             
-        job_q_get    = proxy_operation_decorator(proxy           = job_q,
-                                                 operation       = 'get',
-                                                 verbose         = verbose, 
-                                                 identifier      = identifier, 
-                                                 reconnect_wait  = 2, 
-                                                 reconnect_tries = 3)
-        job_q_put    = proxy_operation_decorator(proxy           = job_q,
-                                                 operation       = 'put',
-                                                 verbose         = verbose, 
-                                                 identifier      = identifier, 
-                                                 reconnect_wait  = 2, 
-                                                 reconnect_tries = 3)
-        result_q_put = proxy_operation_decorator(proxy           = result_q,
-                                                 operation       = 'put',
-                                                 verbose         = verbose, 
-                                                 identifier      = identifier, 
-                                                 reconnect_wait  = 2, 
-                                                 reconnect_tries = 3)
-        fail_q_put   = proxy_operation_decorator(proxy           = fail_q,
-                                                 operation       = 'put',
-                                                 verbose         = verbose, 
-                                                 identifier      = identifier, 
-                                                 reconnect_wait  = 2, 
-                                                 reconnect_tries = 3)        
-        
+        kwargs = {'reconnect_wait' : reconnect_wait, 
+                  'reconnect_tries': reconnect_tries,
+                  'log'            : log, 
+                  'ping_timeout'   : ping_timeout,
+                  'ping_retry'     : ping_retry}
+            
+        job_q_get    = proxy_operation_decorator(proxy = job_q, operation = 'get', **kwargs)
+        job_q_put    = proxy_operation_decorator(proxy = job_q, operation = 'put', **kwargs)
+        result_q_put = proxy_operation_decorator(proxy = result_q, operation = 'put', **kwargs)
+        fail_q_put   = proxy_operation_decorator(proxy = fail_q,   operation = 'put', **kwargs)
+               
         # supposed to catch SystemExit, which will shut the client down quietly 
         try:
             
@@ -479,22 +456,24 @@ class JobManager_Client(object):
                  
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
-                    if verbose > 0:
-                        print("{}: finds empty job queue, processed {} jobs".format(identifier, cnt))
+                    log.info("finds empty job queue, processed {} jobs", cnt)
                     break
                 # handle SystemExit in outer try ... except
                 except SystemExit as e:
+                    log.warning('getting arg from job_q failed due to SystemExit')
                     raise e
                 # job_q.get failed -> server down?             
                 except Exception as e:
-                    print("{}: Error when calling 'job_q_get'".format(identifier)) 
-                    JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
+                    log.error("Error when calling 'job_q_get'") 
+                    handle_unexpected_queue_error(e, log)
                     break
                 
                 # try to process the retrieved argument
                 try:
                     tf_0 = time.time()
+                    log.debug("START crunching _func")
                     res = _func(arg, const_arg, c, m)
+                    log.debug("DONE crunching _func")
                     tf_1 = time.time()
                     time_calc += (tf_1-tf_0)
                 # handle SystemExit in outer try ... except
@@ -505,104 +484,86 @@ class JobManager_Client(object):
                 # - try to inform the server of the failure
                 except:
                     err, val, trb = sys.exc_info()
-                    if verbose > 0:
-                        print("{}: caught exception '{}' when crunching 'func'".format(identifier, err.__name__))
-                    
-                    if verbose > 1:
-                        traceback.print_exc()
+                    log.error("caught exception '{}' when crunching 'func'\n{}", err.__name__, traceback.print_exc())
                 
                     # write traceback to file
                     hostname = socket.gethostname()
                     fname = 'traceback_err_{}_{}.trb'.format(err.__name__, getDateForFileName(includePID=True))
-                        
-                    if verbose > 0:
-                        print("        write exception to file {} ... ".format(fname), end='')
-                        sys.stdout.flush()
+                    
+                    log.info("write exception to file {}", fname)
                     with open(fname, 'w') as f:
                         traceback.print_exception(etype=err, value=val, tb=trb, file=f)
-                    if verbose > 0:
-                        print("done")
-                        print("        continue processing next argument.")
-                        
-                    # try to inform the server of the failure
-                    if verbose > 1:
-                        print("{}: try to send send failed arg to fail_q ...".format(identifier), end='')
-                        sys.stdout.flush()
+
+                    log.debug("try to send send failed arg to fail_q")
                     try:
                         fail_q_put((arg, err.__name__, hostname), block = True, timeout=fail_q_timeout)
                     # handle SystemExit in outer try ... except                        
                     except SystemExit as e:
-                        if verbose > 1:
-                            print(" FAILED!")
+                        log.warning('sending arg to fail_q failed due to SystemExit')
                         raise e
                     # fail_q.put failed -> server down?             
                     except Exception as e:
-                        if verbose > 1:
-                            print(" FAILED!")
-                        JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
+                        log.error('sending arg to fail_q failed')
+                        handle_unexpected_queue_error(e, log)
                         break
                     else:
-                        if verbose > 1:
-                            print(" done!")
+                        log.debug('sending arg to fail_q was successful')
                             
                 # processing the retrieved arguments succeeded
                 # - try to send the result back to the server                        
                 else:
                     try:
-                        tp_0 = time.time()
+                        tp_0 = time.time()                       
                         result_q_put((arg, res), block = True, timeout=result_q_timeout)
                         tp_1 = time.time()
                         time_queue += (tp_1-tp_0)
                         
                     # handle SystemExit in outer try ... except
                     except SystemExit as e:
+                        log.warning('sending result to result_q failed due to SystemExit')
                         raise e
                     
                     except Exception as e:
-                        print("{}: Error when calling 'result_q_put'".format(identifier))
-                        JobManager_Client.__emergency_dump(arg, res, emergency_dump_path, identifier)
-                        JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
+                        log.error('sending result to result_q failed due to {}', type(e))
+                        emergency_dump(arg, res, emergency_dump_path, log)
+                        handle_unexpected_queue_error(e, log)
                         break
                     
                     del res
                     
                 cnt += 1
                 reset_pbc()
+                log.debug("continue with next arg")
              
         # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
         # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
         # default signal handlers
         except SystemExit:
-            if verbose > 0:
-                print("{}: SystemExit, quit processing, reinsert current argument".format(identifier))
-
-            if verbose > 1:
-                print("{}: try to put arg back to job_q ...".format(identifier), end='')
-                sys.stdout.flush()
+            log.warning("SystemExit, quit processing, reinsert current argument, please wait")
+            log.debug("try to put arg back to job_q")
             try:
                 job_q.put(arg, timeout=fail_q_timeout)
             # handle SystemExit in outer try ... except                        
             except SystemExit as e:
-                if verbose > 1:
-                    print(" FAILED!")
+                log.error("put arg back to job_q failed due to SystemExit")
                 raise e
             # fail_q.put failed -> server down?             
             except Exception as e:
-                if verbose > 1:
-                    print(" FAILED!")
-                JobManager_Client._handle_unexpected_queue_error(e, verbose, identifier)
+                log.error("put arg back to job_q failed due to {}", type(e))
+                JobManager_Client._handle_unexpected_queue_error(e, log)
             else:
-                if verbose > 1:
-                    print(" done!")
-                
-        if verbose > 0:
-            try:
-                print("{}: pure calculation time: {}  single task average: {}".format(identifier, progress.humanize_time(time_calc), progress.humanize_time(time_calc / cnt) ))
-                print("{}: calculation:{:.2%} communication:{:.2%}".format(identifier, time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
-            except:
-                pass
-        if verbose > 1:
-            print("{}: JobManager_Client.__worker_func at end (PID {})".format(identifier, os.getpid()))
+                log.debug("putting arg back to job_q was successful")
+
+        try:                
+            sta = progress.humanize_time(time_calc / cnt)
+        except:
+            sta = 'invalid'
+            
+        log.info("pure calculation time: {}  single task average: {}\ncalculation:{:.2%} communication:{:.2%}", 
+                 progress.humanize_time(time_calc), sta, 
+                 time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue))
+
+        log.debug("JobManager_Client.__worker_func at end (PID {})", os.getpid())
 
     def start(self):
         """
@@ -616,10 +577,8 @@ class JobManager_Client(object):
         if not self.connected:
             raise JMConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
 
-        print("{}: starting client with connection to server:{} authkey:{} port:{}".format(self._identifier, self.server, self.authkey.decode(), self.port))
         
-        if self.verbose > 1:
-            print("{}: start {} processes to work on the remote queue".format(self._identifier, self.nproc))
+        self.log.info("STARTING CLIENT\nserver:{} authkey:{} port:{} num proc:{}", self.server, self.authkey.decode(), self.port, self.nproc)
             
         c = []
         for i in range(self.nproc):
@@ -644,6 +603,9 @@ class JobManager_Client(object):
         prepend = []
         infoline = progress.StringValue(num_of_bytes=12)
         infoline = None
+        
+        worker_stdout_queue = mp.SimpleQueue()
+        
         l = len(str(self.nproc))
         for i in range(self.nproc):
             prepend.append("w{0:0{1}}:".format(i+1, l))
@@ -674,7 +636,12 @@ class JobManager_Client(object):
                                                                 self.emergency_dump_path,
                                                                 self._job_q_timeout,
                                                                 self._fail_q_timeout,
-                                                                self._result_q_timeout))
+                                                                self._result_q_timeout,
+                                                                worker_stdout_queue,
+                                                                self.reconnect_wait, 
+                                                                self.reconnect_tries, 
+                                                                self.ping_timeout, 
+                                                                self.ping_retry))
                 self.procs.append(p)
                 p.start()
                 time.sleep(0.3)
@@ -686,7 +653,7 @@ class JobManager_Client(object):
                                                                                                        pid  = p.pid,
                                                                                                        bold = True) for i, p in enumerate(self.procs)],
                                                             signals         = [signal.SIGTERM],                                                            
-                                                            verbose         = self.verbose,
+                                                            log             = self.log,
                                                             timeout         = 2)
             
             interrupt_handler = Signal_handler_for_Jobmanager_client(client_object = self,
@@ -1164,9 +1131,9 @@ class JobManager_Server(object):
             print("{}: started (host:{} authkey:{} port:{} jobs:{})".format(self._identifier, self.hostname, self.authkey.decode(), self.port, self.numjobs))
         
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
-        pid = os.getpid()
-        user = get_user()
-        max_proc = get_user_process_limit()
+#         pid = os.getpid()
+#         user = get_user()
+#         max_proc = get_user_process_limit()
         
         if self.verbose > 1:
             print("{}: start processing incoming results".format(self._identifier))
@@ -1190,11 +1157,9 @@ class JobManager_Server(object):
             stat.start()
         
             while (len(self.args_dict) - self.fail_q.qsize()) > 0:
-                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}, proc (curr/max): {}/{}".format(self.result_q.qsize(), 
-                                                                                                                        self.job_q.qsize(), 
-                                                                                                                        self.numresults,
-                                                                                                                        get_user_num_process(),
-                                                                                                                        max_proc).encode('utf-8')
+                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(), 
+                                                                                                self.job_q.qsize(), 
+                                                                                                self.numresults).encode('utf-8')
         
                 # allows for update of the info line
                 try:
@@ -1366,25 +1331,23 @@ class Signal_to_terminate_process_list(object):
     """
     SIGINT and SIGTERM will call terminate for process given in process_list
     """
-    def __init__(self, identifier, process_list, identifier_list, signals = [signal.SIGINT, signal.SIGTERM], verbose=0, timeout=2):
-        self.identifier = identifier
+    def __init__(self, process_list, identifier_list, signals = [signal.SIGINT, signal.SIGTERM], log=default_log, timeout=2):
+        self.log = log
         self.process_list = process_list
         self.identifier_list = identifier_list
-        self.verbose = verbose
         self.timeout = timeout
         
         for s in signals:
             signal.signal(s, self._handler)
             
     def _handler(self, signal, frame):
-        if self.verbose > 0:
-            print("{}: received sig {} -> terminate all given subprocesses".format(self.identifier, progress.signal_dict[signal]))
+        self.log.debug("received sig {} -> terminate all given subprocesses", progress.signal_dict[signal])
         for i, p in enumerate(self.process_list):
             p.terminate()
             progress.check_process_termination(proc       = p, 
                                                identifier = self.identifier_list[i], 
                                                timeout    = self.timeout,
-                                               verbose    = self.verbose,
+                                               log        = self.log,
                                                auto_kill_on_last_resort=False)
 
 
@@ -1426,24 +1389,21 @@ def address_authkey_from_proxy(proxy):
 def address_authkey_from_manager(manager):
     return manager.address, manager._authkey.decode()
 
-def call_connect_python3(connect, dest, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
-    identifier = mod_id(identifier)
+def call_connect_python3(connect, dest, reconnect_wait=2, reconnect_tries=3, log=log):
     c = 0
     while True:
         try:                                # here we try re establish the connection
-            if verbose > 1:
-                print("{}try connecting to {}".format(identifier, dest))
+            log.debug("try connecting to {}", dest)
             connect()
     
         except Exception as e:
-            if verbose > 0:   
-                print("{}connection to {} could not be established due to '{}'".format(identifier, dest, type(e)))
-                print(traceback.format_stack()[-3].strip())             
+            log.error("connection to {} could not be established due to '{}'", dest, type(e))
+            log.error(traceback.format_stack()[-3].strip())             
             
             if type(e) is ConnectionResetError:           # ... when the destination hangs up on us     
-                c = handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose)
+                c = handler_connection_reset(dest, c, reconnect_wait, reconnect_tries, log)
             elif type(e) is ConnectionRefusedError:       # ... when the destination refuses our connection
-                handler_connection_refused(e, identifier, dest, verbose)
+                handler_connection_refused(e, dest, log)
             elif type(e) is AuthenticationError :      # ... when the destination refuses our connection due authkey missmatch
                 handler_authentication_error(e, identifier, dest, verbose)
             elif type(e) is RemoteError:                  # ... when the destination send us an error message
@@ -1549,286 +1509,240 @@ def getDateForFileName(includePID = False):
         name += "_{}".format(os.getpid()) 
     return name
 
-def handler_authentication_error(e, identifier, dest, verbose):
-    if verbose > 1:
-        print("authkey specified does not match the authkey at destination side!")
+def handler_authentication_error(e, dest, log):
+    log.error("authentication error")
+    log.info("Authkey specified does not match the authkey at destination side!")
     raise e
 
-def handler_broken_pipe_error(e, verbose):
-    if verbose > 1:
-        print("this usually means that an established was closed, does not exists anymore")
-        print("the server probably went down")
+def handler_broken_pipe_error(e, log):
+    log.error("broken pip error")
+    log.info("This usually means that an established connection was closed\n")
+    log.info("does not exists anymore, probably the server went down")
     raise e   
 
-def handler_connection_refused(e, identifier, dest, verbose):
-    if verbose > 1:
-        print("this usually means that no matching Manager object was instanciated at destination side!")
-        print("either there is no Manager running at all, or it is listening to another port.")
+def handler_connection_refused(e, dest, log):
+    log.error("connection refused error")
+    log.info("This usually means that no matching Manager object was instanciated at destination side!")
+    log.info("Either there is no Manager running at all, or it is listening to another port.")
     raise JMConnectionRefusedError(e)
 
-def handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose):
-    if verbose > 1:
-        print("during connect this Error might be due to firewall settings\n"+
-              "or other TPC connections controlling mechanisms!")
+def handler_connection_reset(dest, c, reconnect_wait, reconnect_tries, log):
+    log.error("connection reset error")
+    log.info("During 'connect' this error might be due to firewall settings"+
+             "or other TPC connections controlling mechanisms!")
     c += 1
     if c > reconnect_tries:
-        raise JMConnectionError("{}connection to {} FAILED, ".format(identifier, dest)+
+        log.error("maximium number of reconnects {} was reached", reconnect_tries)
+        raise JMConnectionError("connection to {} FAILED, ".format(dest)+
                                 "{} retries were NOT successfull".format(reconnect_tries))
-    if verbose > 0:
-        traceback.print_exc(limit=1)
-        print("{}try connecting to {} again in {} seconds".format(identifier, dest, reconnect_wait))
+    log.debug("try connecting to {} again in {} seconds", dest, reconnect_wait)
     time.sleep(reconnect_wait)
     return c                
 
-def handler_eof_error(e, verbose):
-    if verbose > 1:
-        print("This usually means that server did not replay, although the connection is still there.")
-        print("This is due to the fact that the connection is in 'timewait' status for about 60s")
-        print("after the server went down. After that time the connection will not exist anymore.")
+def handler_eof_error(e, log):
+    log.error("EOF error")
+    log.info("This usually means that server did not replay, although the connection is still there.\n"+
+             "This is due to the fact that the connection is in 'timewait' status for about 60s\n"+
+             "after the server went down inappropriately.")
     raise e
 
-def handler_remote_error(e, verbose, dest):
-    if verbose > 1:
-        print("the server {} send an RemoteError message!".format(dest))        
+def handler_remote_error(e, dest, log):
+    log.error("remote error")
+    log.info("The server {} send an RemoteError message!\n{}", dest, e.args[0])        
     raise RemoteError(e.args[0])
 
-def handler_remote_key_error(e, verbose, dest):
-    if verbose > 1:
-        print("'KeyError' detected in RemoteError message from server {}!".format(dest))
-        print("This hints to the fact that the actual instace of the shared object on the server")
-        print("side has changed, for example due to a server restart")
-        print("you need to reinstanciate the proxy object")
+def handler_remote_key_error(e, dest, log):
+    log.error("remote key error")
+    log.info("'KeyError' detected in RemoteError message from server {}!\n"+
+             "This hints to the fact that the actual instace of the shared object on the server side has changed,\n"+
+             "for example due to a server restart you need to reinstanciate the proxy object.", dest)
     raise RemoteKeyError(e.args[0])
     
-def handler_remote_value_error(e, verbose, dest):
-    if verbose > 1:
-        print("'ValueError' due to 'unsupported pickle protocol' detected in RemoteError from server {}!".format(dest))
-        print("You might have tried to connect to a SERVER running with an OLDER python version")
-        print("At this stage (and probably for ever) this should be avoided")        
+def handler_remote_value_error(e, dest, log):
+    log.error("remote value error")
+    log.info("'ValueError' due to 'unsupported pickle protocol' detected in RemoteError from server {}!\n"+
+             "You might have tried to connect to a SERVER running with an OLDER python version.\n"+
+             "At this stage (and probably for ever) this should be avoided!", dest)        
     raise RemoteValueError(e.args[0])
 
-def handler_value_error(e, verbose):
+def handler_value_error(e, log):
+    log.error("value error")
     if 'unsupported pickle protocol' in e.args[0]:
-        if verbose > 1:
-            print("'ValueError' due to 'unsupported pickle protocol'!")
-            print("You might have tried to connect to a SERVER running with an NEWER python version")
-            print("At this stage (and probably for ever) this should be avoided")  
+        log.info("'ValueError' due to 'unsupported pickle protocol'!\n"
+                 "You might have tried to connect to a SERVER running with an NEWER python version.\n"
+                 "At this stage (and probably for ever) this should be avoided.\n")  
     raise e
 
-def handler_unexpected_error(e, verbose):
+def handler_unexpected_error(e, log):
+    log.error("unexpected error of type {} and args {}", type(e), e.args)
     raise e
 
-def mod_id(identifier):
-    if identifier != '':
-        identifier = identifier.strip()
-        if identifier[-1] != ':':
-            identifier += ':'
-        identifier += ' '
-        
-    return identifier
+def handle_unexpected_queue_error(e, log):
+    log.error("unexpected error of type {} and args {}\n"+
+              "I guess the server went down, can't do anything, terminate now!", type(e), e.args)
+    log.debug("show traceback.print_exc()\n{}", traceback.print_exc())
 
-def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5):
+def emergency_dump(arg, res, path, log):
+    now = datetime.now().isoformat()
+    pid = os.getpid()
+    fname = "{}_pid_{}".format(now, pid)
+    full_path = os.path.join(path, fname)
+    log.warning("emergency dump (arg, res) to {}", full_path)
+    with open(full_path, 'wb') as f:
+        pickle.dump(arg, f)
+        pickle.dump(res, f)
+
+def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5, log=default_log):
     for i in range(retry):
         try:
-            subprocess.check_output(['ping', '-c 1', '-W {}'.format(int(timeout)), adr])
+            cmd = 'ping -c 1 -W {} {}    '.format(int(timeout), adr)
+            log.debug("[{}/{}]call: {}", i+1, retry, cmd)
+            subprocess.check_output(cmd, shell = True)
         except subprocess.CalledProcessError as e:
             # on exception, resume with loop
+            log.warning("CalledProcessError on ping with message: {}", e)
             continue
         else:
             # no exception, ping was successful, return without error
+            log.debug("ping was succesfull")
             return
         
-    # no early return happend, ping was never successful, raise error        
+    # no early return happend, ping was never successful, raise error
+    log.error("ping failed after {} retries", retry)
     raise JMHostNotReachableError("could not reach host '{}'\nping error reads: {}".format(adr, e.output))
         
 
-def proxy_operation_decorator_python3(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
-    identifier = mod_id(identifier)
+def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconnect_tries=3, log=default_log, ping_timeout=2, ping_retry=5):
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
     
     def _operation(*args, **kwargs):
         c = 0
         while True:
-            check_if_host_is_reachable_unix_ping(adr=dest[0][0])
-            
-            if verbose > 1:
-                print("{}establish connection to {}".format(identifier, dest))
+            check_if_host_is_reachable_unix_ping(adr     = dest[0][0],
+                                                 timeout = ping_timeout,
+                                                 retry   = ping_retry,
+                                                 log     = log)
+            log.debug("establish connection to {}", dest)
             try: 
                 proxy._connect()
             except Exception as e:
-                if verbose > 0:
-                    print("{}establishing connection to {} FAILED due to '{}'".format(identifier, dest, type(e)))
-                    print(traceback.format_stack()[-3].strip())
-                    print("{}wait {} seconds and retry".format(identifier, reconnect_wait))
+                log.warning("establishing connection to {} FAILED due to '{}'", dest, type(e))
+                log.debug("show traceback.format_stack()[-3]\n{}", traceback.format_stack()[-3].strip())
+                log.info("wait {} seconds and retry", reconnect_wait)
                 c += 1
                 if c > reconnect_tries:
-                    if verbose > 0:
-                        print("{}reached maximum number of reconnect tries, raise exception".format(identifier))
+                    log.error("reached maximum number of reconnect tries {}, raise exception", reconnect_tries)
                     raise e
                 time.sleep(reconnect_wait)
                 continue
                 
-            if verbose > 1:
-                print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
+            log.debug("execute operation '{}' -> {}", operation, dest)
             
             try:
                 res = o(*args, **kwargs)
             except Exception as e:
-                if verbose > 0:
-                    print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
-                    print(traceback.format_stack()[-3].strip())
-                    
+                log.warning("operation '{}' -> {} FAILED due to '{}'", operation, dest, type(e))
+                log.debug("show traceback.format_stack()[-3]\n{}", traceback.format_stack()[-3].strip())                   
                 if type(e) is ConnectionResetError:
-                    if verbose > 0:
-                        traceback.print_exc(limit=1)
-                        print("{}wait {} seconds and retry".format(identifier, reconnect_wait))
+                    log.debug("show traceback.print_exc(limit=1))")
+                    log.debug(traceback.print_exc(limit=1))
+
                     c += 1
                     if c > reconnect_tries:
-                        if verbose > 0:
-                            print("{}reached maximum number of reconnect tries, raise exception".format(identifier))
+                        log.error("reached maximum number of reconnect tries {}", reconnect_tries)
                         raise e
+
+                    log.info("wait {} seconds and retry", reconnect_wait)                    
                     time.sleep(reconnect_wait)
                     continue
                 elif type(e) is BrokenPipeError:
-                    handler_broken_pipe_error(e, verbose)
+                    handler_broken_pipe_error(e, log)
                 elif type(e) is EOFError:
-                    handler_eof_error(e, verbose)
+                    handler_eof_error(e, log)
                 else:
-                    handler_unexpected_error(e, verbose)
-            else:                               # SUCCESS -> return True  
-                if verbose > 1:
-                    print("{}operation '{}' successfully executed".format(identifier, operation))
+                    handler_unexpected_error(e, log)
+            else:                               # SUCCESS -> return True
+                log.debug("operation '{}' successfully executed", operation)
                 return res
         
-            if verbose > 1:
-                print("{}close connection to {}".format(identifier, dest))
+            log.debug("close connection to {}", dest)
             try:
                 proxy._tls.connection.close()
             except Exception as e:
-                if verbose > 0:
-                    print("{}closeing connection to {} FAILED due to {}".format(identifier, dest, type(e)))
-                    print(traceback.format_stack()[-3].strip())
+                log.error("closeing connection to {} FAILED due to {}", dest, type(e))
+                log.info("show traceback.format_stack()[-3]\n{}", traceback.format_stack()[-3].strip())
             
     return _operation
 
-def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
-    identifier = mod_id(identifier)
+def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconnect_tries=3, log=default_log, ping_timeout=2, ping_retry=5):
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
     
     def _operation(*args, **kwargs):
         c = 0
         while True:
-            check_if_host_is_reachable_unix_ping(adr=dest[0])
-            
-            if verbose > 1:
-                print("{}establish connection to {}".format(identifier, dest))
+            check_if_host_is_reachable_unix_ping(adr     = dest[0][0],
+                                                 timeout = ping_timeout,
+                                                 retry   = ping_retry,
+                                                 log     = log)
+            log.debug("establish connection to {}", dest)            
             try: 
-                o._connect()
+                proxy._connect()
             except Exception as e:
-                if verbose > 0:
-                    print("{}establishing connection to {} FAILED due to '{}'".format(identifier, dest, type(e)))
-                    print(traceback.format_stack()[-3].strip())
-                    print("wait {} seconds and retry".format(reconnect_wait))
+                log.warning("establishing connection to {} FAILED due to '{}'", dest, type(e))
+                log.debug("show traceback.format_stack()[-3]\n{}", traceback.format_stack()[-3].strip())
+                log.info("wait {} seconds and retry", reconnect_wait)
                 c += 1
                 if c > reconnect_tries:
-                    if verbose > 0:
-                        print("reached maximum number of reconnect tries, raise exception")
+                    log.error("reached maximum number of reconnect tries {}, raise exception", reconnect_tries)
                     raise e
                 time.sleep(reconnect_wait)
                 continue
                 
-            if verbose > 1:
-                print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
+            log.debug("execute operation '{}' -> {}", operation, dest)
             
             try:
                 res = o(*args, **kwargs)
             except Exception as e:
-                if verbose > 0:
-                    print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
-                    print(traceback.format_stack()[-3].strip())
-
+                log.warning("operation '{}' -> {} FAILED due to '{}'", operation, dest, type(e))
+                log.debug("show traceback.format_stack()[-3]\n{}", traceback.format_stack()[-3].strip())                                   
+                
                 if type(e) is IOError:
-                    if verbose > 0:
-                        print("{} with args {}".format(type(e), e.args))
+                    log.debug("{} with args {}", type(e), e.args)
                     err_code = e.args[0]
                     if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
-                        if verbose > 0:
-                            print("wait {} seconds and retry".format(reconnect_wait))
+                        log.debug("show traceback.print_exc(limit=1))")
+                        log.debug(traceback.print_exc(limit=1))
+                        
                         c += 1
                         if c > reconnect_tries:
-                            if verbose > 0:
-                                print("reached maximum number of reconnect tries, raise exception")
+                            log.error("reached maximum number of reconnect tries {}", reconnect_tries)
                             raise e
+                        
+                        log.info("wait {} seconds and retry", reconnect_wait)                    
                         time.sleep(reconnect_wait)
                         continue
                     else:
-                        handler_unexpected_error(e, verbose) 
+                        handler_unexpected_error(e, log) 
                 elif type(e) is BrokenPipeError:
-                    handler_broken_pipe_error(e, verbose)
+                    handler_broken_pipe_error(e, log)
                 elif type(e) is EOFError:
-                    handler_eof_error(e, verbose)
+                    handler_eof_error(e, log)
                 else:
-                    handler_unexpected_error(e, verbose)
-            else:                               # SUCCESS -> return True  
-                if verbose > 1:
-                    print("{}operation '{}' successfully executed".format(identifier, operation))
+                    handler_unexpected_error(e, log)
+            else: # SUCCESS -> return True
+                log.debug("operation '{}' successfully executed", operation)  
                 return res
-        
-            if verbose > 1:
-                print("{}close connection to {}".format(identifier, dest))
+            
+            log.debug("close connection to {}", dest)
             try:
-                o._tls.connection.close()
+                proxy._tls.connection.close()
             except Exception as e:
-                if verbose > 0:
-                    print("{}closeing connection to {} FAILED due to {}".format(identifier, dest, type(e)))
-                    print(traceback.format_stack()[-3].strip())
+                log.error("closeing connection to {} FAILED due to {}", dest, type(e))
+                log.info("show traceback.format_stack()[-3]\n{}", traceback.format_stack()[-3].strip())                
             
     return _operation
-
-# def proxy_operation_decorator_python2(proxy, operation, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
-#     identifier = mod_id(identifier)
-#     o = getattr(proxy, operation)
-#     dest = address_authkey_from_proxy(proxy)
-#     
-#     def _operation(*args, **kwargs):
-#         while True:
-#             try:                                # here we try to put new data to the queue
-#                 if verbose > 1:
-#                     print("{}execute operation '{}' -> {}".format(identifier, operation, dest))
-#                 res = o(*args, **kwargs)
-#                 
-#             except Exception as e:
-#                 if verbose > 0:
-#                     print("{}operation '{}' -> {} FAILED due to '{}'".format(identifier, operation, dest, type(e)))
-#                     print(traceback.format_stack()[-3].strip())
-#                     
-#                 if type(e) is IOError:
-#                     if verbose > 0:
-#                         print("{} with args {}".format(type(e), e.args))
-#                     err_code = e.args[0]
-#                     if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
-#                         if verbose > 0:
-#                             traceback.print_exc(limit=1)
-#                             print("{}try to reconnect".format(identifier))
-#                         call_connect(proxy._connect, dest, verbose, identifier, reconnect_wait, reconnect_tries)
-#                     else:
-#                         handler_unexpected_error(e, verbose)                    
-#                     
-#                 elif type(e) is BrokenPipeError:
-#                     handler_broken_pipe_error(e, verbose)
-#                 elif type(e) is EOFError:
-#                     handler_eof_error(e, verbose)
-#                 else:
-#                     handler_unexpected_error(e, verbose)            
-#                 
-#             else:                               # SUCCESS -> return True  
-#                 if verbose > 1:
-#                     print("{}operation '{}' successfully executed".format(identifier, operation))
-#                 return res
-#             
-#     return _operation
 
 proxy_operation_decorator = proxy_operation_decorator_python2 if sys.version_info[0] == 2 else proxy_operation_decorator_python3
 

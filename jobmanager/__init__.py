@@ -34,7 +34,6 @@ from .jobmanager import *
 
 from . import clients
 from . import decorators
-from . import progress
 from . import servers
 from . import ode_wrapper
 from . import binfootprint
