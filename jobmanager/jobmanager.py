@@ -46,7 +46,8 @@ import sys
 import time
 import traceback
 import warnings
-from . import binfootprint as bf
+
+import binfootprint as bf
 
 import logging
 
