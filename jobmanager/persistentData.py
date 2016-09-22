@@ -910,15 +910,19 @@ def mergePDS(db_source, db_dest, update = 'error', status_interval=5, show_summa
             
         for k in db_source:
             if db_source.is_subdata(k):
-                try:
-                    sub_db_dest = db_dest.newSubData(k, overwrite)
-                except KeyError:
+                sub_db_dest = db_dest.getData(k, create_sub_data=True)
+                if not db_dest.is_subdata(k):
                     if update == 'error':
-                        raise
-                    assert update == 'ignore'
-                    continue
+                        raise KeyError("key already in dest, but key_data is not subdata")
+                    elif update == 'ignore':
+                        continue
+                    elif update == 'update':
+                        del db_dest[k]
+                        sub_db_dest = db_dest.newSubData(k)
+                
+                
                 sub_db_source = db_source[k]
-                t, i = mergePDS(sub_db_source, sub_db_dest, status_interval=0, show_summary=False)
+                t, i = mergePDS(sub_db_source, sub_db_dest, update=update, status_interval=0, show_summary=False)
                 transfered += t
                 ignored += i
                 sub_db_source.close()
