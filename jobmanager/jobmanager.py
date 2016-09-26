@@ -1101,6 +1101,10 @@ class JobManager_Server(object):
         """to implement user defined final processing"""
         pass
 
+    def print_jm_ready(self):
+        # please overwrite for individual hooks to notify that the server process runs
+        print("jobmanager awaits client results")
+
     def start(self):
         """
         starts to loop over incoming results
@@ -1142,6 +1146,8 @@ class JobManager_Server(object):
             Progress = progress.ProgressSilentDummy
   
         info_line = progress.StringValue(num_of_bytes=100)
+
+        self.print_jm_ready()
   
         with Progress(count             = self._numresults,
                       max_count         = self._numjobs, 
