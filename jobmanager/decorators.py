@@ -12,8 +12,9 @@ import time
 from types import ModuleType
 import warnings
 
+import progress
+
 from . import clients
-from . import progress
 from .jobmanager import getCountKwargs, validCountKwargs, JobManager_Server, JobManager_Client, JMConnectionError
 
 
