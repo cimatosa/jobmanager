@@ -17,7 +17,9 @@ from os.path import abspath, dirname, split
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
-from jobmanager import jobmanager, progress, binfootprint
+import jobmanager
+import binfootprint
+import progress
 
 import warnings
 warnings.filterwarnings('error')

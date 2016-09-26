@@ -36,11 +36,6 @@ from . import clients
 from . import decorators
 from . import servers
 from . import ode_wrapper
-from . import binfootprint
 
-# persistentData requires sqlitedict
-try:
-    from . import persistentData
-except ImportError as e:
-    warnings.warn("Submodule 'persistentData' is not available. Reason: {}.".format(e))
+
 

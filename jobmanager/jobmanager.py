@@ -46,7 +46,8 @@ import sys
 import time
 import traceback
 import warnings
-from . import binfootprint as bf
+import binfootprint as bf
+import progress
 
 import logging
 
@@ -112,9 +113,6 @@ else:
     
 class JMHostNotReachableError(JMConnectionError):
     pass
-
-sys.path.append(os.path.dirname(__file__))
-from . import progress
 
 myQueue = mp.Queue
 AuthenticationError = mp.AuthenticationError
