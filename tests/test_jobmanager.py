@@ -21,6 +21,8 @@ import jobmanager
 import binfootprint
 import progress
 
+progress.log.setLevel(logging.ERROR)
+
 import warnings
 warnings.filterwarnings('error')
 
