@@ -2,19 +2,21 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
-import os
+
 import sys
 import time
 
 from os.path import abspath, dirname, split
-
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
-from jobmanager import decorators, progress
+from jobmanager import decorators\
+
+import progress
 
 import warnings
 warnings.filterwarnings('error')
+#warnings.filterwarnings('always', category=DeprecationWarning)
 
 
 @decorators.ProgressBar

@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 import sys
 from os.path import abspath, dirname, split
+# Add parent directory to beginning of path variable
+sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 
-
-import multiprocessing as mp
 import numpy as np
 from scipy.integrate import ode
 from scipy.special import mathieu_sem, mathieu_cem, mathieu_a, mathieu_b
@@ -22,14 +22,9 @@ except ImportError:
 
 
 warnings.filterwarnings('error')
-
-# Add parent directory to beginning of path variable
-sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
-
+#warnings.filterwarnings('always', category=DeprecationWarning)
 
 import jobmanager as jm
-
-
 
 def dgl_mathieu(t, f, a, q):
     f1, f2 = f[0], f[1]
@@ -132,7 +127,6 @@ def test_distributed_mathieu():
                              port = 42520,
                              const_arg = const_arg,
                              nproc=1,
-                             verbose_client=2,
                              niceness_clients=0,
                              show_statusbar_for_jobs=False) as jm_int:
         q_list = np.linspace(q_min, q_max, q_N)

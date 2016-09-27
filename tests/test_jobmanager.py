@@ -6,12 +6,10 @@ import os
 import sys
 import time
 import multiprocessing as mp
-import numpy as np
-import traceback
 import socket
-import subprocess
 import signal
 import logging
+from numpy import random
 
 from os.path import abspath, dirname, split
 # Add parent directory to beginning of path variable
@@ -23,11 +21,16 @@ import progress
 
 progress.log.setLevel(logging.ERROR)
 
+from jobmanager.jobmanager import log as jm_log
+
+jm_log.setLevel(logging.INFO)
+
 import warnings
 warnings.filterwarnings('error')
+#warnings.filterwarnings('always', category=DeprecationWarning)
 
 AUTHKEY = 'testing'
-PORT = 42525
+PORT = random.randint(10000, 60000)
 SERVER = socket.gethostname()
 
 def test_Signal_to_SIG_IGN():
@@ -148,12 +151,11 @@ def test_Signal_to_terminate_process_list():
     
 
  
-def start_server(n, read_old_state=False, verbose=1):
+def start_server(n, read_old_state=False):
     print("START SERVER")
     args = range(1,n)
     with jobmanager.JobManager_Server(authkey      = AUTHKEY,
                                       port         = PORT,
-                                      verbose      = verbose,
                                       msg_interval = 1,
                                       fname_dump   = 'jobmanager.dump') as jm_server:
         if not read_old_state:
@@ -162,16 +164,13 @@ def start_server(n, read_old_state=False, verbose=1):
             jm_server.read_old_state()
         jm_server.start()        
     
-def start_client(verbose=1):
+def start_client():
     print("START CLIENT")
     jm_client = jobmanager.JobManager_Client(server = SERVER, 
                                              authkey = AUTHKEY, 
                                              port    = PORT, 
-                                             nproc   = 3,
-                                             verbose = verbose)
+                                             nproc   = 3)
     jm_client.start()
-    if verbose > 1:
-        print("jm_client returned")
 
 def test_jobmanager_basic():
     """
@@ -181,22 +180,26 @@ def test_jobmanager_basic():
     """
     global PORT
     PORT += 1
-    n = 10
-    p_server = mp.Process(target=start_server, args=(n,False,2))
-    p_server.start()    
-    time.sleep(1)
-    assert p_server.is_alive()
-    
+    n = 5
+
+    p_server = None
+    p_client = None
+
     try:
-        p_client = mp.Process(target=start_client, args=(2,))
+
+        p_server = mp.Process(target=start_server, args=(n,False))
+        p_server.start()
+        time.sleep(0.5)
+        assert p_server.is_alive()
+    
+
+        p_client = mp.Process(target=start_client)
         p_client.start()
         
-        p_client.join(15)
+        p_client.join(3)
         assert not p_client.is_alive(), "the client did not terminate on time!"
         assert p_client.exitcode == 0, "the client raised an exception"
-        p_server.join(15)
-        
-        
+        p_server.join(3)
         assert not p_server.is_alive(), "the server did not terminate on time!"
          
         print("[+] client and server terminated")
@@ -214,7 +217,10 @@ def test_jobmanager_basic():
         assert len(intersect) == 0, "final result does not contain all arguments!"
         print("[+] all arguments found in final_results")
     except:
-        os.kill(p_server.pid, signal.SIGINT)
+        if p_server is not None:
+            os.kill(p_server.pid, signal.SIGINT)
+        if p_client is not None:
+            os.kill(p_client.pid, signal.SIGINT)
         raise
     
     
@@ -299,7 +305,7 @@ def test_shutdown_server_while_client_running():
     
     time.sleep(1)
     
-    p_client = mp.Process(target=start_client, args=(2,))
+    p_client = mp.Process(target=start_client)
     p_client.start()
     
     time.sleep(2)
@@ -432,7 +438,6 @@ def test_check_fail():
 
     
     n = 100
-    verbose=2
     p_server = mp.Process(target=start_server, args=(n,))
     p_server.start()
     
@@ -442,8 +447,7 @@ def test_check_fail():
     jm_client = Client_Random_Error(server=SERVER, 
                                     authkey=AUTHKEY,
                                     port=PORT, 
-                                    nproc=0, 
-                                    verbose=verbose)
+                                    nproc=0)
     
     p_client = mp.Process(target=jm_client.start)
     p_client.start()
@@ -585,7 +589,7 @@ def test_client_status():
     global PORT
     PORT += 1
     n = 10
-    p_server = mp.Process(target=start_server, args=(n,False,0))
+    p_server = mp.Process(target=start_server, args=(n,False))
     p_server.start()
     
     time.sleep(1)
@@ -602,8 +606,7 @@ def test_client_status():
     client = Client_With_Status(server = SERVER, 
                                 authkey = AUTHKEY,
                                 port    = PORT, 
-                                nproc   = 4, 
-                                verbose = 1)
+                                nproc   = 4)
     client.start()
     p_server.join()
     
@@ -614,8 +617,6 @@ def test_jobmanager_local():
     with jobmanager.JobManager_Local(client_class = jobmanager.JobManager_Client,
                                      authkey = AUTHKEY,
                                      port = PORT,
-                                     verbose = 1,
-                                     verbose_client=0,
                                      ) as jm_server:
         jm_server.args_from_list(args)
         jm_server.start()
@@ -690,8 +691,7 @@ def test_shared_const_arg():
         client = myClient(server=SERVER,
                           authkey=AUTHKEY,
                           port = PORT,
-                          nproc=1,
-                          verbose=2)
+                          nproc=1)
         
         client.start()
             
@@ -714,7 +714,7 @@ def test_digest_rejected():
     global PORT
     PORT += 1
     n = 10
-    p_server = mp.Process(target=start_server, args=(n,False,0))
+    p_server = mp.Process(target=start_server, args=(n,False))
     p_server.start()
     
     time.sleep(1)
@@ -731,173 +731,14 @@ def test_digest_rejected():
     client = Client_With_Status(server = SERVER, 
                                 authkey = AUTHKEY+' not the same',
                                 port    = PORT, 
-                                nproc   = 4, 
-                                verbose = 2)
+                                nproc   = 4)
     try:
         client.start()
     except ConnectionError as e:
         print("Not an error: caught '{}' with message '{}'".format(e.__class__.__name__, e))
         p_server.terminate()
         
-    p_server.join()            
-    
-def _test_exception():   
-    global PORT
-    class MyManager_Client(jobmanager.BaseManager):
-        pass
-        
-    def autoproxy_server(which_python, port, authkey, outfile):
-        libpath = os.path.dirname(os.__file__)
-        python_env = os.environ.copy()
-        envpath = "{LIB}:{LIB}/site-packages".format(LIB=libpath)
-        envpath += ":{LIB}/lib-old".format(LIB=libpath)
-        envpath += ":{LIB}/lib-tk".format(LIB=libpath)
-        envpath += ":{LIB}/lib-dynload".format(LIB=libpath)
-        envpath += ":{LIB}/plat-linux2".format(LIB=libpath)
-        # env will be
-        # "/usr/lib/python2.7" for python 2
-        # "/usr/lib/python3.4" for python 3
-        if which_python == 2:
-            python_interpreter = "python2.7"
-            envpath = envpath.replace("3.4", "2.7")
-        elif which_python == 3:
-            python_interpreter = "python3.4"
-            envpath = envpath.replace("2.7", "3.4")
-        else:
-            raise ValueError("'which_python' must be 2 or 3")
-            
-        python_env["PYTHONPATH"] = envpath
-        path = dirname(abspath(__file__))
-        cmd = [python_interpreter,
-        
-               "{}/start_autoproxy_server.py".format(path),
-               str(port), 
-               authkey]
-
-        print("+"*40)
-        print("start an autoproxy server with command")
-        print(cmd)
-        print("and environment")
-        print(python_env)
-        print("+"*40)
-        return subprocess.Popen(cmd, env=python_env, stdout=outfile, stderr=subprocess.STDOUT)
-
-    def autoproxy_connect(server, port, authkey):
-        MyManager_Client.register('get_q')
-        
-        m = MyManager_Client(address = (server, port),                              
-                             authkey = bytearray(authkey, encoding='utf8'))
-        
-        jobmanager.call_connect(m.connect, dest = jobmanager.address_authkey_from_manager(m), verbose=2)
-        
-        return m
-        
-    for p_version_server in [2, 3]:
-        PORT += 2 # plus two because we also check for wrong port
-        port = PORT
-        authkey = 'q'
-        with open("ap_server.out", 'w') as outfile:
-            p_server = autoproxy_server(p_version_server, port, authkey, outfile)
-            print("autoproxy server running with PID {}".format(p_server.pid))
-            time.sleep(1)
-            try:
-                print("running tests with python {} ...".format(sys.version_info[0]))
-                print()
-
-                if sys.version_info[0] == 3:
-                    print("we are using python 3 ... try to connect ...")
-                    try:
-                        autoproxy_connect(server=SERVER, port=port, authkey=authkey)
-                    except jobmanager.RemoteValueError as e:
-                        if p_version_server == 2:
-                            print("that is ok, because the server is running on python2")      # the occurrence of this Exception is normal
-                            print()
-                        else:
-                            print("RemoteValueError error")
-                            raise                    # reraise exception
-                    except Exception as e:
-                        print("unexpected error {}".format(e))
-                        raise
-                
-                elif sys.version_info[0] == 2:
-                    print("we are using python 2 ... try to connect ...")
-                    try:
-                        autoproxy_connect(server=SERVER, port=port, authkey=authkey)
-                    except ValueError as e:
-                        if p_version_server == 3:
-                            print("that is ok, because the server is running on python3")      # the occurrence of this Exception is normal
-                            print()
-                        else:                
-                            print("JMConnectionRefusedError error")
-                            raise                    # reraise exception
-                    except Exception as e:
-                        print("unexpected error {}".format(e))
-                        raise
-
-                # all the following only for the same python versions
-                if (sys.version_info[0] != p_version_server):
-                    continue
-                    
-                try:
-                    print("try to connect to server, use wrong port")
-                    autoproxy_connect(server=SERVER, port=port+1, authkey=authkey)
-                except jobmanager.JMConnectionRefusedError:
-                    print("that is ok")
-                    print()
-                except:
-                    raise
-                
-                try:
-                    print("try to connect to server, use wrong authkey")
-                    autoproxy_connect(server=SERVER, port=port, authkey=authkey+'_')
-                except jobmanager.AuthenticationError:
-                    print("that is ok")
-                    print()
-                except:
-                    raise
-                
-                m = autoproxy_connect(server=SERVER, port=port, authkey=authkey)
-                
-                print("try pass some data forth and back ...")
-                
-                q = m.get_q()
-                
-                q_get = jobmanager.proxy_operation_decorator_python3(q, 'get')
-                q_put = jobmanager.proxy_operation_decorator_python3(q, 'put')
-                
-                s1 = 'hallo welt'
-                q_put(s1)
-                s2 = q_get()
-                
-                assert s1 == s2                
-                                
-            finally:
-                print()
-                print("tests done! terminate server ...".format())
-                
-                p_server.send_signal(signal.SIGTERM)
-                
-                t = time.time()
-                timeout = 10
-                r = None
-                while r is None:
-                    r = p_server.poll()
-                    time.sleep(1)
-                    print("will kill server in {:.1f}s".format(timeout - (time.time() - t)))
-                    if (time.time() - t) > timeout:
-                        print("timeout exceeded, kill p_server")
-                        print("the managers subprocess will still be running, and needs to be killed by hand")
-                        p_server.send_signal(signal.SIGKILL)
-                        break
-                
-                print("server terminated with exitcode {}".format(r))
-        
-                with open("ap_server.out", 'r') as outfile:
-                    print("+"*40)
-                    print("this is the server output:")
-                    for l in outfile:
-                        print("    {}".format(l[:-1]))
-                    print("+"*40)
+    p_server.join()
             
 def test_hum_size():  
     # bypassing the __all__ clause in jobmanagers __init__
@@ -923,17 +764,17 @@ if __name__ == "__main__":
 #         test_Signal_to_terminate_process_list,
                   
         test_jobmanager_basic,
-#         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
-#         test_check_fail,
-#         test_jobmanager_read_old_stat,
-#         test_client_status,
-#         test_jobmanager_local,
-#         test_start_server_on_used_port,
-#         test_shared_const_arg,
-#         test_digest_rejected,
-#         test_hum_size,
+        # test_jobmanager_server_signals,
+        # test_shutdown_server_while_client_running,
+        # test_shutdown_client,
+        # test_check_fail,
+        # test_jobmanager_read_old_stat,
+        # test_client_status,
+        # test_jobmanager_local,
+        # test_start_server_on_used_port,
+        # test_shared_const_arg,
+        # test_digest_rejected,
+        # test_hum_size,
 
         lambda : print("END")
         ]
@@ -944,7 +785,4 @@ if __name__ == "__main__":
             print()
             f()
             time.sleep(1)
-    
-
-#         _test_interrupt_client()
     

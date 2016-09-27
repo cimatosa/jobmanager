@@ -50,6 +50,13 @@ import binfootprint as bf
 import progress
 import logging
 
+# try:
+#     from logging.handlers import QueueHandler
+#     from logging.handlers import QueueListener
+# except ImportError:
+#     warnings.warn("could not load QueueHandler/QueueListener (python version too old\n"+
+#                   "no coheerent subprocess logging pissible", ImportWarning)
+
 # taken from here: https://mail.python.org/pipermail/python-list/2010-November/591474.html
 class MultiLineFormatter(logging.Formatter):
     def format(self, record):
@@ -141,18 +148,6 @@ def get_user_num_process():
     out = subprocess.check_output('ps ut | wc -l', shell=True).decode().strip()
     return int(out)-2
 
-def set_logging_level_from_verbose(verbose):
-    if verbose is not None:
-        if verbose == 0:
-            log.setLevel(logging.ERROR)
-        elif verbose == 1:
-            log.setLevel(logging.INFO)
-        else:
-            log.setLevel(logging.DEBUG)
-    else:
-        log.info("logging level not changes, verbose is None")
-         
-
 class JobManager_Client(object):
     """
     Calls the functions self.func with arguments fetched from the job_q.
@@ -187,7 +182,7 @@ class JobManager_Client(object):
                  njobs                   = 0,
                  nice                    = 19, 
                  no_warnings             = False, 
-                 verbose                 = 1,
+                 verbose                 = None,
                  show_statusbar_for_jobs = True,
                  show_counter_only       = False,
                  interval                = 0.3,
@@ -198,7 +193,8 @@ class JobManager_Client(object):
                  reconnect_wait          = 2,
                  reconnect_tries         = 3,
                  ping_timeout            = 2,
-                 ping_retry              = 3):
+                 ping_retry              = 3,
+                 hide_progress           = False):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -230,11 +226,17 @@ class JobManager_Client(object):
         verbose [int] - 0: quiet, 1: status only, 2: debug messages
         """
 
+        global log
+        log = logging.getLogger(__name__+'.'+self.__class__.__name__)
+
         self._pid = os.getpid()
         self._sid = os.getsid(self._pid)
-        
-        set_logging_level_from_verbose(verbose)
-        self.hide_progress = (verbose == 0)
+
+        if verbose is not None:
+            log.warning("verbose is deprecated, only allowed for compatibility")
+            warnings.warn("verbose is deprecated", DeprecationWarning)
+
+        self.hide_progress = hide_progress
                
         log.info("init JobManager Client instance")        
         
@@ -288,6 +290,8 @@ class JobManager_Client(object):
         log.debug("njobs:%s", self.njobs)
         self.emergency_dump_path = emergency_dump_path
         log.debug("emergency_dump_path:%s", self.emergency_dump_path)
+
+        self.pbc = None
         
         self.procs = []        
         self.manager_objects = None  # will be set via connect()
@@ -368,18 +372,19 @@ class JobManager_Client(object):
         return os.getpid()
     
     @staticmethod
-    def __worker_func(func, nice, loglevel, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs, 
+    def __worker_func(func, nice, loglevel, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs,
                       emergency_dump_path, job_q_timeout, fail_q_timeout, result_q_timeout, stdout_queue,
                       reconnect_wait, reconnect_tries, ping_timeout, ping_retry):
         """
         the wrapper spawned nproc times calling and handling self.func
         """
-        log = logging.getLogger(progress.get_identifier(name='worker{}'.format(i+1)))
+        global log
+        log = logging.getLogger(__name__+'.'+progress.get_identifier(name='worker{}'.format(i+1), bold=False))
         log.setLevel(loglevel)
         
-        queue_hand = logging.handlers.QueueHandler(stdout_queue)
-        queue_hand.setFormatter(fmt)
-        log.addHandler(queue_hand)
+        # queue_hand = logging.handlers.QueueHandler(stdout_queue)
+        # queue_hand.setFormatter(fmt)
+        # log.addHandler(queue_hand)
         
         Signal_to_sys_exit(signals=[signal.SIGTERM])
         Signal_to_SIG_IGN(signals=[signal.SIGINT])
@@ -553,10 +558,14 @@ class JobManager_Client(object):
             sta = progress.humanize_time(time_calc / cnt)
         except:
             sta = 'invalid'
+
+        stat = "pure calculation time: {} single task average: {}".format(progress.humanize_time(time_calc), sta)
+        try:
+            stat += "\ncalculation:{:.2%} communication:{:.2%}".format(time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue))
+        except ZeroDivisionError:
+            pass
             
-        log.info("pure calculation time: %s single task average: %s\ncalculation:%.2f communication:%.2f", 
-                 progress.humanize_time(time_calc), sta, 
-                 100*time_calc/(time_calc+time_queue), 100*time_queue/(time_calc+time_queue))
+        log.info(stat)
 
         log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
 
@@ -593,9 +602,18 @@ class JobManager_Client(object):
         prepend = []
         infoline = progress.StringValue(num_of_bytes=12)
         infoline = None
-        
-        worker_stdout_queue = mp.Queue(-1)
-        
+
+        # try:
+        #     worker_stdout_queue = mp.Queue(-1)
+        #     listener = QueueListener(worker_stdout_queue, console_hand)
+        #     listener.start()
+        # except NameError:
+        #     log.error("QueueListener not available in this python version (need at least 3.2)\n"
+        #               "this may resault in incoheerent logging")
+        #     worker_stdout_queue = None
+
+        worker_stdout_queue = None
+
         l = len(str(self.nproc))
         for i in range(self.nproc):
             prepend.append("w{0:0{1}}:".format(i+1, l))
@@ -606,14 +624,13 @@ class JobManager_Client(object):
                                               prepend       = prepend,
                                               sigint        = 'ign',
                                               sigterm       = 'ign',
-                                              info_line     = infoline,
-                                              logging_level = log.level) as pbc :
+                                              info_line     = infoline) as self.pbc :
             
             if (not self.hide_progress) and self.show_statusbar_for_jobs:
-                pbc.start()
-                
+                self.pbc.start()
+
             for i in range(self.nproc):
-                reset_pbc = lambda: pbc.reset(i)
+                reset_pbc = lambda: self.pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
                                                                 self.nice, 
                                                                 log.level, 
@@ -710,13 +727,14 @@ class JobManager_Server(object):
     """
     def __init__(self, 
                  authkey,
-                 const_arg=None, 
-                 port=42524, 
-                 verbose=1, 
-                 msg_interval=1,
-                 fname_dump='auto',
-                 speed_calc_cycles=50,
-                 keep_new_result_in_memory = False):
+                 const_arg                 = None,
+                 port                      = 42524,
+                 verbose                   = None,
+                 msg_interval              = 1,
+                 fname_dump                = 'auto',
+                 speed_calc_cycles         = 50,
+                 keep_new_result_in_memory = False,
+                 hide_progress             = False):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -726,7 +744,7 @@ class JobManager_Server(object):
         
         port [int] - network port to use
         
-        verbose [int] - 0: quiet, 1: status only, 2: debug messages
+        verbose deprecates, use log.setLevel to change verbosity
         
         msg_interval [int] - number of second for the status bar to update
         
@@ -744,11 +762,18 @@ class JobManager_Server(object):
         
         This init actually starts the SyncManager as a new process. As a next step
         the job_q has to be filled, see put_arg().
-        """       
+        """
+        global log
+        log = logging.getLogger(__name__+'.'+self.__class__.__name__)
+
         self._pid = os.getpid()
         self._pid_start = None
-        set_logging_level_from_verbose(verbose)
-        self.hide_progress = (verbose == 0)
+
+        if verbose is not None:
+            log.warning("verbose is deprecated, only allowed for compatibility")
+            warnings.warn("verbose is deprecated", DeprecationWarning)
+
+        self.hide_progress = hide_progress
         
         log.debug("I'm the JobManager_Server main process")
         
@@ -802,17 +827,18 @@ class JobManager_Server(object):
         
         progress.check_process_termination(proc                     = manager_proc, 
                                            prefix                   = 'SyncManager: ', 
-                                           timeout                  = 2, 
-                                           log                      = log,
+                                           timeout                  = 2,
                                            auto_kill_on_last_resort = True)
 
     def __check_bind(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind((self.hostname, self.port))
-            except:
-                log.critical("test bind to %s:%s failed", self.hostname, self.port)
-                raise
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.bind((self.hostname, self.port))
+        except:
+            log.critical("test bind to %s:%s failed", self.hostname, self.port)
+            raise
+        finally:
+            s.close()
                 
     def __start_SyncManager(self):
         self.__check_bind()
@@ -844,8 +870,7 @@ class JobManager_Server(object):
             manager_identifier = progress.get_identifier(name='SyncManager')
             progress.check_process_termination(proc                     = manager_proc, 
                                                prefix                   = manager_identifier, 
-                                               timeout                  = 0.3, 
-                                               log                      = log, 
+                                               timeout                  = 0.3,
                                                auto_kill_on_last_resort = True)
             
             self.manager = None
@@ -937,7 +962,7 @@ class JobManager_Server(object):
         failed = self.fail_q.qsize()
         all_processed = succeeded + failed
         
-        id1 = self.__class__.__name__
+        id1 = self.__class__.__name__+" "
         l = len(id1)
         id2 = ' '*l + "| " 
         
@@ -1102,8 +1127,7 @@ class JobManager_Server(object):
                                        speed_calc_cycles = self.speed_calc_cycles,                                       
                                        sigint            = 'ign',
                                        sigterm           = 'ign',
-                                       info_line         = info_line,
-                                       logging_level     = log.level) as stat:
+                                       info_line         = info_line) as stat:
             if not self.hide_progress:
                 stat.start()
         
@@ -1137,8 +1161,8 @@ class JobManager_Local(JobManager_Server):
                  delay                   = 1,
                  const_arg               = None, 
                  port                    = 42524, 
-                 verbose                 = 1,
-                 verbose_client          = 0, 
+                 verbose                 = None,
+                 verbose_client          = None,
                  show_statusbar_for_jobs = False,
                  show_counter_only       = False,
                  niceness_clients        = 19,
@@ -1170,7 +1194,7 @@ class JobManager_Local(JobManager_Server):
                       nproc                   = 0, 
                       nice                    = 19, 
                       delay                   = 1, 
-                      verbose                 = 0, 
+                      verbose                 = None,
                       show_statusbar_for_jobs = False,
                       show_counter_only       = False):        # ignore signal, because any signal bringing the server down
         # will cause an error in the client server communication
@@ -1205,8 +1229,7 @@ class JobManager_Local(JobManager_Server):
         
         progress.check_process_termination(p_client, 
                                            prefix  = 'local_client',
-                                           timeout = 2,
-                                           verbose = self.verbose_client)
+                                           timeout = 2)
 
 class RemoteKeyError(RemoteError):
     pass
@@ -1290,7 +1313,6 @@ class Signal_to_terminate_process_list(object):
             progress.check_process_termination(proc       = p, 
                                                prefix     = self.identifier_list[i], 
                                                timeout    = self.timeout,
-                                               log        = log,
                                                auto_kill_on_last_resort=False)
 
 def address_authkey_from_proxy(proxy):
@@ -1544,6 +1566,10 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
             
             try:
                 res = o(*args, **kwargs)
+
+            except queue.Empty as e:
+                log.info("operation '%s' -> %s FAILED due to '%s'", operation, dest, type(e))
+                raise e
             except Exception as e:
                 log.warning("operation '%s' -> %s FAILED due to '%s'", operation, dest, type(e))
                 log.debug("show traceback.format_stack()[-3]\n%s", traceback.format_stack()[-3].strip())
@@ -1627,8 +1653,6 @@ def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconn
                         continue
                     else:
                         handler_unexpected_error(e, log) 
-                elif type(e) is BrokenPipeError:
-                    handler_broken_pipe_error(e, log)
                 elif type(e) is EOFError:
                     handler_eof_error(e, log)
                 else:
