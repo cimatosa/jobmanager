@@ -5,13 +5,13 @@ from __future__ import division, print_function
 import os
 import sys
 import time
-import signal
 import multiprocessing as mp
 import numpy as np
 import traceback
 import socket
 import subprocess
 import signal
+import logging
 
 from os.path import abspath, dirname, split
 # Add parent directory to beginning of path variable
@@ -28,12 +28,12 @@ AUTHKEY = 'testing'
 PORT = 42525
 SERVER = socket.gethostname()
 
-
 def test_Signal_to_SIG_IGN():
+    from jobmanager.jobmanager import Signal_to_SIG_IGN
     global PORT
     PORT += 1
     def f():
-        jobmanager.Signal_to_SIG_IGN()
+        Signal_to_SIG_IGN()
         print("before sleep")
         while True:
             time.sleep(1)
@@ -65,15 +65,16 @@ def test_Signal_to_SIG_IGN():
     print("[+] terminated")
     
 def test_Signal_to_sys_exit():
+    from jobmanager.jobmanager import Signal_to_sys_exit
     global PORT
     PORT += 1
     def f():
-        jobmanager.Signal_to_sys_exit()
+        Signal_to_sys_exit()
         while True:
             try:
                 time.sleep(10)
             except SystemExit:
-                print("[+] caught SystemExit, keep running")
+                print("[+] caught SystemExit, but for further testing keep running")
             else:
                 return
         
@@ -102,10 +103,12 @@ def test_Signal_to_sys_exit():
     print("[+] terminated")
     
 def test_Signal_to_terminate_process_list():
+    from jobmanager.jobmanager import Signal_to_sys_exit
+    from jobmanager.jobmanager import Signal_to_terminate_process_list
     global PORT
     PORT += 1
     def child_proc():
-        jobmanager.Signal_to_sys_exit()
+        Signal_to_sys_exit()
         try:
             time.sleep(10)
         except:
@@ -113,24 +116,33 @@ def test_Signal_to_terminate_process_list():
             print("PID {}: caught Exception {}".format(os.getpid(), err))
             
     def mother_proc():
-        n = 3
-        p = []
-        for i in range(n):
-            p.append(mp.Process(target=child_proc))
-            p[-1].start()
-
-        jobmanager.Signal_to_terminate_process_list(identifier='mother_proc', process_list=p, identifier_list=["proc_{}".format(i+1) for i in range(n)], verbose=2)
-        print("spawned {} processes".format(n))        
-        for i in range(n):
-            p[i].join()
-        print("all joined, mother ends gracefully")
+        try:
+            n = 3
+            p = []
+            for i in range(n):
+                p.append(mp.Process(target=child_proc))
+                p[-1].start()
+    
+            Signal_to_terminate_process_list(process_list=p, identifier_list=["proc_{}".format(i+1) for i in range(n)])
+            print("spawned {} processes".format(n))        
+            for i in range(n):
+                p[i].join()
+            print("all joined, mother ends gracefully")
+            sys.exit()
+        except SystemExit:
+            return
+        except Exception as e:
+            sys.exit(-1)
             
     p_mother = mp.Process(target=mother_proc)
     p_mother.start()
-    time.sleep(1.5)
+    time.sleep(0.2)
     assert p_mother.is_alive()
     print("send SIGINT")
     os.kill(p_mother.pid, signal.SIGINT)
+    time.sleep(0.2)
+    assert not p_mother.is_alive()
+    assert p_mother.exitcode == 0
     
 
  
@@ -146,7 +158,7 @@ def start_server(n, read_old_state=False, verbose=1):
             jm_server.args_from_list(args)
         else:
             jm_server.read_old_state()
-        jm_server.start()
+        jm_server.start()        
     
 def start_client(verbose=1):
     print("START CLIENT")
@@ -157,7 +169,7 @@ def start_client(verbose=1):
                                              verbose = verbose)
     jm_client.start()
     if verbose > 1:
-        print("jm_client returned")    
+        print("jm_client returned")
 
 def test_jobmanager_basic():
     """
@@ -169,44 +181,39 @@ def test_jobmanager_basic():
     PORT += 1
     n = 10
     p_server = mp.Process(target=start_server, args=(n,False,2))
-    p_server.start()
-    
+    p_server.start()    
     time.sleep(1)
-     
-    p_client = mp.Process(target=start_client, args=(2,))
-    p_client.start()
-     
-    p_client.join(30)
-    p_server.join(30)
+    assert p_server.is_alive()
     
     try:
-        assert not p_client.is_alive(), "the client did not terminate on time!"
-        assert not p_server.is_alive(), "the server did not terminate on time!"
-    finally:
-        try:
-            os.kill(p_client.pid, signal.SIGINT)
-        except ProcessLookupError:
-            pass
+        p_client = mp.Process(target=start_client, args=(2,))
+        p_client.start()
         
-        try:
-            os.kill(p_server.pid, signal.SIGINT)
-        except ProcessLookupError:
-            pass
-    
-    print("[+] client and server terminated")
-     
-    fname = 'jobmanager.dump'
-    with open(fname, 'rb') as f:
-        data = jobmanager.JobManager_Server.static_load(f)
-    
-    final_res_args_set = {a[0] for a in data['final_result']}
+        p_client.join(15)
+        assert not p_client.is_alive(), "the client did not terminate on time!"
+        assert p_client.exitcode == 0, "the client raised an exception"
+        p_server.join(15)
+        
+        
+        assert not p_server.is_alive(), "the server did not terminate on time!"
          
-    set_ref = set(range(1,n))
-     
-    intersect = set_ref - final_res_args_set
-     
-    assert len(intersect) == 0, "final result does not contain all arguments!"
-    print("[+] all arguments found in final_results")
+        print("[+] client and server terminated")
+          
+        fname = 'jobmanager.dump'
+        with open(fname, 'rb') as f:
+            data = jobmanager.JobManager_Server.static_load(f)
+         
+        final_res_args_set = {a[0] for a in data['final_result']}
+              
+        set_ref = set(range(1,n))
+          
+        intersect = set_ref - final_res_args_set
+          
+        assert len(intersect) == 0, "final result does not contain all arguments!"
+        print("[+] all arguments found in final_results")
+    except:
+        os.kill(p_server.pid, signal.SIGINT)
+        raise
     
     
     
@@ -890,39 +897,41 @@ def _test_exception():
                         print("    {}".format(l[:-1]))
                     print("+"*40)
             
-def test_hum_size():    
-    print(jobmanager.humanize_size(1))
-    print(jobmanager.humanize_size(110))
-    print(jobmanager.humanize_size(1000))
-    print(jobmanager.humanize_size(1024))
-    print(jobmanager.humanize_size(1024**2))
-    print(jobmanager.humanize_size(1024**3))
-    print(jobmanager.humanize_size(1024**4))
+def test_hum_size():  
+    # bypassing the __all__ clause in jobmanagers __init__
+    from jobmanager.jobmanager import humanize_size
+      
+    assert humanize_size(1) == '1.00kB'
+    assert humanize_size(110) == '0.11MB'
+    assert humanize_size(1000) == '0.98MB'
+    assert humanize_size(1024) == '1.00MB'
+    assert humanize_size(1024**2) == '1.00GB'
+    assert humanize_size(1024**3) == '1.00TB'
+    assert humanize_size(1024**4) == '1024.00TB'
     
-if __name__ == "__main__":
+if __name__ == "__main__":      
     if len(sys.argv) > 1:
         pass
     else:    
         func = [
         
-        test_hum_size,
-        test_Signal_to_SIG_IGN,
-        test_Signal_to_sys_exit,
-        test_Signal_to_terminate_process_list,
+#         test_hum_size,
+#         test_Signal_to_SIG_IGN,
+#         test_Signal_to_sys_exit,
+#         test_Signal_to_terminate_process_list,
                   
         test_jobmanager_basic,
-        test_jobmanager_server_signals,
-        test_shutdown_server_while_client_running,
-        test_shutdown_client,
-        test_check_fail,
-        test_jobmanager_read_old_stat,
-        test_client_status,
-        test_jobmanager_local,
-        test_start_server_on_used_port,
-        test_shared_const_arg,
-        test_digest_rejected,
-        test_exception,
-        test_hum_size,
+#         test_jobmanager_server_signals,
+#         test_shutdown_server_while_client_running,
+#         test_shutdown_client,
+#         test_check_fail,
+#         test_jobmanager_read_old_stat,
+#         test_client_status,
+#         test_jobmanager_local,
+#         test_start_server_on_used_port,
+#         test_shared_const_arg,
+#         test_digest_rejected,
+#         test_hum_size,
 
         lambda : print("END")
         ]

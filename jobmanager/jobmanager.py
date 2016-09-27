@@ -48,24 +48,24 @@ import traceback
 import warnings
 import binfootprint as bf
 import progress
-
 import logging
 
 # taken from here: https://mail.python.org/pipermail/python-list/2010-November/591474.html
 class MultiLineFormatter(logging.Formatter):
     def format(self, record):
         _str = logging.Formatter.format(self, record)
-        header = str.split(record.message)[0]
+        header = _str.split(record.message)[0]
         _str = _str.replace('\n', '\n' + ' '*len(header))
         return _str
+   
 
-default_log = logging.getLogger(__name__)
-default_log.setLevel(logging.INFO)
-cons_hand = logging.StreamHandler(stream = sys.stderr)
-cons_hand.setLevel(logging.DEBUG)
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+console_hand = logging.StreamHandler(stream = sys.stderr)
+console_hand.setLevel(logging.DEBUG)
 fmt = MultiLineFormatter('%(asctime)s %(name)s %(levelname)s : %(message)s')
-cons_hand.setFormatter(fmt)
-default_log.addHandler(cons_hand)
+console_hand.setFormatter(fmt)
+log.addHandler(console_hand)
 
 
 from datetime import datetime
@@ -120,7 +120,7 @@ AuthenticationError = mp.AuthenticationError
 def humanize_size(size_in_bytes):
     """convert a speed in counts per second to counts per [s, min, h, d], choosing the smallest value greater zero.
     """
-    thr = 999
+    thr = 99
     scales = [1024, 1024, 1024]
     units = ['k', 'M', 'G', 'T']
     i = 0
@@ -140,6 +140,17 @@ def get_user_process_limit():
 def get_user_num_process():
     out = subprocess.check_output('ps ut | wc -l', shell=True).decode().strip()
     return int(out)-2
+
+def set_logging_level_from_verbose(verbose):
+    if verbose is not None:
+        if verbose == 0:
+            log.setLevel(logging.ERROR)
+        elif verbose == 1:
+            log.setLevel(logging.INFO)
+        else:
+            log.setLevel(logging.DEBUG)
+    else:
+        log.info("logging level not changes, verbose is None")
          
 
 class JobManager_Client(object):
@@ -184,7 +195,6 @@ class JobManager_Client(object):
                  result_q_timeout        = 30,                 
                  job_q_timeout           = 0.1,
                  fail_q_timeout          = 10,
-                 logging_level           = None,
                  reconnect_wait          = 2,
                  reconnect_tries         = 3,
                  ping_timeout            = 2,
@@ -222,84 +232,72 @@ class JobManager_Client(object):
 
         self._pid = os.getpid()
         self._sid = os.getsid(self._pid)
-        _identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid)
-        self.log = logging.getLogger(_identifier)
         
-        if logging_level is None:
-            if verbose == 0:
-                self.log.setLevel(logging.ERROR)
-            elif verbose == 1:
-                self.log.setLevel(logging.INFO)
-            else:
-                self.log.setLevel(logging.DEBUG)
-        else:
-            self.log.setLevel(logging_level)
-        self.log.addHandler(cons_hand)   
-        
-        self.log.info("init JobManager Client instance")        
+        set_logging_level_from_verbose(verbose)
+        self.hide_progress = (verbose == 0)
+               
+        log.info("init JobManager Client instance")        
         
         self.show_statusbar_for_jobs = show_statusbar_for_jobs
-        self.log.debug("show_statusbar_for_jobs:%s", self.show_statusbar_for_jobs)
+        log.debug("show_statusbar_for_jobs:%s", self.show_statusbar_for_jobs)
         self.show_counter_only = show_counter_only
-        self.log.debug("show_counter_only:%s", self.show_counter_only)
+        log.debug("show_counter_only:%s", self.show_counter_only)
         self.interval = interval
-        self.log.debug("interval:%s", self.interval)
+        log.debug("interval:%s", self.interval)
             
         self._result_q_timeout = result_q_timeout
-        self.log.debug("_result_q_timeout:%s", self._result_q_timeout)
+        log.debug("_result_q_timeout:%s", self._result_q_timeout)
         self._job_q_timeout = job_q_timeout
-        self.log.debug("_job_q_timeout:%s", self._job_q_timeout)
+        log.debug("_job_q_timeout:%s", self._job_q_timeout)
         self._fail_q_timeout = fail_q_timeout
-        self.log.debug("_fail_q_timeout:%s", self._fail_q_timeout)
+        log.debug("_fail_q_timeout:%s", self._fail_q_timeout)
         self.reconnect_wait = reconnect_wait
-        self.log.debug("reconnect_wait:%s", self.reconnect_wait)
+        log.debug("reconnect_wait:%s", self.reconnect_wait)
         self.reconnect_tries = reconnect_tries
-        self.log.debug("reconnect_tries:%s", self.reconnect_tries)
+        log.debug("reconnect_tries:%s", self.reconnect_tries)
         self.ping_timeout = ping_timeout
-        self.log.debug("ping_timeout:%s", self.ping_timeout)
+        log.debug("ping_timeout:%s", self.ping_timeout)
         self.ping_retry = ping_retry
-        self.log.debug("ping_retry:%s", self.ping_retry)
+        log.debug("ping_retry:%s", self.ping_retry)
               
         if no_warnings:
             warnings.filterwarnings("ignore")
-            self.log.info("ignore all warnings")
+            log.info("ignore all warnings")
 
         self.server = server
-        self.log.debug("server:%s", self.server)
+        log.debug("server:%s", self.server)
         if isinstance(authkey, bytearray):
             self.authkey = authkey
         else: 
             self.authkey = bytearray(authkey, encoding='utf8')
-        self.log.debug("authkey:%s", self.authkey)
+        log.debug("authkey:%s", self.authkey)
         self.port = port
-        self.log.debug("port:%s", self.port)
+        log.debug("port:%s", self.port)
         self.nice = nice
-        self.log.debug("nice:%s", self.nice)
+        log.debug("nice:%s", self.nice)
         if nproc > 0:
             self.nproc = nproc
         else:
             self.nproc = mp.cpu_count() + nproc
             if self.nproc <= 0:
                 raise RuntimeError("Invalid Number of Processes\ncan not spawn {} processes (cores found: {}, cores NOT to use: {} = -nproc)".format(self.nproc, mp.cpu_count(), abs(nproc)))
-        self.log.debug("nproc:%s", self.nproc)
+        log.debug("nproc:%s", self.nproc)
         if njobs == 0:        # internally, njobs must be negative for infinite jobs
             njobs -= 1
         self.njobs = njobs
-        self.log.debug("njobs:%s", self.njobs)
+        log.debug("njobs:%s", self.njobs)
         self.emergency_dump_path = emergency_dump_path
-        self.log.debug("emergency_dump_path:%s", self.emergency_dump_path)
+        log.debug("emergency_dump_path:%s", self.emergency_dump_path)
         
         self.procs = []        
         self.manager_objects = None  # will be set via connect()
         self.connect()               # get shared objects from server
         
-        self.pbc = None
-        
     def connect(self):
         if self.manager_objects is None:
             self.manager_objects = self.create_manager_objects()
         else:
-            self.log.info("already connected (at least shared object are available)")
+            log.info("already connected (at least shared object are available)")
 
     @property
     def connected(self):
@@ -330,14 +328,14 @@ class JobManager_Client(object):
             call_connect(connect         = manager.connect,
                          dest            = address_authkey_from_manager(manager),
                          reconnect_wait  = self.reconnect_wait, 
-                         reconnect_tries = self.reconnect_tries,
-                         log             = self.log)
+                         reconnect_tries = self.reconnect_tries)
         except:
-            self.log.warning("FAILED to connect to %s", address_authkey_from_manager(manager))
+            log.warning("FAILED to connect to %s", address_authkey_from_manager(manager))
+            log.info(traceback.format_exc())
             return None
             
         job_q = manager.get_job_q()
-        self.log.info("found job_q with %s jobs", job_q.qsize())
+        log.info("found job_q with %s jobs", job_q.qsize())
         
         result_q = manager.get_result_q()
         fail_q = manager.get_fail_q()
@@ -425,7 +423,6 @@ class JobManager_Client(object):
             
         kwargs = {'reconnect_wait' : reconnect_wait, 
                   'reconnect_tries': reconnect_tries,
-                  'log'            : log, 
                   'ping_timeout'   : ping_timeout,
                   'ping_retry'     : ping_retry}
             
@@ -557,9 +554,9 @@ class JobManager_Client(object):
         except:
             sta = 'invalid'
             
-        log.info("pure calculation time: {} single task average: {}\ncalculation:{:.2%} communication:{:.2%}".format(
+        log.info("pure calculation time: %s single task average: %s\ncalculation:%.2f communication:%.2f", 
                  progress.humanize_time(time_calc), sta, 
-                 time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue)))
+                 100*time_calc/(time_calc+time_queue), 100*time_queue/(time_calc+time_queue))
 
         log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
 
@@ -576,7 +573,7 @@ class JobManager_Client(object):
             raise JMConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
 
         
-        self.log.info("STARTING CLIENT\nserver:%s authkey:%s port:%s num proc:%s", self.server, self.authkey.decode(), self.port, self.nproc)
+        log.info("STARTING CLIENT\nserver:%s authkey:%s port:%s num proc:%s", self.server, self.authkey.decode(), self.port, self.nproc)
             
         c = []
         for i in range(self.nproc):
@@ -592,36 +589,34 @@ class JobManager_Client(object):
             
         if not self.show_counter_only:
             m_set_by_function = m_progress
-            
-        if (self.show_statusbar_for_jobs) and (self.verbose > 0):
-            Progress = progress.ProgressBarCounterFancy
-        else:
-            Progress = progress.ProgressSilentDummy
-            
+                      
         prepend = []
         infoline = progress.StringValue(num_of_bytes=12)
         infoline = None
         
-        worker_stdout_queue = mp.SimpleQueue()
+        worker_stdout_queue = mp.Queue(-1)
         
         l = len(str(self.nproc))
         for i in range(self.nproc):
             prepend.append("w{0:0{1}}:".format(i+1, l))
             
-        with Progress(count     = c, 
-                      max_count = m_progress, 
-                      interval  = self.interval,
-                      prepend   = prepend, 
-                      verbose   = self.verbose,
-                      sigint    = 'ign',
-                      sigterm   = 'ign',
-                      info_line  = infoline) as self.pbc :
-            self.pbc.start()
+        with progress.ProgressBarCounterFancy(count         = c, 
+                                              max_count     = m_progress, 
+                                              interval      = self.interval,
+                                              prepend       = prepend,
+                                              sigint        = 'ign',
+                                              sigterm       = 'ign',
+                                              info_line     = infoline,
+                                              logging_level = log.level) as pbc :
+            
+            if (not self.hide_progress) and self.show_statusbar_for_jobs:
+                pbc.start()
+                
             for i in range(self.nproc):
-                reset_pbc = lambda: self.pbc.reset(i)
+                reset_pbc = lambda: pbc.reset(i)
                 p = mp.Process(target=self.__worker_func, args=(self.func, 
                                                                 self.nice, 
-                                                                self.verbose, 
+                                                                log.level, 
                                                                 self.server, 
                                                                 self.port,
                                                                 self.authkey,
@@ -645,31 +640,28 @@ class JobManager_Client(object):
                 time.sleep(0.3)
 
             time.sleep(self.interval/2)
-            exit_handler = Signal_to_terminate_process_list(identifier      = self._identifier,
-                                                            process_list    = self.procs,
+            exit_handler = Signal_to_terminate_process_list(process_list    = self.procs,
                                                             identifier_list = [progress.get_identifier(name = "worker{}".format(i+1),
                                                                                                        pid  = p.pid,
                                                                                                        bold = True) for i, p in enumerate(self.procs)],
                                                             signals         = [signal.SIGTERM],                                                            
-                                                            log             = self.log,
                                                             timeout         = 2)
             
             interrupt_handler = Signal_handler_for_Jobmanager_client(client_object = self,
                                                                      exit_handler=exit_handler,
-                                                                     signals=[signal.SIGINT],
-                                                                     verbose=self.verbose)
+                                                                     signals=[signal.SIGINT])
         
             for p in self.procs:
-                self.log.debug("join %s PID %s", p, p.pid)
+                log.debug("join %s PID %s", p, p.pid)
                 while p.is_alive():
-                    self.log.debug("still alive {} PID {}", p, p.pid)
+                    log.debug("still alive %s PID %s", p, p.pid)
                     p.join(timeout=self.interval)
 
-                self.log.debug("process {} PID {} was joined", p, p.pid)
+                log.debug("process %s PID %s was joined", p, p.pid)
                     
-            self.log.debug("still in progressBar context")
+            log.debug("still in progressBar context")
                                         
-        self.log.debug("progressBar context has been left")
+        log.debug("progressBar context has been left")
 
 
 class JobManager_Server(object):
@@ -752,18 +744,15 @@ class JobManager_Server(object):
         
         This init actually starts the SyncManager as a new process. As a next step
         the job_q has to be filled, see put_arg().
-        """
-
-        self.verbose = verbose        
+        """       
         self._pid = os.getpid()
         self._pid_start = None
-        self._identifier = progress.get_identifier(name=self.__class__.__name__, pid=self._pid)
-        if self.verbose > 1:
-
-            print("{}: I'm the JobManager_Server main process".format(self._identifier))
+        set_logging_level_from_verbose(verbose)
+        self.hide_progress = (verbose == 0)
+        
+        log.debug("I'm the JobManager_Server main process")
         
         self.__wait_before_stop = 2
-        
         self.port = port
 
         if isinstance(authkey, bytearray):
@@ -773,8 +762,7 @@ class JobManager_Server(object):
             
       
         self.const_arg = const_arg
-        
-        
+                
         self.fname_dump = fname_dump        
         self.msg_interval = msg_interval
         self.speed_calc_cycles = speed_calc_cycles
@@ -808,24 +796,22 @@ class JobManager_Server(object):
         if self.manager == None:
             return
         
-        manager_proc = self.manager._process
-        manager_identifier = progress.get_identifier(name='SyncManager')
-        
+        manager_proc = self.manager._process        
         # stop SyncManager
         self.manager.shutdown()
         
-        progress.check_process_termination(proc=manager_proc, 
-                                  identifier=manager_identifier, 
-                                  timeout=2, 
-                                  verbose=self.verbose, 
-                                  auto_kill_on_last_resort=True)
+        progress.check_process_termination(proc                     = manager_proc, 
+                                           prefix                   = 'SyncManager: ', 
+                                           timeout                  = 2, 
+                                           log                      = log,
+                                           auto_kill_on_last_resort = True)
 
     def __check_bind(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.bind((self.hostname, self.port))
             except:
-                print("{}: test bind to {}:{} failed".format(progress.ESC_RED + self._identifier, self.hostname, self.port))
+                log.critical("test bind to %s:%s failed", self.hostname, self.port)
                 raise
                 
     def __start_SyncManager(self):
@@ -851,30 +837,27 @@ class JobManager_Server(object):
         try:
             self.manager.start(setup_SIG_handler_manager)
         except EOFError as e:
-            print("{}: can not start {} on {}:{}".format(progress.ESC_RED + self._identifier, self.__class__.__name__, self.hostname, self.port))
-            print("{}: this is usually the case when the port used is not available!".format(progress.ESC_RED + self._identifier))
+            log.error("can not start SyncManager on %s:%s\n"+
+                      "this is usually the case when the port used is not available!", self.hostname, self.port)
             
             manager_proc = self.manager._process
             manager_identifier = progress.get_identifier(name='SyncManager')
-            progress.check_process_termination(proc=manager_proc, 
-                                               identifier=manager_identifier, 
-                                               timeout=0.3, 
-                                               verbose=self.verbose, 
-                                               auto_kill_on_last_resort=True)
+            progress.check_process_termination(proc                     = manager_proc, 
+                                               prefix                   = manager_identifier, 
+                                               timeout                  = 0.3, 
+                                               log                      = log, 
+                                               auto_kill_on_last_resort = True)
             
             self.manager = None
             return False
         
-        if self.verbose > 1:
-            print("{}: started on {}:{} with authkey '{}'".format(progress.get_identifier('SyncManager', self.manager._process.pid), 
-                                                                  self.hostname, 
-                                                                  self.port,  
-                                                                  authkey))
+        log.info("SyncManager with PID %s started on %s:%s (%s)", self.manager._process.pid, self.hostname, self.port, authkey)
         return True
     
     def __restart_SyncManager(self):
         self.__stop_SyncManager()
         if not self.__start_SyncManager():
+            log.critical("faild to restart SyncManager")
             raise RuntimeError("could not start server")
         
     def __enter__(self):
@@ -884,15 +867,13 @@ class JobManager_Server(object):
         # KeyboardInterrupt via SIGINT will be mapped to SystemExit  
         # SystemExit is considered non erroneous
         if (err is None) or (err == SystemExit):
-            if self.verbose > 0:
-                print("{}: normal shutdown".format(self._identifier))
+            log.debug("normal shutdown")
             # bring everything down, dump status to file 
             self.shutdown()
             # no exception traceback will be printed
             return True
         else:
-            if self.verbose > 0:
-                print("{}: shutdown due to exception '{}'".format(progress.ESC_RED + self._identifier, err.__name__))
+            log.debug("shutdown due to exception '%s'", err.__name__)
             # bring everything down, dump status to file 
             self.shutdown()
             # causes exception traceback to be printed
@@ -922,8 +903,7 @@ class JobManager_Server(object):
         
         # do user defined final processing
         self.process_final_result()
-        if self.verbose > 1:
-            print("{}: process_final_result done!".format(self._identifier))
+        log.debug("process_final_result done!")
         
         # print(self.fname_dump)
         if self.fname_dump is not None:
@@ -931,18 +911,15 @@ class JobManager_Server(object):
                 fname = "{}_{}.dump".format(self.authkey.decode('utf8'), getDateForFileName(includePID=False))
             else:
                 fname = self.fname_dump
-
-            if self.verbose > 0:
-                print("{}: dump current state to '{}'".format(self._identifier, fname))    
+            
+            log.info("dump current state to '%s'", fname)    
             with open(fname, 'wb') as f:
                 self.__dump(f)
 
-            if self.verbose > 1:
-                print("{}:dump state done!".format(self._identifier))
+            log.debug("dump state done!")
 
         else:
-            if self.verbose > 0:
-                print("{}: fname_dump == None, ignore dumping current state!".format(self._identifier))
+            log.info("fname_dump == None, ignore dumping current state!")
         
         # start also makes sure that it was not started as subprocess
         # so at default behavior this assertion will allays be True
@@ -951,40 +928,34 @@ class JobManager_Server(object):
         self.show_statistics()
         
         self.__stop_SyncManager()
-        if self.verbose > 1:
-            print("{}: SyncManager stop done!".format(self._identifier))
-        
-        
-        print("{}: JobManager_Server was successfully shut down".format(self._identifier))
+        log.debug("SyncManager stopped!")
+        log.info("JobManager_Server was successfully shut down")
         
     def show_statistics(self):
-        if self.verbose > 0:
-            all_jobs = self.numjobs
-            succeeded = self.numresults
-            failed = self.fail_q.qsize()
-            all_processed = succeeded + failed
-            
-            id  = self._identifier + ": "
-            stripped_id = progress.remove_ESC_SEQ_from_string(self._identifier)
-            l = len(stripped_id)
-            id2 = ' '*l + "| " 
-            
-            print("{}total number of jobs  : {}".format(id, all_jobs))
-            print("{}  processed   : {}".format(id2, all_processed))
-            print("{}    succeeded : {}".format(id2, succeeded))
-            print("{}    failed    : {}".format(id2, failed))
-            
-            all_not_processed = all_jobs - all_processed
-            not_queried = self.job_q.qsize()
-            queried_but_not_processed = all_not_processed - not_queried  
-            
-            print("{}  not processed     : {}".format(id2, all_not_processed))
-            print("{}    queried         : {}".format(id2, queried_but_not_processed))
-            print("{}    not queried yet : {}".format(id2, not_queried))
-            print("{}len(args_dict) : {}".format(id2, len(self.args_dict)))
-            if (all_not_processed + failed) != len(self.args_dict):
-                raise RuntimeWarning("'all_not_processed != len(self.args_dict)' something is inconsistent!")
-            
+        all_jobs = self.numjobs
+        succeeded = self.numresults
+        failed = self.fail_q.qsize()
+        all_processed = succeeded + failed
+        
+        id1 = self.__class__.__name__
+        l = len(id1)
+        id2 = ' '*l + "| " 
+        
+        print("{}total number of jobs  : {}".format(id1, all_jobs))
+        print("{}  processed   : {}".format(id2, all_processed))
+        print("{}    succeeded : {}".format(id2, succeeded))
+        print("{}    failed    : {}".format(id2, failed))
+        
+        all_not_processed = all_jobs - all_processed
+        not_queried = self.job_q.qsize()
+        queried_but_not_processed = all_not_processed - not_queried  
+        
+        print("{}  not processed     : {}".format(id2, all_not_processed))
+        print("{}    queried         : {}".format(id2, queried_but_not_processed))
+        print("{}    not queried yet : {}".format(id2, not_queried))
+        print("{}len(args_dict) : {}".format(id2, len(self.args_dict)))
+        if (all_not_processed + failed) != len(self.args_dict):
+            log.error("'all_not_processed != len(self.args_dict)' something is inconsistent!")            
 
     @staticmethod
     def static_load(f):
@@ -1036,13 +1007,14 @@ class JobManager_Server(object):
         if fname_dump == None:
             fname_dump = self.fname_dump
         if fname_dump == 'auto':
+            log.critical("fname_dump must not be 'auto' when reading old state")
             raise RuntimeError("fname_dump must not be 'auto' when reading old state")
         
         if not os.path.isfile(fname_dump):
+            log.critical("file '%s' to read old state from not found", fname_dump)
             raise RuntimeError("file '{}' to read old state from not found".format(fname_dump))
 
-        if self.verbose > 0:
-            print("{}: load state from file '{}'".format(self._identifier, fname_dump))
+        log.info("load state from file '%s'", fname_dump)
         
         with open(fname_dump, 'rb') as f:
             self.__load(f)
@@ -1052,17 +1024,9 @@ class JobManager_Server(object):
     def put_arg(self, a):
         """add argument a to the job_q
         """
-#         if (not hasattr(a, '__hash__')) or (a.__hash__ == None):
-#             # try to add hashability
-#             if isinstance(a, dict):
-#                 a = hashDict(a)
-#             elif isinstance(a, np.ndarray):
-#                 a = hashableCopyOfNumpyArray(a)
-#             else:
-#                 raise AttributeError("'{}' is not hashable".format(type(a)))
-        
         bfa = bf.dump(a)
         if bfa in self.args_dict:
+            log.critical("do not add the same argument twice! If you are sure, they are not the same, there might be an error with the binfootprint mehtods!")
             raise ValueError("do not add the same argument twice! If you are sure, they are not the same, there might be an error with the binfootprint mehtods!")
         
         # this dict associates an unique index with each argument 'a'
@@ -1106,52 +1070,42 @@ class JobManager_Server(object):
         """
         
         if not self.__start_SyncManager():
+            log.critical("could not start server")
             raise RuntimeError("could not start server")
         
         if self._pid != os.getpid():
+            log.critical("do not run JobManager_Server.start() in a subprocess")
             raise RuntimeError("do not run JobManager_Server.start() in a subprocess")
 
         if (self.numjobs - self.numresults) != len(self.args_dict):
-            if self.verbose > 1:
-                print("numjobs: {}".format(self.numjobs))
-                print("numresults: {}".format(self.numresults))
-                print("len(self.args_dict): {}".format(len(self.args_dict)))
+            log.debug("numjobs:             %s\n"+
+                      "numresults:          %s\n"+
+                      "len(self.args_dict): %s", self.numjobs, self.numresults, len(self.args_dict))
                 
+            log.critical("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
             raise RuntimeError("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
         
         if self.numjobs == 0:
-            print("{}: WARNING no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q".format(self._identifier))
+            log.warning("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
             return
         else:
-            print("{}: started (host:{} authkey:{} port:{} jobs:{})".format(self._identifier, self.hostname, self.authkey.decode(), self.port, self.numjobs))
+            log.info("started (host:%s authkey:%s port:%s jobs:%s)", self.hostname, self.authkey.decode(), self.port, self.numjobs)
         
-        Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT], verbose = self.verbose)
-#         pid = os.getpid()
-#         user = get_user()
-#         max_proc = get_user_process_limit()
+        Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
         
-        if self.verbose > 1:
-            print("{}: start processing incoming results".format(self._identifier))
-        
-        if self.verbose > 0:
-            Progress = progress.ProgressBarFancy
-        else:
-            Progress = progress.ProgressSilentDummy
-  
+        log.debug("start processing incoming results")
         info_line = progress.StringValue(num_of_bytes=100)
-
         self.print_jm_ready()
-  
-        with Progress(count             = self._numresults,
-                      max_count         = self._numjobs, 
-                      interval          = self.msg_interval,
-                      speed_calc_cycles = self.speed_calc_cycles,
-                      verbose           = self.verbose,
-                      sigint            = 'ign',
-                      sigterm           = 'ign',
-                      info_line         = info_line) as stat:
-
-            stat.start()
+        with progress.ProgressBarFancy(count             = self._numresults,
+                                       max_count         = self._numjobs, 
+                                       interval          = self.msg_interval,
+                                       speed_calc_cycles = self.speed_calc_cycles,                                       
+                                       sigint            = 'ign',
+                                       sigterm           = 'ign',
+                                       info_line         = info_line,
+                                       logging_level     = log.level) as stat:
+            if not self.hide_progress:
+                stat.start()
         
             while (len(self.args_dict) - self.fail_q.qsize()) > 0:
                 info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(), 
@@ -1171,35 +1125,34 @@ class JobManager_Server(object):
                     del arg
                     del result
         
-        if self.verbose > 1:
-            print("{}: wait {}s before trigger clean up".format(self._identifier, self.__wait_before_stop))
+        log.debug("wait %ss before trigger clean up", self.__wait_before_stop)
         time.sleep(self.__wait_before_stop)
         
 
 class JobManager_Local(JobManager_Server):
     def __init__(self,
-                  client_class,
-                  authkey='local_jobmanager',
-                  nproc=-1,
-                  delay=1,
-                  const_arg=None, 
-                  port=42524, 
-                  verbose=1,
-                  verbose_client=0, 
-                  show_statusbar_for_jobs=False,
-                  show_counter_only=False,
-                  niceness_clients=19,
-                  msg_interval=1,
-                  fname_dump='auto',
-                  speed_calc_cycles=50):
+                 client_class,
+                 authkey                 = 'local_jobmanager',
+                 nproc                   = -1,
+                 delay                   = 1,
+                 const_arg               = None, 
+                 port                    = 42524, 
+                 verbose                 = 1,
+                 verbose_client          = 0, 
+                 show_statusbar_for_jobs = False,
+                 show_counter_only       = False,
+                 niceness_clients        = 19,
+                 msg_interval            = 1,
+                 fname_dump              = 'auto',
+                 speed_calc_cycles       = 50):
         
-        super(JobManager_Local, self).__init__(authkey=authkey,
-                         const_arg=const_arg, 
-                         port=port, 
-                         verbose=verbose, 
-                         msg_interval=msg_interval,
-                         fname_dump=fname_dump,
-                         speed_calc_cycles=speed_calc_cycles)
+        super(JobManager_Local, self).__init__(authkey           = authkey,
+                                               const_arg         = const_arg, 
+                                               port              = port, 
+                                               verbose           = verbose, 
+                                               msg_interval      = msg_interval,
+                                               fname_dump        = fname_dump,
+                                               speed_calc_cycles = speed_calc_cycles)
         
         self.client_class = client_class
         self.port = port
@@ -1212,26 +1165,26 @@ class JobManager_Local(JobManager_Server):
 
     @staticmethod 
     def _start_client(authkey,
-                        port, 
-                        client_class,
-                        nproc=0, 
-                        nice=19, 
-                        delay=1, 
-                        verbose=0, 
-                        show_statusbar_for_jobs=False,
-                        show_counter_only=False):        # ignore signal, because any signal bringing the server down
+                      port, 
+                      client_class,
+                      nproc                   = 0, 
+                      nice                    = 19, 
+                      delay                   = 1, 
+                      verbose                 = 0, 
+                      show_statusbar_for_jobs = False,
+                      show_counter_only       = False):        # ignore signal, because any signal bringing the server down
         # will cause an error in the client server communication
         # therefore the clients will also quit 
-        Signal_to_SIG_IGN(verbose=verbose)
+        Signal_to_SIG_IGN(signals=[signal.SIGINT, signal.SIGTERM])
         time.sleep(delay)
         client = client_class(server='localhost',
-                              authkey=authkey,
-                              port=port,
-                              nproc=nproc, 
-                              nice=nice,
-                              verbose=verbose,
-                              show_statusbar_for_jobs=show_statusbar_for_jobs,
-                              show_counter_only=show_counter_only)
+                              authkey                 = authkey,
+                              port                    = port,
+                              nproc                   = nproc, 
+                              nice                    = nice,
+                              verbose                 = verbose,
+                              show_statusbar_for_jobs = show_statusbar_for_jobs,
+                              show_counter_only       = show_counter_only)
         
         client.start()
         
@@ -1251,9 +1204,9 @@ class JobManager_Local(JobManager_Server):
         super(JobManager_Local, self).start()
         
         progress.check_process_termination(p_client, 
-                                           identifier='local_client',
-                                           timeout=2,
-                                           verbose=self.verbose_client)
+                                           prefix  = 'local_client',
+                                           timeout = 2,
+                                           verbose = self.verbose_client)
 
 class RemoteKeyError(RemoteError):
     pass
@@ -1262,16 +1215,14 @@ class RemoteValueError(RemoteError):
     pass
 
 class Signal_handler_for_Jobmanager_client(object):
-    def __init__(self, client_object, exit_handler, signals=[signal.SIGINT], verbose=0):
+    def __init__(self, client_object, exit_handler, signals=[signal.SIGINT]):
         self.client_object = client_object
         self.exit_handler = exit_handler
-        self.verbose = verbose
         for s in signals:
             signal.signal(s, self._handler)
             
     def _handler(self, sig, frame):
-        if self.verbose > 0:
-            print("{}: received signal {}".format(self.client_object._identifier, progress.signal_dict[sig]))
+        log.info("received signal %s", progress.signal_dict[sig])
         
         if self.client_object.pbc is not None:
             self.client_object.pbc.pause()
@@ -1284,9 +1235,9 @@ class Signal_handler_for_Jobmanager_client(object):
         if r == 'i':
             self._show_server_info()
         elif r == 'q':
-            print('{}: terminate worker functions'.format(self.client_object._identifier))
+            log.info("terminate worker functions")
             self.exit_handler._handler(sig, frame)
-            print('{}: call sys.exit -> raise SystemExit'.format(self.client_object._identifier))
+            log.info("call sys.exit -> raise SystemExit")
             sys.exit('exit due to user')
         else:
             print("input '{}' ignored".format(r))
@@ -1303,24 +1254,20 @@ class Signal_handler_for_Jobmanager_client(object):
 
 
 class Signal_to_SIG_IGN(object):
-    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM], verbose=0):
-        self.verbose = verbose
+    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM]):
         for s in signals:
             signal.signal(s, self._handler)
     
     def _handler(self, sig, frame):
-        if self.verbose > 0:
-            print("PID {}: received signal {} -> will be ignored".format(os.getpid(), progress.signal_dict[sig]))
+        log.info("PID %s: received signal %s -> will be ignored", os.getpid(), progress.signal_dict[sig])
 
 
 class Signal_to_sys_exit(object):
-    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM], verbose=0):
-        self.verbose = verbose
+    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM]):
         for s in signals:
             signal.signal(s, self._handler)
     def _handler(self, signal, frame):
-        if self.verbose > 0:
-            print("PID {}: received signal {} -> call sys.exit -> raise SystemExit".format(os.getpid(), progress.signal_dict[signal]))
+        log.info("PID %s: received signal %s -> call sys.exit -> raise SystemExit", os.getpid(), progress.signal_dict[signal])
         sys.exit('exit due to signal {}'.format(progress.signal_dict[signal]))
         
  
@@ -1328,8 +1275,7 @@ class Signal_to_terminate_process_list(object):
     """
     SIGINT and SIGTERM will call terminate for process given in process_list
     """
-    def __init__(self, process_list, identifier_list, signals = [signal.SIGINT, signal.SIGTERM], log=default_log, timeout=2):
-        self.log = log
+    def __init__(self, process_list, identifier_list, signals = [signal.SIGINT, signal.SIGTERM], timeout=2):
         self.process_list = process_list
         self.identifier_list = identifier_list
         self.timeout = timeout
@@ -1338,47 +1284,14 @@ class Signal_to_terminate_process_list(object):
             signal.signal(s, self._handler)
             
     def _handler(self, signal, frame):
-        self.log.debug("received sig {} -> terminate all given subprocesses", progress.signal_dict[signal])
+        log.debug("received sig %s -> terminate all given subprocesses", progress.signal_dict[signal])
         for i, p in enumerate(self.process_list):
             p.terminate()
             progress.check_process_termination(proc       = p, 
-                                               identifier = self.identifier_list[i], 
+                                               prefix     = self.identifier_list[i], 
                                                timeout    = self.timeout,
-                                               log        = self.log,
+                                               log        = log,
                                                auto_kill_on_last_resort=False)
-
-
-class hashDict(dict):
-    def __init__(self, **kwargs):
-        warnings.warn("'hashDict' is obsolete, not needed anymore, use regular 'dict' instead!")
-        dict.__init__(self, **kwargs)
-    
-    def __hash__(self):
-        try:
-            return hash(tuple(sorted(self.items())))
-        except:
-            for i in self.items():
-                try:
-                    hash(i)
-                except Exception as e:
-                    print("item '{}' of dict is not hashable".format(i))
-                    raise e
-                     
-     
-class hashableCopyOfNumpyArray(np.ndarray):
-    def __new__(self, other):
-        return np.ndarray.__new__(self, shape=other.shape, dtype=other.dtype)
- 
-    def __init__(self, other):
-        warnings.warn("'hashableCopyOfNumpyArray' is obsolete, not needed anymore, use regular 'np.ndarray' instead!")
-        self[:] = other[:]
-     
-    def __hash__(self):
-        return hash(self.shape + tuple(self.flat))
- 
-    def __eq__(self, other):
-        return np.all(np.equal(self, other))
-
 
 def address_authkey_from_proxy(proxy):
     return proxy._token.address, proxy._authkey.decode()
@@ -1386,7 +1299,7 @@ def address_authkey_from_proxy(proxy):
 def address_authkey_from_manager(manager):
     return manager.address, manager._authkey.decode()
 
-def call_connect_python3(connect, dest, reconnect_wait=2, reconnect_tries=3, log=default_log):
+def call_connect_python3(connect, dest, reconnect_wait=2, reconnect_tries=3):
     c = 0
     while True:
         try:                                # here we try re establish the connection
@@ -1394,7 +1307,7 @@ def call_connect_python3(connect, dest, reconnect_wait=2, reconnect_tries=3, log
             connect()
     
         except Exception as e:
-            log.error("connection to %s could not be established due to '{}'", dest, type(e))
+            log.error("connection to %s could not be established due to '%s'", dest, type(e))
             log.error(traceback.format_stack()[-3].strip())             
             
             if type(e) is ConnectionResetError:           # ... when the destination hangs up on us     
@@ -1419,32 +1332,28 @@ def call_connect_python3(connect, dest, reconnect_wait=2, reconnect_tries=3, log
             log.debug("connection to %s successfully established".format(dest))
             return True      
 
-def call_connect_python2(connect, dest, verbose=1, identifier='', reconnect_wait=2, reconnect_tries=3):
-    identifier = mod_id(identifier)
+def call_connect_python2(connect, dest, verbose=1, reconnect_wait=2, reconnect_tries=3):
     c = 0
     while True:
         try:                                # here we try re establish the connection
-            if verbose > 1:
-                print("{}try connecting to {}".format(identifier, dest))
+            log.debug("try connecting to %s", dest)
             connect()
         
         except Exception as e:
-            if verbose > 0:
-                print("{}connection to %s could not be established due to '{}'".format(identifier, dest, type(e)))
-                print(traceback.format_stack()[-3].strip())
+            log.error("connection to %s could not be established due to '%s'", dest, type(e))
+            log.info(traceback.format_stack()[-3].strip())
             
             if type(e) is socket.error:                    # error in socket communication
-                if verbose > 0:
-                    print("{} with args {}".format(type(e), e.args)) 
+                log.error("caught %s with args %s", type(e), e.args) 
                 err_code = e.args[0]
                 if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
-                    c = handler_connection_reset(identifier, dest, c, reconnect_wait, reconnect_tries, verbose)
+                    c = handler_connection_reset(dest, c, reconnect_wait, reconnect_tries, verbose)
                 elif err_code == errno.ECONNREFUSED: # ... when the destination refuses our connection
-                    handler_connection_refused(e, identifier, dest, verbose)
+                    handler_connection_refused(e, dest, verbose)
                 else:
                     handler_unexpected_error(e, verbose)
             elif type(e) is AuthenticationError :       # ... when the destination refuses our connection due authkey missmatch
-                handler_authentication_error(e, identifier, dest, verbose)
+                handler_authentication_error(e, dest, verbose)
             elif type(e) is RemoteError:                   # ... when the destination send us an error message
                 if 'KeyError' in e.args[0]:
                     handler_remote_key_error(e, verbose, dest)
@@ -1458,8 +1367,7 @@ def call_connect_python2(connect, dest, verbose=1, identifier='', reconnect_wait
                 handler_unexpected_error(e, verbose)            
         
         else:                               # no exception
-            if verbose > 1:
-                print("{}connection to %s successfully established".format(identifier, dest))
+            log.debug("connection to %s successfully established", dest)
             return True                     # SUCCESS -> return True            
 
 call_connect = call_connect_python2 if sys.version_info[0] == 2 else call_connect_python3
@@ -1544,19 +1452,19 @@ def handler_eof_error(e, log):
 
 def handler_remote_error(e, dest, log):
     log.error("remote error")
-    log.info("The server %s send an RemoteError message!\n{}", dest, e.args[0])
+    log.info("The server %s send an RemoteError message!\n%s", dest, e.args[0])
     raise RemoteError(e.args[0])
 
 def handler_remote_key_error(e, dest, log):
     log.error("remote key error")
-    log.info("'KeyError' detected in RemoteError message from server {}!\n"+
+    log.info("'KeyError' detected in RemoteError message from server %s!\n"+
              "This hints to the fact that the actual instace of the shared object on the server side has changed,\n"+
              "for example due to a server restart you need to reinstanciate the proxy object.", dest)
     raise RemoteKeyError(e.args[0])
     
 def handler_remote_value_error(e, dest, log):
     log.error("remote value error")
-    log.info("'ValueError' due to 'unsupported pickle protocol' detected in RemoteError from server {}!\n"+
+    log.info("'ValueError' due to 'unsupported pickle protocol' detected in RemoteError from server %s!\n"+
              "You might have tried to connect to a SERVER running with an OLDER python version.\n"+
              "At this stage (and probably for ever) this should be avoided!", dest)        
     raise RemoteValueError(e.args[0])
@@ -1570,33 +1478,33 @@ def handler_value_error(e, log):
     raise e
 
 def handler_unexpected_error(e, log):
-    log.error("unexpected error of type %s and args {}", type(e), e.args)
+    log.error("unexpected error of type %s and args %s", type(e), e.args)
     raise e
 
 def handle_unexpected_queue_error(e, log):
-    log.error("unexpected error of type %s and args {}\n"+
+    log.error("unexpected error of type %s and args %s\n"+
               "I guess the server went down, can't do anything, terminate now!", type(e), e.args)
-    log.debug("show traceback.print_exc()\n{}", traceback.print_exc())
+    log.debug(traceback.print_exc())
 
 def emergency_dump(arg, res, path, log):
     now = datetime.now().isoformat()
     pid = os.getpid()
     fname = "{}_pid_{}".format(now, pid)
     full_path = os.path.join(path, fname)
-    log.warning("emergency dump (arg, res) to {}", full_path)
+    log.warning("emergency dump (arg, res) to %s", full_path)
     with open(full_path, 'wb') as f:
         pickle.dump(arg, f)
         pickle.dump(res, f)
 
-def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5, log=default_log):
+def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5):
     for i in range(retry):
         try:
             cmd = 'ping -c 1 -W {} {}    '.format(int(timeout), adr)
-            log.debug("[{}/{}]call: {}", i+1, retry, cmd)
+            log.debug("[%s/%s]call: %s", i+1, retry, cmd)
             subprocess.check_output(cmd, shell = True)
         except subprocess.CalledProcessError as e:
             # on exception, resume with loop
-            log.warning("CalledProcessError on ping with message: {}", e)
+            log.warning("CalledProcessError on ping with message: %s", e)
             continue
         else:
             # no exception, ping was successful, return without error
@@ -1608,7 +1516,7 @@ def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5, log=default_lo
     raise JMHostNotReachableError("could not reach host '{}'\nping error reads: {}".format(adr, e.output))
         
 
-def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconnect_tries=3, log=default_log, ping_timeout=2, ping_retry=5):
+def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconnect_tries=3, ping_timeout=2, ping_retry=5):
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
     
@@ -1617,13 +1525,12 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
         while True:
             check_if_host_is_reachable_unix_ping(adr     = dest[0][0],
                                                  timeout = ping_timeout,
-                                                 retry   = ping_retry,
-                                                 log     = log)
-            log.debug("establish connection to {}", dest)
+                                                 retry   = ping_retry)
+            log.debug("establish connection to %s", dest)
             try: 
                 proxy._connect()
             except Exception as e:
-                log.warning("establishing connection to %s FAILED due to '{}'", dest, type(e))
+                log.warning("establishing connection to %s FAILED due to '%s'", dest, type(e))
                 log.debug("show traceback.format_stack()[-3]\n%s", traceback.format_stack()[-3].strip())
                 log.info("wait %s seconds and retry", reconnect_wait)
                 c += 1
@@ -1671,7 +1578,7 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
             
     return _operation
 
-def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconnect_tries=3, log=default_log, ping_timeout=2, ping_retry=5):
+def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconnect_tries=3, ping_timeout=2, ping_retry=5):
     o = getattr(proxy, operation)
     dest = address_authkey_from_proxy(proxy)
     
@@ -1680,8 +1587,7 @@ def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconn
         while True:
             check_if_host_is_reachable_unix_ping(adr     = dest[0][0],
                                                  timeout = ping_timeout,
-                                                 retry   = ping_retry,
-                                                 log     = log)
+                                                 retry   = ping_retry)
             log.debug("establish connection to %s", dest)
             try: 
                 proxy._connect()
@@ -1760,7 +1666,7 @@ def setup_SIG_handler_manager():
     we have to prevent this default signal handling by passing this functions
     to the SyncManager start routine.
     """
-    Signal_to_SIG_IGN(signals=[signal.SIGINT, signal.SIGTERM], verbose=0)
+    Signal_to_SIG_IGN(signals=[signal.SIGINT, signal.SIGTERM])
             
 
 def try_pickle(obj, show_exception=False):
