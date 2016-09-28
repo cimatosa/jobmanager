@@ -9,6 +9,11 @@ Easy distributed computing based on the python class SyncManager for remote comm
 ### Documentation
 The documentation is available at http://cimatosa.github.io/jobmanager/ 
 
+### TODO
+  * timeout for client
+  * single proxy for client and queue for subprocesses
+
+
 ### Developer's note
 After cloning into jobmanager, create a virtual environment
 
@@ -22,7 +27,7 @@ Install all dependencies
 Running an example
 
     python examples/simple_example.py
-   
+
 Running tests
 
     python setup.py test
