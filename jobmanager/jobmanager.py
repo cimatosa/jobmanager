@@ -239,7 +239,7 @@ class JobManager_Client(object):
 
         self.hide_progress = hide_progress
                
-        log.info("init JobManager Client instance")        
+        log.info("init JobManager Client instance (pid %s)", os.getpid())
         
         self.show_statusbar_for_jobs = show_statusbar_for_jobs
         log.debug("show_statusbar_for_jobs:%s", self.show_statusbar_for_jobs)
@@ -578,8 +578,8 @@ class JobManager_Client(object):
 
         log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
         
-        pid = os.getpid()
-        os.kill(pid, signal.SIGTERM)
+        # pid = os.getpid()
+        # os.kill(pid, signal.SIGTERM)
 #         __p = psutil.Process(pid)
 #         for thr in __p.threads():
 #             if pid == thr.id:
@@ -644,7 +644,7 @@ class JobManager_Client(object):
         l = len(str(self.nproc))
         for i in range(self.nproc):
             prepend.append("w{0:0{1}}:".format(i+1, l))
-            
+
         with progress.ProgressBarCounterFancy(count         = c, 
                                               max_count     = m_progress, 
                                               interval      = self.interval,
@@ -683,32 +683,36 @@ class JobManager_Client(object):
                 p.start()
                 time.sleep(0.3)
 
-            time.sleep(self.interval/2)
+            log.debug("all worker processes startes")
+
+            #time.sleep(self.interval/2)
+            log.debug("setup Signal_to_terminate_process_list handler")
             exit_handler = Signal_to_terminate_process_list(process_list    = self.procs,
                                                             identifier_list = [progress.get_identifier(name = "worker{}".format(i+1),
                                                                                                        pid  = p.pid,
                                                                                                        bold = True) for i, p in enumerate(self.procs)],
                                                             signals         = [signal.SIGTERM],                                                            
                                                             timeout         = 2)
-            
-            interrupt_handler = Signal_handler_for_Jobmanager_client(client_object = self,
-                                                                     exit_handler=exit_handler,
-                                                                     signals=[signal.SIGINT])
+
+            log.debug("setup Signal_handler_for_Jobmanager_client handler")
+            Signal_handler_for_Jobmanager_client(client_object = self,
+                                                 exit_handler=exit_handler,
+                                                 signals=[signal.SIGINT])
         
             for p in self.procs:
-                log.debug("join %s PID %s", p, p.pid)
-                
+
                 p.join()
+                log.debug("process %s exitcode %s", p, p.exitcode)
                 
-#                 while p.is_alive():
-#                     log.debug("still alive %s PID %s", p, p.pid)
-#                     p.join(timeout=self.interval)
-#                     _proc = psutil.Process(p.pid)
-#                     log.debug(str(p.exitcode))
-#                     log.debug(str(_proc.connections()))
-#                     log.debug(str(_proc.children(recursive=True)))
-#                     log.debug(str(_proc.status()))
-#                     log.debug(str(_proc.threads()))
+                # while p.is_alive():
+                #     log.debug("still alive %s PID %s", p, p.pid)
+                #     p.join(timeout=self.interval)
+                #     _proc = psutil.Process(p.pid)
+                #     log.debug(str(p.exitcode))
+                #     log.debug(str(_proc.connections()))
+                #     log.debug(str(_proc.children(recursive=True)))
+                #     log.debug(str(_proc.status()))
+                #     log.debug(str(_proc.threads()))
 
                 log.debug("process %s PID %s was joined", p, p.pid)
                     
@@ -811,7 +815,7 @@ class JobManager_Server(object):
 
         self.hide_progress = hide_progress
         
-        log.debug("I'm the JobManager_Server main process")
+        log.debug("I'm the JobManager_Server main process (pid %s)", os.getpid())
         
         self.__wait_before_stop = 2
         self.port = port
