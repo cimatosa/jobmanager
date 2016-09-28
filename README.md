@@ -12,6 +12,7 @@ The documentation is available at http://cimatosa.github.io/jobmanager/
 ### TODO
   * timeout for client
   * single proxy for client and queue for subprocesses
+  * user signal to server to retrieve status
 
 
 ### Developer's note
