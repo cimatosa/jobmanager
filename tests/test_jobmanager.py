@@ -151,12 +151,13 @@ def test_Signal_to_terminate_process_list():
     
 
  
-def start_server(n, read_old_state=False):
+def start_server(n, read_old_state=False, client_sleep=0.1):
     print("START SERVER")
     args = range(1,n)
     with jobmanager.JobManager_Server(authkey      = AUTHKEY,
                                       port         = PORT,
                                       msg_interval = 1,
+                                      const_arg    = client_sleep,
                                       fname_dump   = 'jobmanager.dump') as jm_server:
         if not read_old_state:
             jm_server.args_from_list(args)
@@ -169,7 +170,8 @@ def start_client():
     jm_client = jobmanager.JobManager_Client(server = SERVER, 
                                              authkey = AUTHKEY, 
                                              port    = PORT, 
-                                             nproc   = 3)
+                                             nproc   = 3,
+                                             reconnect_tries = 0)
     jm_client.start()
 
 def test_jobmanager_basic():
@@ -285,7 +287,7 @@ def test_shutdown_server_while_client_running():
     global PORT
    
     n = 100
-    timeout = 10
+    timeout = 30
     
     sigs = [('SIGTERM', signal.SIGTERM), ('SIGINT', signal.SIGINT)]
     sigs = [('SIGTERM', signal.SIGTERM)]
@@ -297,14 +299,14 @@ def test_shutdown_server_while_client_running():
         p_client = None
         
         try:
-            p_server = mp.Process(target=start_server, args=(n,))
+            p_server = mp.Process(target=start_server, args=(n,False,1))
             p_server.start()       
             time.sleep(0.5)
             assert p_server.is_alive()
             
             p_client = mp.Process(target=start_client)
             p_client.start()
-            time.sleep(4)
+            time.sleep(1.5)
             assert p_client.is_alive()
             
             print("    send {} to server".format(signame))

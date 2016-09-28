@@ -375,8 +375,10 @@ class JobManager_Client(object):
         NOTE: This is just some dummy implementation to be used for test reasons only!
         Subclass and overwrite this function to implement your own function.  
         """
-        time.sleep(0.1)
-        return os.getpid()
+        pid = os.getpid()
+        print("{} sleeps for {}s".format(pid, const_arg))
+        time.sleep(const_arg)
+        return pid
     
     @staticmethod
     def __worker_func(func, nice, loglevel, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs,
@@ -575,6 +577,20 @@ class JobManager_Client(object):
         log.info(stat)
 
         log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
+        
+        pid = os.getpid()
+        os.kill(pid, signal.SIGTERM)
+#         __p = psutil.Process(pid)
+#         for thr in __p.threads():
+#             if pid == thr.id:
+#                 log.debug("skip thread is %s, because it is the process itself", thr.id)
+#             else:
+#                 log.debug("send SIGTERM to thread with id %s", thr.id)
+#                 os.kill(thr.id, signal.SIGTERM)
+            
+            
+        #log.debug(str(__p.threads()))
+        
 #         log.debug("trigger sys.exit(0)")
 #         raise SystemExit
 #         log.debug("sys.exit(0) was triggered")
@@ -681,7 +697,9 @@ class JobManager_Client(object):
         
             for p in self.procs:
                 log.debug("join %s PID %s", p, p.pid)
+                
                 p.join()
+                
 #                 while p.is_alive():
 #                     log.debug("still alive %s PID %s", p, p.pid)
 #                     p.join(timeout=self.interval)
@@ -690,6 +708,7 @@ class JobManager_Client(object):
 #                     log.debug(str(_proc.connections()))
 #                     log.debug(str(_proc.children(recursive=True)))
 #                     log.debug(str(_proc.status()))
+#                     log.debug(str(_proc.threads()))
 
                 log.debug("process %s PID %s was joined", p, p.pid)
                     
@@ -1573,11 +1592,11 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
             except Exception as e:
                 log.warning("establishing connection to %s FAILED due to '%s'", dest, type(e))
                 log.debug("show traceback.format_stack()[-3]\n%s", traceback.format_stack()[-3].strip())
-                log.info("wait %s seconds and retry", reconnect_wait)
                 c += 1
                 if c > reconnect_tries:
                     log.error("reached maximum number of reconnect tries %s, raise exception", reconnect_tries)
                     raise e
+                log.info("wait %s seconds and retry", reconnect_wait)                
                 time.sleep(reconnect_wait)
                 continue
                 
@@ -1632,17 +1651,17 @@ def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconn
             check_if_host_is_reachable_unix_ping(adr     = dest[0][0],
                                                  timeout = ping_timeout,
                                                  retry   = ping_retry)
-            log.debug("establish connection to %s", dest)
+            log.debug("establishing connection to %s ...", dest)
             try: 
                 proxy._connect()
             except Exception as e:
                 log.warning("establishing connection to %s FAILED due to '%s'", dest, type(e))
                 log.debug("show traceback.format_stack()[-3]\n%s", traceback.format_stack()[-3].strip())
-                log.info("wait %s seconds and retry", reconnect_wait)
                 c += 1
                 if c > reconnect_tries:
                     log.error("reached maximum number of reconnect tries %s, raise exception", reconnect_tries)
                     raise e
+                log.info("wait %s seconds and retry", reconnect_wait)                
                 time.sleep(reconnect_wait)
                 continue
                  
