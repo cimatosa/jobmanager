@@ -1,18 +1,28 @@
 language: python
+
 env:
   global:
   - GH_REF: github.com/cimatosa/jobmanager.git
   - secure: Q3YVqRTs3QLspdzHgYMMuOoMypn7yetkb7v0LFe/68AwxZAwEkpCF24FHL/cEH9khc99AGbDIST81undY6kJLWLEDHYIWaoKUbC8OmaT7H6MUdfLtznsv1NnOLut9Z3So/mTMGQHCmTga9NKsuFpDMxg/oxp3wS915ar6+PLh3w=
+
 notifications:
   email: false
+  
+branches:
+  only:
+  - master
+
+
 python:
 - '2.7'
 - '3.4'
 - '3.5'
+
 matrix:
   allow_failures:
   - python: '2.7'
   - python: '3.5'
+  
 before_install:
 # required for testing
 - sudo apt-get update -qq -y
