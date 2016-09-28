@@ -23,7 +23,7 @@ progress.log.setLevel(logging.ERROR)
 
 from jobmanager.jobmanager import log as jm_log
 
-jm_log.setLevel(logging.INFO)
+jm_log.setLevel(logging.WARNING)
 
 import warnings
 warnings.filterwarnings('error')
@@ -186,20 +186,24 @@ def test_jobmanager_basic():
     p_client = None
 
     try:
-
+        # start a server
         p_server = mp.Process(target=start_server, args=(n,False))
         p_server.start()
         time.sleep(0.5)
+        # server needs to be running
         assert p_server.is_alive()
     
-
+        # start client
         p_client = mp.Process(target=start_client)
         p_client.start()
         
         p_client.join(3)
+        # client should have processed all
         assert not p_client.is_alive(), "the client did not terminate on time!"
+        # client must not throw an exception
         assert p_client.exitcode == 0, "the client raised an exception"
         p_server.join(3)
+        # server should have come down
         assert not p_server.is_alive(), "the server did not terminate on time!"
          
         print("[+] client and server terminated")
@@ -207,84 +211,67 @@ def test_jobmanager_basic():
         fname = 'jobmanager.dump'
         with open(fname, 'rb') as f:
             data = jobmanager.JobManager_Server.static_load(f)
-         
+        
+        
         final_res_args_set = {a[0] for a in data['final_result']}
-              
         set_ref = set(range(1,n))
-          
         intersect = set_ref - final_res_args_set
           
         assert len(intersect) == 0, "final result does not contain all arguments!"
         print("[+] all arguments found in final_results")
     except:
         if p_server is not None:
-            os.kill(p_server.pid, signal.SIGINT)
+            p_server.terminate()
         if p_client is not None:
-            os.kill(p_client.pid, signal.SIGINT)
+            p_client.terminate()
         raise
     
-    
-    
 def test_jobmanager_server_signals():
+    """
+        start a server (no client), shutdown, check dump 
+    """
     global PORT
-    PORT += 1
-    print("## TEST SIGTERM ##")
-    p_server = mp.Process(target=start_server, args=(30,))
-    p_server.start()
-    time.sleep(1)
-    print("    send SIGTERM")
-    os.kill(p_server.pid, signal.SIGTERM)
-    assert p_server.is_alive()
-    print("[+] still alive (assume shut down takes some time)")
-    p_server.join(15)
-    assert not p_server.is_alive(), "timeout for server shutdown reached"
-    print("[+] now terminated (timeout of 15s not reached)")
+    timeout = 5
+    n = 15
+    sigs = [('SIGTERM', signal.SIGTERM), ('SIGINT', signal.SIGINT)]
     
-    fname = 'jobmanager.dump'
-    with open(fname, 'rb') as f:
-        data = jobmanager.JobManager_Server.static_load(f)    
-    
-    args_set = set(data['args_dict'].keys())
-    args_ref = range(1,30)
-    ref_set = set()
-    for a in args_ref:
-        ref_set.add(binfootprint.dump(a))
-    
-    assert len(args_set) == len(ref_set)
-    assert len(ref_set - args_set) == 0
-    print("[+] args_set from dump contains all arguments")
-    
-    PORT += 1
-    print("## TEST SIGINT ##")    
-    p_server = mp.Process(target=start_server, args=(30,))
-    p_server.start()
-    time.sleep(1)
-    print("    send SIGINT")
-    os.kill(p_server.pid, signal.SIGINT)
-    assert p_server.is_alive()
-    print("[+] still alive (assume shut down takes some time)")
-    p_server.join(15)
-    assert not p_server.is_alive(), "timeout for server shutdown reached"
-    print("[+] now terminated (timeout of 15s not reached)")
-    
-    fname = 'jobmanager.dump'
-    with open(fname, 'rb') as f:
-        data = jobmanager.JobManager_Server.static_load(f)    
-    
-    args_set = set(data['args_dict'].keys())
-    args_ref = range(1,30)
-    ref_set = set()
-    for a in args_ref:
-        ref_set.add(binfootprint.dump(a))
-        
-    assert len(args_set) == len(ref_set)
-    assert len(ref_set - args_set) == 0
-    print("[+] args_set from dump contains all arguments")
- 
+    for signame, sig in sigs:
+        PORT += 1
+        p_server = None   
+        try:
+            print("## TEST {} ##".format(signame))
+            p_server = mp.Process(target=start_server, args=(n,))
+            p_server.start()
+            time.sleep(0.5)
+            assert p_server.is_alive()
+            print("    send {}".format(signame))
+            os.kill(p_server.pid, sig)
+            print("[+] still alive (assume shut down takes some time)")
+            p_server.join(timeout)
+            assert not p_server.is_alive(), "timeout for server shutdown reached"
+            print("[+] now terminated (timeout of {}s not reached)".format(timeout))
+            
+            fname = 'jobmanager.dump'
+            with open(fname, 'rb') as f:
+                data = jobmanager.JobManager_Server.static_load(f)    
+            
+            args_set = set(data['args_dict'].keys())
+            args_ref = range(1,n)
+            ref_set = set()
+            for a in args_ref:
+                ref_set.add(binfootprint.dump(a))
+            
+            assert len(args_set) == len(ref_set)
+            assert len(ref_set - args_set) == 0
+            print("[+] args_set from dump contains all arguments")
+        except:
+            if p_server is not None:
+                p_server.terminate()
+            raise
     
 def test_shutdown_server_while_client_running():
     """
-    start server with 1000 elements in queue
+    start server with 100 elements in queue
     
     start client
     
@@ -296,61 +283,66 @@ def test_shutdown_server_while_client_running():
     all arguments given 
     """
     global PORT
-    PORT += 1
+   
+    n = 100
+    timeout = 10
     
-    n = 1000
+    sigs = [('SIGTERM', signal.SIGTERM), ('SIGINT', signal.SIGINT)]
+    sigs = [('SIGTERM', signal.SIGTERM)]
     
-    p_server = mp.Process(target=start_server, args=(n,))
-    p_server.start()
+    for signame, sig in sigs:
+        PORT += 1
     
-    time.sleep(1)
-    
-    p_client = mp.Process(target=start_client)
-    p_client.start()
-    
-    time.sleep(2)
-    
-    os.kill(p_server.pid, signal.SIGTERM)
-    
-    p_server.join(200)
-    p_client.join(200)
-    
-    try:
-        assert not p_server.is_alive()
-    except:
-        p_server.terminate()
-        raise
-    
-    try:
-        assert not p_client.is_alive()
-    except:
-        p_client.terminate()
-        raise
+        p_server = None
+        p_client = None
         
-    
-    
-    fname = 'jobmanager.dump'
-    with open(fname, 'rb') as f:
-        data = jobmanager.JobManager_Server.static_load(f)    
-
-    args_set = set(data['args_dict'].keys())
-    final_result = data['final_result']
-
-    final_res_args = {binfootprint.dump(a[0]) for a in final_result}
+        try:
+            p_server = mp.Process(target=start_server, args=(n,))
+            p_server.start()       
+            time.sleep(0.5)
+            assert p_server.is_alive()
+            
+            p_client = mp.Process(target=start_client)
+            p_client.start()
+            time.sleep(4)
+            assert p_client.is_alive()
+            
+            print("    send {} to server".format(signame))
+            os.kill(p_server.pid, sig)
+            
+            p_server.join(timeout)
+            assert not p_server.is_alive(), "server did not shut down on time"
+            p_client.join(timeout)
+            assert not p_client.is_alive(), "client did not shut down on time"
+            
+            fname = 'jobmanager.dump'
+            with open(fname, 'rb') as f:
+                data = jobmanager.JobManager_Server.static_load(f)    
         
-    args_ref = range(1,n)
-    set_ref = set()
-    for a in args_ref:
-        set_ref.add(binfootprint.dump(a))    
-    
-    set_recover = set(args_set) | set(final_res_args)
-    
-    intersec_set = set_ref-set_recover
-
-    if len(intersec_set) == 0:
-        print("[+] no arguments lost!")
-
-    assert len(intersec_set) == 0, "NOT all arguments found in dump!"
+            args_set = set(data['args_dict'].keys())
+            final_result = data['final_result']
+        
+            final_res_args = {binfootprint.dump(a[0]) for a in final_result}
+                
+            args_ref = range(1,n)
+            set_ref = set()
+            for a in args_ref:
+                set_ref.add(binfootprint.dump(a))    
+            
+            set_recover = set(args_set) | set(final_res_args)
+            
+            intersec_set = set_ref-set_recover
+        
+            if len(intersec_set) == 0:
+                print("[+] no arguments lost!")
+        
+            assert len(intersec_set) == 0, "NOT all arguments found in dump!"
+        except:
+            if p_server is not None:
+                p_server.terminate()
+            if p_client is not None:
+                p_client.terminate()
+            raise
 
 def test_shutdown_client():
     shutdown_client(signal.SIGTERM)
@@ -752,7 +744,9 @@ def test_hum_size():
     assert humanize_size(1024**3) == '1.00TB'
     assert humanize_size(1024**4) == '1024.00TB'
     
-if __name__ == "__main__":      
+if __name__ == "__main__":  
+    jm_log.setLevel(logging.DEBUG)
+    progress.log.setLevel(logging.DEBUG)
     if len(sys.argv) > 1:
         pass
     else:    
@@ -763,10 +757,10 @@ if __name__ == "__main__":
 #         test_Signal_to_sys_exit,
 #         test_Signal_to_terminate_process_list,
                   
-        test_jobmanager_basic,
-        # test_jobmanager_server_signals,
-        # test_shutdown_server_while_client_running,
-        # test_shutdown_client,
+#         test_jobmanager_basic,
+#         test_jobmanager_server_signals,
+        test_shutdown_server_while_client_running,
+#         test_shutdown_client,
         # test_check_fail,
         # test_jobmanager_read_old_stat,
         # test_client_status,

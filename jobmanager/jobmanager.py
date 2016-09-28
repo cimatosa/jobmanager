@@ -49,6 +49,7 @@ import warnings
 import binfootprint as bf
 import progress
 import logging
+import psutil
 
 # try:
 #     from logging.handlers import QueueHandler
@@ -299,7 +300,13 @@ class JobManager_Client(object):
         
     def connect(self):
         if self.manager_objects is None:
-            self.manager_objects = self.create_manager_objects()
+            try:
+                self.manager_objects = self.create_manager_objects()
+            except Exception as e:
+                log.critical("creating manager objects failed due to {}".format(type(e)))
+                log.info(traceback.format_exc())
+                raise
+                
         else:
             log.info("already connected (at least shared object are available)")
 
@@ -465,7 +472,7 @@ class JobManager_Client(object):
                 # job_q.get failed -> server down?             
                 except Exception as e:
                     log.error("Error when calling 'job_q_get'") 
-                    handle_unexpected_queue_error(e, log)
+                    handle_unexpected_queue_error(e)
                     break
                 
                 # try to process the retrieved argument
@@ -504,7 +511,7 @@ class JobManager_Client(object):
                     # fail_q.put failed -> server down?             
                     except Exception as e:
                         log.error('sending arg to fail_q failed')
-                        handle_unexpected_queue_error(e, log)
+                        handle_unexpected_queue_error(e)
                         break
                     else:
                         log.debug('sending arg to fail_q was successful')
@@ -525,8 +532,8 @@ class JobManager_Client(object):
                     
                     except Exception as e:
                         log.error('sending result to result_q failed due to %s', type(e))
-                        emergency_dump(arg, res, emergency_dump_path, log)
-                        handle_unexpected_queue_error(e, log)
+                        emergency_dump(arg, res, emergency_dump_path)
+                        handle_unexpected_queue_error(e)
                         break
                     
                     del res
@@ -550,7 +557,7 @@ class JobManager_Client(object):
             # fail_q.put failed -> server down?             
             except Exception as e:
                 log.error("put arg back to job_q failed due to %s", type(e))
-                JobManager_Client._handle_unexpected_queue_error(e, log)
+                handle_unexpected_queue_error(e)
             else:
                 log.debug("putting arg back to job_q was successful")
 
@@ -568,6 +575,10 @@ class JobManager_Client(object):
         log.info(stat)
 
         log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
+#         log.debug("trigger sys.exit(0)")
+#         raise SystemExit
+#         log.debug("sys.exit(0) was triggered")
+
 
     def start(self):
         """
@@ -670,9 +681,15 @@ class JobManager_Client(object):
         
             for p in self.procs:
                 log.debug("join %s PID %s", p, p.pid)
-                while p.is_alive():
-                    log.debug("still alive %s PID %s", p, p.pid)
-                    p.join(timeout=self.interval)
+                p.join()
+#                 while p.is_alive():
+#                     log.debug("still alive %s PID %s", p, p.pid)
+#                     p.join(timeout=self.interval)
+#                     _proc = psutil.Process(p.pid)
+#                     log.debug(str(p.exitcode))
+#                     log.debug(str(_proc.connections()))
+#                     log.debug(str(_proc.children(recursive=True)))
+#                     log.debug(str(_proc.status()))
 
                 log.debug("process %s PID %s was joined", p, p.pid)
                     
@@ -926,6 +943,9 @@ class JobManager_Server(object):
         """
         # will only be False when _shutdown was started in subprocess
         
+        self.__stop_SyncManager()
+        log.debug("SyncManager stopped!")        
+        
         # do user defined final processing
         self.process_final_result()
         log.debug("process_final_result done!")
@@ -952,8 +972,7 @@ class JobManager_Server(object):
         
         self.show_statistics()
         
-        self.__stop_SyncManager()
-        log.debug("SyncManager stopped!")
+
         log.info("JobManager_Server was successfully shut down")
         
     def show_statistics(self):
@@ -1333,28 +1352,28 @@ def call_connect_python3(connect, dest, reconnect_wait=2, reconnect_tries=3):
             log.error(traceback.format_stack()[-3].strip())             
             
             if type(e) is ConnectionResetError:           # ... when the destination hangs up on us     
-                c = handler_connection_reset(dest, c, reconnect_wait, reconnect_tries, log)
+                c = handler_connection_reset(dest, c, reconnect_wait, reconnect_tries)
             elif type(e) is ConnectionRefusedError:       # ... when the destination refuses our connection
-                handler_connection_refused(e, dest, log)
+                handler_connection_refused(e, dest)
             elif type(e) is AuthenticationError :      # ... when the destination refuses our connection due authkey missmatch
-                handler_authentication_error(e, dest, log)
+                handler_authentication_error(e, dest)
             elif type(e) is RemoteError:                  # ... when the destination send us an error message
                 if 'KeyError' in e.args[0]:
-                    handler_remote_key_error(e, dest, log)
+                    handler_remote_key_error(e, dest)
                 elif 'ValueError: unsupported pickle protocol:' in e.args[0]:
-                    handler_remote_value_error(e, dest, log)
+                    handler_remote_value_error(e, dest)
                 else:
-                    handler_remote_error(e, dest, log)
+                    handler_remote_error(e, dest)
             elif type(e) is ValueError:
-                handler_value_error(e, log)
+                handler_value_error(e)
             else:                                   # any other exception
-                handler_unexpected_error(e, log)
+                handler_unexpected_error(e)
         
         else:                               # no exception
             log.debug("connection to %s successfully established".format(dest))
             return True      
 
-def call_connect_python2(connect, dest, verbose=1, reconnect_wait=2, reconnect_tries=3):
+def call_connect_python2(connect, dest, reconnect_wait=2, reconnect_tries=3):
     c = 0
     while True:
         try:                                # here we try re establish the connection
@@ -1369,24 +1388,24 @@ def call_connect_python2(connect, dest, verbose=1, reconnect_wait=2, reconnect_t
                 log.error("caught %s with args %s", type(e), e.args) 
                 err_code = e.args[0]
                 if err_code == errno.ECONNRESET:     # ... when the destination hangs up on us
-                    c = handler_connection_reset(dest, c, reconnect_wait, reconnect_tries, verbose)
+                    c = handler_connection_reset(dest, c, reconnect_wait, reconnect_tries)
                 elif err_code == errno.ECONNREFUSED: # ... when the destination refuses our connection
-                    handler_connection_refused(e, dest, verbose)
+                    handler_connection_refused(e, dest)
                 else:
-                    handler_unexpected_error(e, verbose)
+                    handler_unexpected_error(e)
             elif type(e) is AuthenticationError :       # ... when the destination refuses our connection due authkey missmatch
-                handler_authentication_error(e, dest, verbose)
+                handler_authentication_error(e, dest)
             elif type(e) is RemoteError:                   # ... when the destination send us an error message
                 if 'KeyError' in e.args[0]:
-                    handler_remote_key_error(e, verbose, dest)
+                    handler_remote_key_error(e, dest)
                 elif 'ValueError: unsupported pickle protocol:' in e.args[0]:
-                    handler_remote_value_error(e, verbose, dest)
+                    handler_remote_value_error(e, dest)
                 else:
-                    handler_remote_error(e, verbose, dest)
+                    handler_remote_error(e, dest)
             elif type(e) is ValueError:
-                handler_value_error(e, verbose)
+                handler_value_error(e)
             else:                                    # any other exception
-                handler_unexpected_error(e, verbose)            
+                handler_unexpected_error(e)            
         
         else:                               # no exception
             log.debug("connection to %s successfully established", dest)
@@ -1435,24 +1454,24 @@ def getDateForFileName(includePID = False):
         name += "_{}".format(os.getpid()) 
     return name
 
-def handler_authentication_error(e, dest, log):
+def handler_authentication_error(e, dest):
     log.error("authentication error")
     log.info("Authkey specified does not match the authkey at destination side!")
     raise e
 
-def handler_broken_pipe_error(e, log):
+def handler_broken_pipe_error(e):
     log.error("broken pip error")
     log.info("This usually means that an established connection was closed\n")
     log.info("does not exists anymore, probably the server went down")
     raise e   
 
-def handler_connection_refused(e, dest, log):
+def handler_connection_refused(e, dest):
     log.error("connection refused error")
     log.info("This usually means that no matching Manager object was instanciated at destination side!")
     log.info("Either there is no Manager running at all, or it is listening to another port.")
     raise JMConnectionRefusedError(e)
 
-def handler_connection_reset(dest, c, reconnect_wait, reconnect_tries, log):
+def handler_connection_reset(dest, c, reconnect_wait, reconnect_tries):
     log.error("connection reset error")
     log.info("During 'connect' this error might be due to firewall settings"+
              "or other TPC connections controlling mechanisms!")
@@ -1465,33 +1484,33 @@ def handler_connection_reset(dest, c, reconnect_wait, reconnect_tries, log):
     time.sleep(reconnect_wait)
     return c                
 
-def handler_eof_error(e, log):
+def handler_eof_error(e):
     log.error("EOF error")
     log.info("This usually means that server did not replay, although the connection is still there.\n"+
              "This is due to the fact that the connection is in 'timewait' status for about 60s\n"+
              "after the server went down inappropriately.")
     raise e
 
-def handler_remote_error(e, dest, log):
+def handler_remote_error(e, dest):
     log.error("remote error")
     log.info("The server %s send an RemoteError message!\n%s", dest, e.args[0])
     raise RemoteError(e.args[0])
 
-def handler_remote_key_error(e, dest, log):
+def handler_remote_key_error(e, dest):
     log.error("remote key error")
     log.info("'KeyError' detected in RemoteError message from server %s!\n"+
              "This hints to the fact that the actual instace of the shared object on the server side has changed,\n"+
              "for example due to a server restart you need to reinstanciate the proxy object.", dest)
     raise RemoteKeyError(e.args[0])
     
-def handler_remote_value_error(e, dest, log):
+def handler_remote_value_error(e, dest):
     log.error("remote value error")
     log.info("'ValueError' due to 'unsupported pickle protocol' detected in RemoteError from server %s!\n"+
              "You might have tried to connect to a SERVER running with an OLDER python version.\n"+
              "At this stage (and probably for ever) this should be avoided!", dest)        
     raise RemoteValueError(e.args[0])
 
-def handler_value_error(e, log):
+def handler_value_error(e):
     log.error("value error")
     if 'unsupported pickle protocol' in e.args[0]:
         log.info("'ValueError' due to 'unsupported pickle protocol'!\n"
@@ -1499,16 +1518,16 @@ def handler_value_error(e, log):
                  "At this stage (and probably for ever) this should be avoided.\n")  
     raise e
 
-def handler_unexpected_error(e, log):
+def handler_unexpected_error(e):
     log.error("unexpected error of type %s and args %s", type(e), e.args)
     raise e
 
-def handle_unexpected_queue_error(e, log):
+def handle_unexpected_queue_error(e):
     log.error("unexpected error of type %s and args %s\n"+
               "I guess the server went down, can't do anything, terminate now!", type(e), e.args)
     log.debug(traceback.print_exc())
 
-def emergency_dump(arg, res, path, log):
+def emergency_dump(arg, res, path):
     now = datetime.now().isoformat()
     pid = os.getpid()
     fname = "{}_pid_{}".format(now, pid)
@@ -1566,7 +1585,6 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
             
             try:
                 res = o(*args, **kwargs)
-
             except queue.Empty as e:
                 log.info("operation '%s' -> %s FAILED due to '%s'", operation, dest, type(e))
                 raise e
@@ -1586,11 +1604,11 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
                     time.sleep(reconnect_wait)
                     continue
                 elif type(e) is BrokenPipeError:
-                    handler_broken_pipe_error(e, log)
+                    handler_broken_pipe_error(e)
                 elif type(e) is EOFError:
-                    handler_eof_error(e, log)
+                    handler_eof_error(e)
                 else:
-                    handler_unexpected_error(e, log)
+                    handler_unexpected_error(e)
             else:                               # SUCCESS -> return True
                 log.debug("operation '%s' successfully executed", operation)
                 return res
@@ -1627,11 +1645,14 @@ def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconn
                     raise e
                 time.sleep(reconnect_wait)
                 continue
-                
+                 
             log.debug("execute operation '%s' -> %s", operation, dest)
             
             try:
                 res = o(*args, **kwargs)
+            except queue.Empty as e:
+                log.info("operation '%s' -> %s FAILED due to '%s'", operation, dest, type(e))
+                raise e                
             except Exception as e:
                 log.warning("operation '%s' -> %s FAILED due to '%s'", operation, dest, type(e))
                 log.debug("show traceback.format_stack()[-3]\n%s", traceback.format_stack()[-3].strip())
@@ -1652,11 +1673,11 @@ def proxy_operation_decorator_python2(proxy, operation, reconnect_wait=2, reconn
                         time.sleep(reconnect_wait)
                         continue
                     else:
-                        handler_unexpected_error(e, log) 
+                        handler_unexpected_error(e) 
                 elif type(e) is EOFError:
-                    handler_eof_error(e, log)
+                    handler_eof_error(e)
                 else:
-                    handler_unexpected_error(e, log)
+                    handler_unexpected_error(e)
             else: # SUCCESS -> return True
                 log.debug("operation '%s' successfully executed", operation)
                 return res

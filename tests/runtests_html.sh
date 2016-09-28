@@ -8,6 +8,7 @@ OUTFILE='pytest_out'
 PYTHON="python"
 PYTHON2_7="python2.7"
 PYTHON3_4="python3.4"
+PYTHON3_5="python3.5"
 
 PYLIST=( $PYTHON )
 
@@ -17,7 +18,7 @@ while getopts ":p:ahn" opt; do
     case $opt in
         a)
             echo "run all!" >&2
-            PYLIST=( $PYTHON2_7 $PYTHON3_4 )
+            PYLIST=( $PYTHON2_7 $PYTHON3_4 $PYTHON3_5 )
             ;;
         p)
             if [ "$OPTARG" = "2.7" ]; then
