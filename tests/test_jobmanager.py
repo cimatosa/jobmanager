@@ -23,7 +23,7 @@ import progress
 if sys.version_info[0] == 2:
     TIMEOUT = 300
 elif sys.version_info[0] == 3:
-    TIMEOUT = 5
+    TIMEOUT = 15
 
 progress.log.setLevel(logging.ERROR)
 
@@ -177,7 +177,10 @@ def start_client():
                                              authkey = AUTHKEY,
                                              port    = PORT,
                                              nproc   = 3,
-                                             reconnect_tries = 0)
+                                             reconnect_tries = 0,
+                                             job_q_put_timeout = 1,
+                                             result_q_put_timeout = 1,
+                                             fail_q_put_timeout = 1)
     jm_client.start()
 
 def test_jobmanager_basic():
@@ -729,7 +732,7 @@ def test_hum_size():
     assert humanize_size(1024**4) == '1024.00TB'
     
 if __name__ == "__main__":  
-    jm_log.setLevel(logging.WARNING)
+    jm_log.setLevel(logging.DEBUG)
     progress.log.setLevel(logging.ERROR)
     if len(sys.argv) > 1:
         pass
@@ -742,17 +745,17 @@ if __name__ == "__main__":
 #         test_Signal_to_terminate_process_list,
                   
         # test_jobmanager_basic,
-#         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
-#         test_chedck_fail,
-        test_jobmanager_read_old_stat,
-        test_client_status,
-        test_jobmanager_local,
-        test_start_server_on_used_port,
-        test_shared_const_arg,
-        test_digest_rejected,
-        test_hum_size,
+        # test_jobmanager_server_signals,
+        test_shutdown_server_while_client_running,
+        # test_shutdown_client,
+        # test_check_fail,
+        # test_jobmanager_read_old_stat,
+        # test_client_status,
+        # test_jobmanager_local,
+        # test_start_server_on_used_port,
+        # test_shared_const_arg,
+        # test_digest_rejected,
+        # test_hum_size,
 
         lambda : print("END")
         ]

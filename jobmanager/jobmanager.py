@@ -31,13 +31,10 @@ The class JobManager_Client
 from __future__ import division, print_function
 
 import copy
-#import functools
 import inspect
 import multiprocessing as mp
-import subprocess as sp
 from multiprocessing.managers import BaseManager, RemoteError
 import subprocess
-import numpy as np
 import os
 import pickle
 import signal
@@ -49,14 +46,7 @@ import warnings
 import binfootprint as bf
 import progress
 import logging
-import psutil
-
-# try:
-#     from logging.handlers import QueueHandler
-#     from logging.handlers import QueueListener
-# except ImportError:
-#     warnings.warn("could not load QueueHandler/QueueListener (python version too old\n"+
-#                   "no coheerent subprocess logging pissible", ImportWarning)
+import threading
 
 # taken from here: https://mail.python.org/pipermail/python-list/2010-November/591474.html
 class MultiLineFormatter(logging.Formatter):
@@ -188,9 +178,10 @@ class JobManager_Client(object):
                  show_counter_only       = False,
                  interval                = 0.3,
                  emergency_dump_path     = '.',
-                 result_q_timeout        = 30,                 
-                 job_q_timeout           = 0.1,
-                 fail_q_timeout          = 10,
+                 job_q_get_timeout       = 1,
+                 job_q_put_timeout       = 10,
+                 result_q_put_timeout   = 300,
+                 fail_q_put_timeout      = 10,
                  reconnect_wait          = 2,
                  reconnect_tries         = 3,
                  ping_timeout            = 2,
@@ -247,13 +238,15 @@ class JobManager_Client(object):
         log.debug("show_counter_only:%s", self.show_counter_only)
         self.interval = interval
         log.debug("interval:%s", self.interval)
-            
-        self._result_q_timeout = result_q_timeout
-        log.debug("_result_q_timeout:%s", self._result_q_timeout)
-        self._job_q_timeout = job_q_timeout
-        log.debug("_job_q_timeout:%s", self._job_q_timeout)
-        self._fail_q_timeout = fail_q_timeout
-        log.debug("_fail_q_timeout:%s", self._fail_q_timeout)
+
+        self._job_q_get_timeout = job_q_get_timeout
+        log.debug("_job_q_get_timeout:%s", self._job_q_get_timeout)
+        self._job_q_put_timeout = job_q_put_timeout
+        log.debug("_job_q_put_timeout:%s", self._job_q_put_timeout)
+        self._result_q_put_timeout = result_q_put_timeout
+        log.debug("_result_q_put_timeout:%s", self._result_q_put_timeout)
+        self._fail_q_put_timeout = fail_q_put_timeout
+        log.debug("_fail_q_put_timeout:%s", self._fail_q_put_timeout)
         self.reconnect_wait = reconnect_wait
         log.debug("reconnect_wait:%s", self.reconnect_wait)
         self.reconnect_tries = reconnect_tries
@@ -381,25 +374,31 @@ class JobManager_Client(object):
         return pid
     
     @staticmethod
-    def __worker_func(func, nice, loglevel, server, port, authkey, i, manager_objects, c, m, reset_pbc, njobs,
-                      emergency_dump_path, job_q_timeout, fail_q_timeout, result_q_timeout, stdout_queue,
-                      reconnect_wait, reconnect_tries, ping_timeout, ping_retry):
+    def __worker_func(func,
+                      nice,
+                      loglevel,
+                      i,
+                      job_q_get,
+                      local_job_q,
+                      local_result_q,
+                      local_fail_q,
+                      const_arg,
+                      c,
+                      m,
+                      reset_pbc,
+                      njobs,
+                      emergency_dump_path,
+                      job_q_get_timeout):
         """
         the wrapper spawned nproc times calling and handling self.func
         """
         global log
         log = logging.getLogger(__name__+'.'+progress.get_identifier(name='worker{}'.format(i+1), bold=False))
         log.setLevel(loglevel)
-        
-        # queue_hand = logging.handlers.QueueHandler(stdout_queue)
-        # queue_hand.setFormatter(fmt)
-        # log.addHandler(queue_hand)
-        
+
         Signal_to_sys_exit(signals=[signal.SIGTERM])
         Signal_to_SIG_IGN(signals=[signal.SIGINT])
 
-        job_q, result_q, fail_q, const_arg, manager = manager_objects 
-        
         n = os.nice(0)
         try:
             n = os.nice(nice - n)
@@ -410,9 +409,7 @@ class JobManager_Client(object):
         cnt = 0
         time_queue = 0.
         time_calc = 0.
-        
-        tg_1 = tg_0 = tp_1 = tp_0 = tf_1 = tf_0 = 0
-        
+
         # check for func definition without status members count, max_count
         #args_of_func = inspect.getfullargspec(func).args
         #if len(args_of_func) == 2:
@@ -435,15 +432,7 @@ class JobManager_Client(object):
             log.debug("found standard keyword arguments: [c, m]")
             _func = func
             
-        kwargs = {'reconnect_wait' : reconnect_wait, 
-                  'reconnect_tries': reconnect_tries,
-                  'ping_timeout'   : ping_timeout,
-                  'ping_retry'     : ping_retry}
-            
-        job_q_get    = proxy_operation_decorator(proxy = job_q, operation = 'get', **kwargs)
-        job_q_put    = proxy_operation_decorator(proxy = job_q, operation = 'put', **kwargs)
-        result_q_put = proxy_operation_decorator(proxy = result_q, operation = 'put', **kwargs)
-        fail_q_put   = proxy_operation_decorator(proxy = fail_q,   operation = 'put', **kwargs)
+
                
         # supposed to catch SystemExit, which will shut the client down quietly 
         try:
@@ -459,7 +448,7 @@ class JobManager_Client(object):
                 # try to get an item from the job_q                
                 try:
                     tg_0 = time.time()
-                    arg = job_q_get(block = True, timeout = job_q_timeout)
+                    arg = job_q_get(block = True, timeout = job_q_get_timeout)
                     tg_1 = time.time()
                     time_queue += (tg_1-tg_0)
                  
@@ -505,7 +494,7 @@ class JobManager_Client(object):
 
                     log.debug("try to send send failed arg to fail_q")
                     try:
-                        fail_q_put((arg, err.__name__, hostname), block = True, timeout=fail_q_timeout)
+                        local_fail_q.put((arg, err.__name__, hostname))
                     # handle SystemExit in outer try ... except                        
                     except SystemExit as e:
                         log.warning('sending arg to fail_q failed due to SystemExit')
@@ -522,8 +511,8 @@ class JobManager_Client(object):
                 # - try to send the result back to the server                        
                 else:
                     try:
-                        tp_0 = time.time()                       
-                        result_q_put((arg, res), block = True, timeout=result_q_timeout)
+                        tp_0 = time.time()
+                        local_result_q.put((arg, res))
                         tp_1 = time.time()
                         time_queue += (tp_1-tp_0)
                         
@@ -551,7 +540,7 @@ class JobManager_Client(object):
             log.warning("SystemExit, quit processing, reinsert current argument, please wait")
             log.debug("try to put arg back to job_q")
             try:
-                job_q.put(arg, timeout=fail_q_timeout)
+                local_job_q.put(arg)
             # handle SystemExit in outer try ... except                        
             except SystemExit as e:
                 log.error("put arg back to job_q failed due to SystemExit")
@@ -578,24 +567,6 @@ class JobManager_Client(object):
 
         log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
         
-        # pid = os.getpid()
-        # os.kill(pid, signal.SIGTERM)
-#         __p = psutil.Process(pid)
-#         for thr in __p.threads():
-#             if pid == thr.id:
-#                 log.debug("skip thread is %s, because it is the process itself", thr.id)
-#             else:
-#                 log.debug("send SIGTERM to thread with id %s", thr.id)
-#                 os.kill(thr.id, signal.SIGTERM)
-            
-            
-        #log.debug(str(__p.threads()))
-        
-#         log.debug("trigger sys.exit(0)")
-#         raise SystemExit
-#         log.debug("sys.exit(0) was triggered")
-
-
     def start(self):
         """
         starts a number of nproc subprocess to work on the job_q
@@ -639,11 +610,60 @@ class JobManager_Client(object):
         #               "this may resault in incoheerent logging")
         #     worker_stdout_queue = None
 
-        worker_stdout_queue = None
+        # worker_stdout_queue = None
 
         l = len(str(self.nproc))
         for i in range(self.nproc):
             prepend.append("w{0:0{1}}:".format(i+1, l))
+
+        job_q, result_q, fail_q, const_arg, manager = self.manager_objects
+
+        local_job_q = mp.Queue()
+        local_result_q = mp.Queue()
+        local_fail_q = mp.Queue()
+
+        kwargs = {'reconnect_wait': self.reconnect_wait,
+                  'reconnect_tries': self.reconnect_tries,
+                  'ping_timeout': self.ping_timeout,
+                  'ping_retry': self.ping_retry}
+
+        job_q_get = proxy_operation_decorator(proxy=job_q, operation='get', **kwargs)
+        job_q_put = proxy_operation_decorator(proxy=job_q, operation='put', **kwargs)
+        result_q_put = proxy_operation_decorator(proxy=result_q, operation='put', **kwargs)
+        fail_q_put = proxy_operation_decorator(proxy=fail_q, operation='put', **kwargs)
+
+        def pass_job_q_put(job_q_put, local_job_q, timeout):
+            while True:
+                try:
+                    data = local_job_q.get(timeout = 1)
+                except queue.Empty:
+                    continue
+                job_q_put(data, timeout=timeout)
+
+        def pass_result_q_put(result_q_put, local_result_q, timeout):
+            while True:
+                try:
+                    data = local_result_q.get(timeout = 1)
+                except queue.Empty:
+                    continue
+                result_q_put(data, timeout=timeout)
+
+        def pass_fail_q_put(fail_q_put, local_fail_q, timeout):
+            while True:
+                try:
+                    data = local_fail_q.get(timeout = 1)
+                except queue.Empty:
+                    continue
+                fail_q_put(data, timeout=timeout)
+
+        thr_job_q_put    = threading.Thread(target=pass_job_q_put   , args=(job_q_put   , local_job_q   , self._job_q_put_timeout))
+        thr_result_q_put = threading.Thread(target=pass_result_q_put, args=(result_q_put, local_result_q, self._result_q_put_timeout))
+        thr_fail_q_put   = threading.Thread(target=pass_fail_q_put  , args=(fail_q_put  , local_fail_q  , self._fail_q_put_timeout))
+
+        thr_job_q_put.start()
+        thr_result_q_put.start()
+        thr_fail_q_put.start()
+
 
         with progress.ProgressBarCounterFancy(count         = c, 
                                               max_count     = m_progress, 
@@ -658,27 +678,24 @@ class JobManager_Client(object):
 
             for i in range(self.nproc):
                 reset_pbc = lambda: self.pbc.reset(i)
-                p = mp.Process(target=self.__worker_func, args=(self.func, 
-                                                                self.nice, 
-                                                                log.level, 
-                                                                self.server, 
-                                                                self.port,
-                                                                self.authkey,
-                                                                i,
-                                                                self.manager_objects,
-                                                                c[i],
-                                                                m_set_by_function[i],
-                                                                reset_pbc,
-                                                                self.njobs,
-                                                                self.emergency_dump_path,
-                                                                self._job_q_timeout,
-                                                                self._fail_q_timeout,
-                                                                self._result_q_timeout,
-                                                                worker_stdout_queue,
-                                                                self.reconnect_wait, 
-                                                                self.reconnect_tries, 
-                                                                self.ping_timeout, 
-                                                                self.ping_retry))
+                p = mp.Process(target=self.__worker_func, args=(self.func,                # func
+                                                                self.nice,                # nice
+                                                                log.level,                # loglevel
+                                                                i,                        # i
+                                                                job_q_get,                # job_q_get
+                                                                local_job_q,              # local_job_q
+                                                                local_result_q,           # local_result_q
+                                                                local_fail_q,             # local_fail_q
+                                                                const_arg,                # const_arg
+                                                                c[i],                     # c
+                                                                m_set_by_function[i],     # m
+                                                                reset_pbc,                # reset_pbc
+                                                                self.njobs,               # njobs
+                                                                self.emergency_dump_path, # emergency_dump_path
+                                                                self._job_q_get_timeout)) # job_q_get_timeout
+
+
+
                 self.procs.append(p)
                 p.start()
                 time.sleep(0.3)
@@ -703,22 +720,35 @@ class JobManager_Client(object):
 
                 p.join()
                 log.debug("process %s exitcode %s", p, p.exitcode)
-                
-                # while p.is_alive():
-                #     log.debug("still alive %s PID %s", p, p.pid)
-                #     p.join(timeout=self.interval)
-                #     _proc = psutil.Process(p.pid)
-                #     log.debug(str(p.exitcode))
-                #     log.debug(str(_proc.connections()))
-                #     log.debug(str(_proc.children(recursive=True)))
-                #     log.debug(str(_proc.status()))
-                #     log.debug(str(_proc.threads()))
-
                 log.debug("process %s PID %s was joined", p, p.pid)
-                    
+
+            log.debug("all workers joind")
             log.debug("still in progressBar context")
-                                        
+
         log.debug("progressBar context has been left")
+
+        log.debug("wait for local_job_q to empty or thread to stop...")
+        while (not local_job_q.empty()) and thr_job_q_put.is_alive():
+            time.sleep(1)
+        log.debug("join thread (local_job_q empty:%s)", local_job_q.empty())
+        thr_job_q_put.join(0)
+
+
+        log.debug("wait for local_result_q to empty or thread to stop...")
+        while (not local_result_q.empty()) and thr_result_q_put.is_alive():
+            time.sleep(1)
+        log.debug("join thread (local_result_q empty:%s)", local_result_q.empty())
+        thr_result_q_put.join(0)
+
+
+        log.debug("wait for local_fail_q to empty or thread to stop...")
+        while (not local_fail_q.empty()) and thr_fail_q_put.is_alive():
+            time.sleep(1)
+        log.debug("join thread (local_fail_q empty:%s)", local_fail_q.empty())
+        thr_fail_q_put.join(0)
+
+
+
 
 
 class JobManager_Server(object):
