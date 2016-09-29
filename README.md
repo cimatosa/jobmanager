@@ -14,9 +14,17 @@ The documentation is available at http://cimatosa.github.io/jobmanager/
   * timeout for client
   * single proxy for client and queue for subprocesses
   * user signal to server to retrieve status
+  
+### known Problems
 
+#### Python2.7
+  * regular shutdown takes very long -> travis tests cancel due to timeout
+#### Python3.4
+  * some tests result in `segmentation fault (core dumped)`, nonetheless they pass
 
-### Developer's note
+Therefore it is highly encouraged to use Python3.5 (and probably higher).
+
+### Developer's note (out of date)
 After cloning into jobmanager, create a virtual environment
 
     virtualenv --system-site-packages ve_jm
@@ -33,5 +41,3 @@ Running an example
 Running tests
 
     python setup.py test
-    
-[travis test]
