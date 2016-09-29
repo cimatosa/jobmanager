@@ -47,6 +47,7 @@ import binfootprint as bf
 import progress
 import logging
 import threading
+import ctypes
 
 # taken from here: https://mail.python.org/pipermail/python-list/2010-November/591474.html
 class MultiLineFormatter(logging.Formatter):
@@ -216,6 +217,8 @@ class JobManager_Client(object):
         no_warnings [bool] - call warnings.filterwarnings("ignore") -> all warnings are ignored
         
         verbose [int] - 0: quiet, 1: status only, 2: debug messages
+        
+        DO NOT SIGTERM CLIENT TOO ERLY, MAKE SURE THAT ALL SIGNAL HANDLERS ARE UP (see log at debug level)
         """
 
         global log
@@ -369,7 +372,7 @@ class JobManager_Client(object):
         Subclass and overwrite this function to implement your own function.  
         """
         pid = os.getpid()
-        print("{} sleeps for {}s".format(pid, const_arg))
+        #print("{} sleeps for {}s".format(pid, const_arg))
         time.sleep(const_arg)
         return pid
     
@@ -413,7 +416,7 @@ class JobManager_Client(object):
         # check for func definition without status members count, max_count
         #args_of_func = inspect.getfullargspec(func).args
         #if len(args_of_func) == 2:
-        count_args = getCountKwargs(func)
+        count_args = progress.getCountKwargs(func)
 
         if count_args is None:
             log.warning("found function without status information (progress will not work)")
@@ -631,40 +634,46 @@ class JobManager_Client(object):
         job_q_put = proxy_operation_decorator(proxy=job_q, operation='put', **kwargs)
         result_q_put = proxy_operation_decorator(proxy=result_q, operation='put', **kwargs)
         fail_q_put = proxy_operation_decorator(proxy=fail_q, operation='put', **kwargs)
-
+        
         def pass_job_q_put(job_q_put, local_job_q, timeout):
+#             log.debug("this is thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
             while True:
-                try:
-                    data = local_job_q.get(timeout = 1)
-                except queue.Empty:
-                    continue
+                data = local_job_q.get()
                 job_q_put(data, timeout=timeout)
+#             log.debug("stopped thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
 
+ 
         def pass_result_q_put(result_q_put, local_result_q, timeout):
-            while True:
-                try:
-                    data = local_result_q.get(timeout = 1)
-                except queue.Empty:
-                    continue
-                result_q_put(data, timeout=timeout)
-
+            log.debug("this is thread thr_result_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
+            try:
+                while True:
+                    data = local_result_q.get()
+                    result_q_put(data, timeout=timeout)
+            except Exception as e:
+                log.error("thr_result_q_put caught error %s", type(e))
+                log.info(traceback.format_exc())
+            log.debug("stopped thread thr_result_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
+ 
         def pass_fail_q_put(fail_q_put, local_fail_q, timeout):
+#             log.debug("this is thread thr_fail_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
             while True:
-                try:
-                    data = local_fail_q.get(timeout = 1)
-                except queue.Empty:
-                    continue
-                fail_q_put(data, timeout=timeout)
+                data = local_fail_q.get()
+                fail_q_put(data, timeout=timeout)  
+#             log.debug("stopped thread thr_fail_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
 
-        thr_job_q_put    = threading.Thread(target=pass_job_q_put   , args=(job_q_put   , local_job_q   , self._job_q_put_timeout))
-        thr_result_q_put = threading.Thread(target=pass_result_q_put, args=(result_q_put, local_result_q, self._result_q_put_timeout))
-        thr_fail_q_put   = threading.Thread(target=pass_fail_q_put  , args=(fail_q_put  , local_fail_q  , self._fail_q_put_timeout))
+        thr_job_q_put           = threading.Thread(target=pass_job_q_put   , args=(job_q_put   , local_job_q   , self._job_q_put_timeout))
+        thr_job_q_put.daemon    = True
+        thr_result_q_put        = threading.Thread(target=pass_result_q_put, args=(result_q_put, local_result_q, self._result_q_put_timeout))
+        thr_result_q_put.daemon = True
+        thr_fail_q_put          = threading.Thread(target=pass_fail_q_put  , args=(fail_q_put  , local_fail_q  , self._fail_q_put_timeout))
+        thr_fail_q_put.daemon   = True
+        
+        
 
-        thr_job_q_put.start()
+        thr_job_q_put.start()       
         thr_result_q_put.start()
         thr_fail_q_put.start()
-
-
+        
         with progress.ProgressBarCounterFancy(count         = c, 
                                               max_count     = m_progress, 
                                               interval      = self.interval,
@@ -698,7 +707,8 @@ class JobManager_Client(object):
 
                 self.procs.append(p)
                 p.start()
-                time.sleep(0.3)
+                log.debug("started new worker with pid %s", p.pid)
+                time.sleep(0.1)
 
             log.debug("all worker processes startes")
 
@@ -719,33 +729,57 @@ class JobManager_Client(object):
             for p in self.procs:
 
                 p.join()
-                log.debug("process %s exitcode %s", p, p.exitcode)
-                log.debug("process %s PID %s was joined", p, p.pid)
+                log.debug("worker process %s exitcode %s", p.pid, p.exitcode)
+                log.debug("worker process %s was joined", p.pid)
 
             log.debug("all workers joind")
             log.debug("still in progressBar context")
 
         log.debug("progressBar context has been left")
+        
+        while (not local_job_q.empty()):
+            log.debug("still data in local_job_q (%s)", local_job_q.qsize())
+            if thr_job_q_put.is_alive():
+                log.debug("allow the thread thr_job_q_put to process items")
+                time.sleep(1)
+            else:
+                log.warning("the thread thr_job_q_put has died, can not process remaining items")
+                break
 
-        log.debug("wait for local_job_q to empty or thread to stop...")
-        while (not local_job_q.empty()) and thr_job_q_put.is_alive():
-            time.sleep(1)
-        log.debug("join thread (local_job_q empty:%s)", local_job_q.empty())
-        thr_job_q_put.join(0)
+        while (not local_result_q.empty()):
+            log.debug("still data in local_result_q (%s)", local_result_q.qsize())
+            if thr_result_q_put.is_alive():
+                log.debug("allow the thread thr_result_q_put to process items")
+                time.sleep(1)
+            else:
+                log.warning("the thread thr_result_q_put has died, can not process remaining items")
+                break
 
+        while (not local_fail_q.empty()):
+            log.debug("still data in local_fail_q (%s)", local_fail_q.qsize())
+            if thr_fail_q_put.is_alive():
+                log.debug("allow the thread thr_fail_q_put to process items")
+                time.sleep(1)
+            else:
+                log.warning("the thread thr_fail_q_put has died, can not process remaining items")
+                break
+            
+        log.info("client stopped")                    
 
-        log.debug("wait for local_result_q to empty or thread to stop...")
-        while (not local_result_q.empty()) and thr_result_q_put.is_alive():
-            time.sleep(1)
-        log.debug("join thread (local_result_q empty:%s)", local_result_q.empty())
-        thr_result_q_put.join(0)
-
-
-        log.debug("wait for local_fail_q to empty or thread to stop...")
-        while (not local_fail_q.empty()) and thr_fail_q_put.is_alive():
-            time.sleep(1)
-        log.debug("join thread (local_fail_q empty:%s)", local_fail_q.empty())
-        thr_fail_q_put.join(0)
+# 
+# 
+#         log.debug("wait for local_result_q to empty or thread to stop...")
+#         while (not local_result_q.empty()) and thr_result_q_put.is_alive():
+#             time.sleep(1)
+#         log.debug("join thread (local_result_q empty:%s)", local_result_q.empty())
+#         thr_result_q_put.join(0)
+# 
+# 
+#         log.debug("wait for local_fail_q to empty or thread to stop...")
+#         while (not local_fail_q.empty()) and thr_fail_q_put.is_alive():
+#             time.sleep(1)
+#         log.debug("join thread (local_fail_q empty:%s)", local_fail_q.empty())
+#         thr_fail_q_put.join(0)
 
 
 
@@ -1052,7 +1086,10 @@ class JobManager_Server(object):
         print("{}    not queried yet : {}".format(id2, not_queried))
         print("{}len(args_dict) : {}".format(id2, len(self.args_dict)))
         if (all_not_processed + failed) != len(self.args_dict):
-            log.error("'all_not_processed != len(self.args_dict)' something is inconsistent!")            
+            log.error("'all_not_processed != len(self.args_dict)' something is inconsistent!")
+            
+    def all_successfully_processed(self):
+        return self.numjobs == self.numresults
 
     @staticmethod
     def static_load(f):
@@ -1214,7 +1251,14 @@ class JobManager_Server(object):
                 except queue.Empty:
                     continue
                 
-                del self.args_dict[bf.dump(arg)]
+                bf_arg = bf.dump(arg)
+                if bf_arg not in self.args_dict:
+                    log.warning("got an argument that is not listed in the args_dict (probably crunshed twice, uups) -> will be skipped")
+                    del arg
+                    del result
+                    continue
+                
+                del self.args_dict[bf_arg]
                 self.numresults += 1
                 self.process_new_result(arg, result)
                 if not self.keep_new_result_in_memory:
@@ -1297,8 +1341,7 @@ class JobManager_Local(JobManager_Server):
                                     self.show_statusbar_for_jobs,
                                     self.show_counter_only))
         p_client.start()
-        super(JobManager_Local, self).start()
-        
+        super(JobManager_Local, self).start()             
         progress.check_process_termination(p_client, 
                                            prefix  = 'local_client',
                                            timeout = 2)
@@ -1314,6 +1357,7 @@ class Signal_handler_for_Jobmanager_client(object):
         self.client_object = client_object
         self.exit_handler = exit_handler
         for s in signals:
+            log.debug("setup Signal_handler_for_Jobmanager_client for signal %s", progress.signal_dict[s])
             signal.signal(s, self._handler)
             
     def _handler(self, sig, frame):
@@ -1376,12 +1420,15 @@ class Signal_to_terminate_process_list(object):
         self.timeout = timeout
         
         for s in signals:
+            log.debug("setup Signal_to_terminate_process_list for signal %s", progress.signal_dict[s])
             signal.signal(s, self._handler)
             
     def _handler(self, signal, frame):
         log.debug("received sig %s -> terminate all given subprocesses", progress.signal_dict[signal])
         for i, p in enumerate(self.process_list):
             p.terminate()
+            
+        for i, p in enumerate(self.process_list):            
             progress.check_process_termination(proc       = p, 
                                                prefix     = self.identifier_list[i], 
                                                timeout    = self.timeout,
@@ -1408,7 +1455,7 @@ def call_connect_python3(connect, dest, reconnect_wait=2, reconnect_tries=3):
                 c = handler_connection_reset(dest, c, reconnect_wait, reconnect_tries)
             elif type(e) is ConnectionRefusedError:       # ... when the destination refuses our connection
                 handler_connection_refused(e, dest)
-            elif type(e) is AuthenticationError :      # ... when the destination refuses our connection due authkey missmatch
+            elif type(e) is AuthenticationError :         # ... when the destination refuses our connection due authkey missmatch
                 handler_authentication_error(e, dest)
             elif type(e) is RemoteError:                  # ... when the destination send us an error message
                 if 'KeyError' in e.args[0]:
@@ -1477,25 +1524,7 @@ def copyQueueToList(q):
     except queue.Empty:
         pass
 
-    return res_q, res_list
-
-
-def getCountKwargs(func):
-    """ Returns a list ["count kwarg", "count_max kwarg"] for a
-    given function. Valid combinations are defined in 
-    `jobmanager.jobmanager.validCountKwargs`.
-    
-    Returns None if no keyword arguments are found.
-    """
-    # Get all arguments of the function
-    if hasattr(func, "__code__"):
-        func_args = func.__code__.co_varnames[:func.__code__.co_argcount]
-        for pair in validCountKwargs:
-            if ( pair[0] in func_args and pair[1] in func_args ):
-                return pair
-    # else
-    return None
-    
+    return res_q, res_list    
      
 def getDateForFileName(includePID = False):
     """returns the current date-time and optionally the process id in the format
@@ -1781,10 +1810,4 @@ def try_pickle(obj, show_exception=False):
 # a list of all names of the implemented python signals
 all_signals = [s for s in dir(signal) if (s.startswith('SIG') and s[3] != '_')]
 
-# keyword arguments that define counting in wrapped functions
-validCountKwargs = [
-                    [ "count", "count_max"],
-                    [ "count", "max_count"],
-                    [ "c", "m"],
-                    [ "jmc", "jmm"],
-                   ]
+

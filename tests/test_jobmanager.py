@@ -10,6 +10,7 @@ import socket
 import signal
 import logging
 import datetime
+import threading
 from numpy import random
 
 from os.path import abspath, dirname, split
@@ -157,21 +158,22 @@ def test_Signal_to_terminate_process_list():
     
 
  
-def start_server(n, read_old_state=False, client_sleep=0.1):
+def start_server(n, read_old_state=False, client_sleep=0.1, hide_progress=False):
     print("START SERVER")
     args = range(1,n)
-    with jobmanager.JobManager_Server(authkey      = AUTHKEY,
-                                      port         = PORT,
-                                      msg_interval = 1,
-                                      const_arg    = client_sleep,
-                                      fname_dump   = 'jobmanager.dump') as jm_server:
+    with jobmanager.JobManager_Server(authkey       = AUTHKEY,
+                                      port          = PORT,
+                                      msg_interval  = 1,
+                                      const_arg     = client_sleep,
+                                      fname_dump    = 'jobmanager.dump',
+                                      hide_progress = hide_progress) as jm_server:
         if not read_old_state:
             jm_server.args_from_list(args)
         else:
             jm_server.read_old_state()
         jm_server.start()        
     
-def start_client():
+def start_client(hide_progress=True):
     print("START CLIENT")
     jm_client = jobmanager.JobManager_Client(server  = SERVER,
                                              authkey = AUTHKEY,
@@ -180,8 +182,80 @@ def start_client():
                                              reconnect_tries = 0,
                                              job_q_put_timeout = 1,
                                              result_q_put_timeout = 1,
-                                             fail_q_put_timeout = 1)
+                                             fail_q_put_timeout = 1,
+                                             hide_progress = hide_progress)
     jm_client.start()
+    
+def test_start_server_with_no_args():
+    n = 10
+    args = range(1,n)
+    
+    with jobmanager.JobManager_Server(authkey      = AUTHKEY,
+                                      port         = PORT,
+                                      msg_interval = 1,
+                                      fname_dump   = 'jobmanager.dump') as jm_server:
+        jm_server.start()    
+    
+def test_start_server():
+    n = 10
+    args = range(1,n)
+    
+    def send_SIGINT(pid):
+        time.sleep(0.5)
+        sys.stderr.write("send SIGINT\n")
+        os.kill(pid, signal.SIGINT)    
+    thr = threading.Thread(target=send_SIGINT, args=(os.getpid(),))
+    thr.daemon = True    
+    
+    with jobmanager.JobManager_Server(authkey      = AUTHKEY,
+                                      port         = PORT,
+                                      msg_interval = 1,
+                                      fname_dump   = 'jobmanager.dump') as jm_server:
+        jm_server.args_from_list(args)       
+        thr.start()
+        jm_server.start()
+    
+def test_jobmanager_static_client_call():
+    jm_client = jobmanager.JobManager_Client(server  = SERVER,
+                                             authkey = AUTHKEY,
+                                             port    = PORT,
+                                             nproc   = 3,
+                                             reconnect_tries = 0,
+                                             job_q_put_timeout = 1,
+                                             result_q_put_timeout = 1,
+                                             fail_q_put_timeout = 1)
+    jm_client.func(arg=1, const_arg=1)
+    
+def test_client():
+    global PORT
+    PORT += 1    
+    p_server = None
+    n = 5
+
+    try:
+        # start a server
+        p_server = mp.Process(target=start_server, args=(n,False,0.5))
+        p_server.start()
+        time.sleep(0.5)
+        
+        jmc = jobmanager.JobManager_Client(server  = SERVER,
+                                           authkey = AUTHKEY,
+                                           port    = PORT,
+                                           nproc   = 3,
+                                           reconnect_tries = 0,
+                                           job_q_put_timeout = 1,
+                                           result_q_put_timeout = 1,
+                                           fail_q_put_timeout = 1)
+        jmc.start()
+        
+        p_server.join(5)
+        assert not p_server.is_alive(), "server did not end on time"
+        
+    except:
+        if p_server is not None:
+            p_server.terminate()
+        raise
+        
 
 def test_jobmanager_basic():
     """
@@ -382,6 +456,7 @@ def shutdown_client(sig):
 
     p_server = None
     p_client = None
+    
     try:
     
         p_server = mp.Process(target=start_server, args=(n, False, 0.1))
@@ -392,7 +467,7 @@ def shutdown_client(sig):
         p_client = mp.Process(target=start_client)
         p_client.start()
 
-        time.sleep(1.5)
+        time.sleep(3)
 
         print("    send {}".format(progress.signal_dict[sig]))
         os.kill(p_client.pid, sig)
@@ -568,37 +643,47 @@ def test_client_status():
     global PORT
     PORT += 1
     n = 10
-    p_server = mp.Process(target=start_server, args=(n,False))
-    p_server.start()
+    p_server = None
     
-    time.sleep(1)
+    try:
+        p_server = mp.Process(target=start_server, args=(n,False,None, True))
+        p_server.start()
+        
+        time.sleep(1)
+        
+        class Client_With_Status(jobmanager.JobManager_Client):
+            def func(self, args, const_args, c, m):
+                m.value = 30
+                for i in range(m.value):
+                    c.value = i+1
+                    time.sleep(0.05)
+     
+                return os.getpid()
     
-    class Client_With_Status(jobmanager.JobManager_Client):
-        def func(self, args, const_args, c, m):
-            m.value = 100
-            for i in range(m.value):
-                c.value = i+1
-                time.sleep(0.05)
-
-            return os.getpid()
-
-    client = Client_With_Status(server = SERVER, 
-                                authkey = AUTHKEY,
-                                port    = PORT, 
-                                nproc   = 4)
-    client.start()
-    p_server.join()
+        client = Client_With_Status(server  = SERVER, 
+                                    authkey = AUTHKEY,
+                                    port    = PORT, 
+                                    nproc   = 4)
+        client.start()
+        p_server.join(5)
+        assert not p_server.is_alive()
+    except:
+        if p_server is not None:
+            p_server.terminate()
+        raise
     
 def test_jobmanager_local():
     global PORT
     PORT += 1
     args = range(1,200)
     with jobmanager.JobManager_Local(client_class = jobmanager.JobManager_Client,
-                                     authkey = AUTHKEY,
-                                     port = PORT,
-                                     ) as jm_server:
+                                     authkey      = AUTHKEY,
+                                     port         = PORT,
+                                     const_arg    = 0.1) as jm_server:
         jm_server.args_from_list(args)
         jm_server.start()
+    
+    assert jm_server.all_successfully_processed()
         
 def test_start_server_on_used_port():
     global PORT
@@ -732,7 +817,8 @@ def test_hum_size():
     assert humanize_size(1024**4) == '1024.00TB'
     
 if __name__ == "__main__":  
-    jm_log.setLevel(logging.DEBUG)
+#     jm_log.setLevel(logging.DEBUG)
+    jm_log.setLevel(logging.ERROR)
     progress.log.setLevel(logging.ERROR)
     if len(sys.argv) > 1:
         pass
@@ -743,19 +829,22 @@ if __name__ == "__main__":
 #         test_Signal_to_SIG_IGN,
 #         test_Signal_to_sys_exit,
 #         test_Signal_to_terminate_process_list,
-                  
-        # test_jobmanager_basic,
-        # test_jobmanager_server_signals,
-        test_shutdown_server_while_client_running,
-        # test_shutdown_client,
-        # test_check_fail,
-        # test_jobmanager_read_old_stat,
-        # test_client_status,
-        # test_jobmanager_local,
-        # test_start_server_on_used_port,
-        # test_shared_const_arg,
-        # test_digest_rejected,
-        # test_hum_size,
+#         test_jobmanager_static_client_call,
+#         test_start_server_with_no_args,
+#         test_start_server,
+#         test_client,
+#         test_jobmanager_basic,
+#         test_jobmanager_server_signals,
+#         test_shutdown_server_while_client_running,
+#         test_shutdown_client,
+#         test_check_fail,
+#         test_jobmanager_read_old_stat,
+#         test_client_status,
+#         test_jobmanager_local,
+#         test_start_server_on_used_port,
+#         test_shared_const_arg,
+#         test_digest_rejected,
+#         test_hum_size,
 
         lambda : print("END")
         ]
@@ -765,5 +854,4 @@ if __name__ == "__main__":
             print('##  {}'.format(f.__name__))
             print()
             f()
-            time.sleep(1)
-    
+            time.sleep(1)   
