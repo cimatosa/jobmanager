@@ -25,8 +25,8 @@ before_install:
 - pip install sqlitedict
 - pip install h5py
 - pip install pytest pytest-cov
-- git clone https://github.com/cimatosa/progress.git progress_package
-- ln -s progress_package/progress
+- git clone https://github.com/cimatosa/progression.git progress_package
+- ln -s progress_package/progression
 - git clone https://github.com/cimatosa/binfootprint.git binfootprint_package
 - ln -s binfootprint_package/binfootprint
 - git clone https://github.com/cimatosa/persistentdata.git persistentdata_package
