@@ -255,6 +255,8 @@ def test_client():
         if p_server is not None:
             p_server.terminate()
         raise
+
+
         
 
 def test_jobmanager_basic():
@@ -282,8 +284,12 @@ def test_jobmanager_basic():
         p_client = mp.Process(target=start_client)
         p_client.start()
         
-        p_client.join(3)
+        p_client.join(10)
         # client should have processed all
+        if sys.version_info.major == 2:
+            p_client.terminate()
+            p_client.join(3)
+
         assert not p_client.is_alive(), "the client did not terminate on time!"
         # client must not throw an exception
         assert p_client.exitcode == 0, "the client raised an exception"
@@ -817,9 +823,11 @@ def test_hum_size():
     assert humanize_size(1024**4) == '1024.00TB'
     
 if __name__ == "__main__":  
-#     jm_log.setLevel(logging.DEBUG)
-    jm_log.setLevel(logging.ERROR)
-    progress.log.setLevel(logging.ERROR)
+    jm_log.setLevel(logging.DEBUG)
+    progress.log.setLevel(logging.DEBUG)
+#     jm_log.setLevel(logging.ERROR)
+#     progress.log.setLevel(logging.ERROR)
+
     if len(sys.argv) > 1:
         pass
     else:    
@@ -833,18 +841,18 @@ if __name__ == "__main__":
 #         test_start_server_with_no_args,
 #         test_start_server,
 #         test_client,
-#         test_jobmanager_basic,
-#         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
-#         test_check_fail,
-#         test_jobmanager_read_old_stat,
-#         test_client_status,
-#         test_jobmanager_local,
-#         test_start_server_on_used_port,
-#         test_shared_const_arg,
-#         test_digest_rejected,
-#         test_hum_size,
+        test_jobmanager_basic,
+        test_jobmanager_server_signals,
+        test_shutdown_server_while_client_running,
+        test_shutdown_client,
+        test_check_fail,
+        test_jobmanager_read_old_stat,
+        test_client_status,
+        test_jobmanager_local,
+        test_start_server_on_used_port,
+        test_shared_const_arg,
+        test_digest_rejected,
+        test_hum_size,
 
         lambda : print("END")
         ]
@@ -854,4 +862,4 @@ if __name__ == "__main__":
             print('##  {}'.format(f.__name__))
             print()
             f()
-            time.sleep(1)   
+            #time.sleep(1)

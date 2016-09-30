@@ -101,6 +101,8 @@ if sys.version_info[0] == 2:
     
     class JMConnectionResetError(JMConnectionError):
         pass
+
+    input_promt = raw_input
     
 else:
     # Python 3
@@ -109,6 +111,8 @@ else:
     JMConnectionError = ConnectionError
     JMConnectionRefusedError = ConnectionRefusedError
     JMConnectionResetError = ConnectionResetError
+
+    input_promt = input
     
 class JMHostNotReachableError(JMConnectionError):
     pass
@@ -269,7 +273,7 @@ class JobManager_Client(object):
             self.authkey = authkey
         else: 
             self.authkey = bytearray(authkey, encoding='utf8')
-        log.debug("authkey:%s", self.authkey)
+        log.debug("authkey:%s", self.authkey.decode())
         self.port = port
         log.debug("port:%s", self.port)
         self.nice = nice
@@ -350,7 +354,6 @@ class JobManager_Client(object):
         const_arg = copy.deepcopy(manager.get_const_arg())
             
         return job_q, result_q, fail_q, const_arg, manager
-    
         
     @staticmethod
     def func(arg, const_arg):
@@ -391,7 +394,10 @@ class JobManager_Client(object):
                       reset_pbc,
                       njobs,
                       emergency_dump_path,
-                      job_q_get_timeout):
+                      job_q_get_timeout,
+                      host,
+                      port,
+                      authkey):
         """
         the wrapper spawned nproc times calling and handling self.func
         """
@@ -701,8 +707,10 @@ class JobManager_Client(object):
                                                                 reset_pbc,                # reset_pbc
                                                                 self.njobs,               # njobs
                                                                 self.emergency_dump_path, # emergency_dump_path
-                                                                self._job_q_get_timeout)) # job_q_get_timeout
-
+                                                                self._job_q_get_timeout,  # job_q_get_timeout
+                                                                self.server,              # host
+                                                                self.port,                # port
+                                                                self.authkey))            # authkey
 
 
                 self.procs.append(p)
@@ -764,7 +772,12 @@ class JobManager_Client(object):
                 log.warning("the thread thr_fail_q_put has died, can not process remaining items")
                 break
             
-        log.info("client stopped")                    
+        log.info("client stopped")
+
+        log.debug("setup default signal handler for SIGINT")
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        log.debug("setup default signal handler for SIGTERM")
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 # 
 # 
@@ -1367,9 +1380,13 @@ class Signal_handler_for_Jobmanager_client(object):
             self.client_object.pbc.pause()
         
         try:
-            r = input(progress.ESC_BOLD + progress.ESC_LIGHT_RED+"<q> - quit, <i> - server info: " + progress.ESC_NO_CHAR_ATTR)
-        except:
+            r = input_promt(progress.ESC_BOLD + progress.ESC_LIGHT_RED+"<q> - quit, <i> - server info: " + progress.ESC_NO_CHAR_ATTR)
+        except Exception as e:
+            log.error("Exception during input %s", type(e))
+            log.info(traceback.format_exc())
             r = 'q'
+
+        log.debug("input: '%s'", r)
 
         if r == 'i':
             self._show_server_info()
@@ -1609,11 +1626,12 @@ def handle_unexpected_queue_error(e):
               "I guess the server went down, can't do anything, terminate now!", type(e), e.args)
     log.debug(traceback.print_exc())
 
-def emergency_dump(arg, res, path):
+
+def emergency_dump(arg, res, emergency_dump_path, host, port, authkey):
     now = datetime.now().isoformat()
     pid = os.getpid()
-    fname = "{}_pid_{}".format(now, pid)
-    full_path = os.path.join(path, fname)
+    fname = "jmclient_dump_{}_pid_{}_host_{}_port_{}_authkey_{}.dump".format(now, pid, host, port, authkey.decode())
+    full_path = os.path.join(emergency_dump_path, fname)
     log.warning("emergency dump (arg, res) to %s", full_path)
     with open(full_path, 'wb') as f:
         pickle.dump(arg, f)
