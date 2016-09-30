@@ -19,7 +19,7 @@ sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
 import jobmanager
 import binfootprint
-import progress
+import progression as progress
 
 if sys.version_info[0] == 2:
     TIMEOUT = 300

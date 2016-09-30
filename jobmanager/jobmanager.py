@@ -44,7 +44,7 @@ import time
 import traceback
 import warnings
 import binfootprint as bf
-import progress
+import progression as progress
 import logging
 import threading
 import ctypes
