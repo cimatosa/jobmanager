@@ -4,6 +4,8 @@
 import binfootprint
 
 from .jobmanager import JobManager_Server
+from .jobmanager import log
+
 
 class PersistentData_Server(JobManager_Server):
     def __init__(self, 
@@ -11,7 +13,7 @@ class PersistentData_Server(JobManager_Server):
                  authkey, 
                  const_arg=None, 
                  port=42524, 
-                 verbose=1, 
+                 verbose=None, 
                  msg_interval=1, 
                  fname_dump=None,
                  speed_calc_cycles=50,
@@ -20,11 +22,10 @@ class PersistentData_Server(JobManager_Server):
         JobManager_Server.__init__(self, authkey, const_arg=const_arg, port=port, verbose=verbose, msg_interval=msg_interval, fname_dump=fname_dump, speed_calc_cycles=speed_calc_cycles)
         self.pds = persistent_data_structure
         self.overwrite = overwrite
-        if self.verbose > 1:
-            if self.overwrite:
-                print("{}: overwriting existing data is ENABLED".format(self._identifier))
-            else:
-                print("{}: overwriting existing data is DISABLED".format(self._identifier))
+        if self.overwrite:
+            log.info("overwriting existing data is ENABLED")
+        else:
+            log.info("overwriting existing data is DISABLED")
          
     def process_new_result(self, arg, result):
         """
@@ -40,9 +41,16 @@ class PersistentData_Server(JobManager_Server):
         
     def put_arg(self, a):
         a_bin = binfootprint.dump(a.id)
-        if self.overwrite or (not a_bin in self.pds):
+        if self.overwrite:
+            log.debug("add arg (overwrite True)")
             JobManager_Server.put_arg(self, a)
             return True
         
+        if not a_bin in self.pds:
+            log.debug("add arg (arg not found in db)")
+            JobManager_Server.put_arg(self, a)
+            return True
+        
+        log.debug("skip arg (arg found in db)")
         return False
         
