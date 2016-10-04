@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import binfootprint
+import pickle
 
 from .jobmanager import JobManager_Server
 from .jobmanager import log
-
 
 class PersistentData_Server(JobManager_Server):
     def __init__(self, 
@@ -34,13 +33,13 @@ class PersistentData_Server(JobManager_Server):
             return True, if a new data set was added (key not already in pds)
             otherwise false
         """
-        key = binfootprint.dump(arg.id)
+        key = pickle.dumps(arg.id, protocol=2)
         has_key = key in self.pds
         self.pds[key] = (arg, result)
         return not has_key
         
     def put_arg(self, a):
-        a_bin = binfootprint.dump(a.id)
+        a_bin = pickle.dumps(a.id, protocol=2)
         if self.overwrite:
             log.debug("add arg (overwrite True)")
             JobManager_Server.put_arg(self, a)
