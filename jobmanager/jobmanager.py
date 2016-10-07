@@ -191,7 +191,8 @@ class JobManager_Client(object):
                  reconnect_tries         = 3,
                  ping_timeout            = 2,
                  ping_retry              = 3,
-                 hide_progress           = False):
+                 hide_progress           = False,
+                 use_special_SIG_INT_handler = True):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -236,6 +237,7 @@ class JobManager_Client(object):
             warnings.warn("verbose is deprecated", DeprecationWarning)
 
         self.hide_progress = hide_progress
+        self.use_special_SIG_INT_handler = use_special_SIG_INT_handler
                
         log.info("init JobManager Client instance (pid %s)", os.getpid())
         
@@ -721,18 +723,26 @@ class JobManager_Client(object):
             log.debug("all worker processes startes")
 
             #time.sleep(self.interval/2)
-            log.debug("setup Signal_to_terminate_process_list handler")
+
+            if self.use_special_SIG_INT_handler:
+                exit_handler_signals = [signal.SIGTERM]
+                jm_client_special_interrupt_signals = [signal.SIGINT]
+            else:
+                exit_handler_signals = [signal.SIGTERM, signal.SIGINT]
+                jm_client_special_interrupt_signals = []
+
+            log.debug("setup Signal_to_terminate_process_list handler for signals %s", exit_handler_signals)
             exit_handler = Signal_to_terminate_process_list(process_list    = self.procs,
                                                             identifier_list = [progress.get_identifier(name = "worker{}".format(i+1),
                                                                                                        pid  = p.pid,
                                                                                                        bold = True) for i, p in enumerate(self.procs)],
-                                                            signals         = [signal.SIGTERM],                                                            
+                                                            signals         = exit_handler_signals,
                                                             timeout         = 2)
 
-            log.debug("setup Signal_handler_for_Jobmanager_client handler")
+            log.debug("setup Signal_handler_for_Jobmanager_client handler for signals %s", jm_client_special_interrupt_signals)
             Signal_handler_for_Jobmanager_client(client_object = self,
-                                                 exit_handler=exit_handler,
-                                                 signals=[signal.SIGINT])
+                                                 exit_handler  = exit_handler,
+                                                 signals       = jm_client_special_interrupt_signals)
         
             for p in self.procs:
 
@@ -799,7 +809,15 @@ class JobManager_Client(object):
 
 
 
+def set_shared_status(ss, v):
+    if ss is not None:
+        ss.value = v
 
+def get_shared_status(ss):
+    if ss in None:
+        return None
+    else:
+        return ss.value
 
 class JobManager_Server(object):
     """general usage:
@@ -1215,77 +1233,87 @@ class JobManager_Server(object):
         # please overwrite for individual hooks to notify that the server process runs
         print("jobmanager awaits client results")
 
-    def start(self):
-        """
-        starts to loop over incoming results
-        
-        When finished, or on exception call stop() afterwards to shut down gracefully.
-        """
-        
+    def bring_him_up(self):
         if not self.__start_SyncManager():
             log.critical("could not start server")
             raise RuntimeError("could not start server")
-        
+
         if self._pid != os.getpid():
             log.critical("do not run JobManager_Server.start() in a subprocess")
             raise RuntimeError("do not run JobManager_Server.start() in a subprocess")
 
         if (self.numjobs - self.numresults) != len(self.args_dict):
-            log.debug("numjobs:             %s\n"+
-                      "numresults:          %s\n"+
+            log.debug("numjobs:             %s\n" +
+                      "numresults:          %s\n" +
                       "len(self.args_dict): %s", self.numjobs, self.numresults, len(self.args_dict))
-                
-            log.critical("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
-            raise RuntimeError("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
-        
+
+            log.critical(
+                "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
+            raise RuntimeError(
+                "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
+
         if self.numjobs == 0:
             log.info("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
             return
         else:
-            log.info("started (host:%s authkey:%s port:%s jobs:%s)", self.hostname, self.authkey.decode(), self.port, self.numjobs)
-        
+            log.info("started (host:%s authkey:%s port:%s jobs:%s)", self.hostname, self.authkey.decode(), self.port,
+                     self.numjobs)
+
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
-        
-        log.debug("start processing incoming results")
-        info_line = progress.StringValue(num_of_bytes=100)
+
+        log.debug("ready for processing incoming results")
         self.print_jm_ready()
-        with progress.ProgressBarFancy(count             = self._numresults,
-                                       max_count         = self._numjobs, 
-                                       interval          = self.msg_interval,
-                                       speed_calc_cycles = self.speed_calc_cycles,                                       
-                                       sigint            = 'ign',
-                                       sigterm           = 'ign',
-                                       info_line         = info_line) as stat:
+
+    def join(self):
+        """
+        starts to loop over incoming results
+
+        When finished, or on exception call stop() afterwards to shut down gracefully.
+        """
+        info_line = progress.StringValue(num_of_bytes=100)
+        with progress.ProgressBarFancy(count=self._numresults,
+                                       max_count=self._numjobs,
+                                       interval=self.msg_interval,
+                                       speed_calc_cycles=self.speed_calc_cycles,
+                                       sigint='ign',
+                                       sigterm='ign',
+                                       info_line=info_line) as stat:
             if not self.hide_progress:
                 stat.start()
-        
+
             while (len(self.args_dict) - self.fail_q.qsize()) > 0:
-                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(), 
-                                                                                                self.job_q.qsize(), 
-                                                                                                self.numresults).encode('utf-8')
-        
+                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(),
+                                                                                                self.job_q.qsize(),
+                                                                                                self.numresults).encode(
+                    'utf-8')
+
                 # allows for update of the info line
                 try:
-                    arg, result = self.result_q.get(timeout = self.msg_interval)
+                    arg, result = self.result_q.get(timeout=self.msg_interval)
                 except queue.Empty:
                     continue
-                
+
                 bf_arg = bf.dump(arg)
                 if bf_arg not in self.args_dict:
-                    log.warning("got an argument that is not listed in the args_dict (probably crunshed twice, uups) -> will be skipped")
+                    log.warning(
+                        "got an argument that is not listed in the args_dict (probably crunshed twice, uups) -> will be skipped")
                     del arg
                     del result
                     continue
-                
+
                 del self.args_dict[bf_arg]
                 self.numresults += 1
                 self.process_new_result(arg, result)
                 if not self.keep_new_result_in_memory:
                     del arg
                     del result
-        
+
         log.debug("wait %ss before trigger clean up", self.__wait_before_stop)
         time.sleep(self.__wait_before_stop)
+
+    def start(self):
+        self.bring_him_up()
+        self.join()
         
 
 class JobManager_Local(JobManager_Server):
@@ -1304,14 +1332,15 @@ class JobManager_Local(JobManager_Server):
                  msg_interval            = 1,
                  fname_dump              = 'auto',
                  speed_calc_cycles       = 50):
-        
-        super(JobManager_Local, self).__init__(authkey           = authkey,
-                                               const_arg         = const_arg, 
-                                               port              = port, 
-                                               verbose           = verbose, 
-                                               msg_interval      = msg_interval,
-                                               fname_dump        = fname_dump,
-                                               speed_calc_cycles = speed_calc_cycles)
+
+        JobManager_Server.__init__(self,
+                                   authkey           = authkey,
+                                   const_arg         = const_arg,
+                                   port              = port,
+                                   verbose           = verbose,
+                                   msg_interval      = msg_interval,
+                                   fname_dump        = fname_dump,
+                                   speed_calc_cycles = speed_calc_cycles)
         
         self.client_class = client_class
         self.port = port
@@ -1327,15 +1356,11 @@ class JobManager_Local(JobManager_Server):
                       port, 
                       client_class,
                       nproc                   = 0, 
-                      nice                    = 19, 
-                      delay                   = 1, 
+                      nice                    = 19,
                       verbose                 = None,
                       show_statusbar_for_jobs = False,
-                      show_counter_only       = False):        # ignore signal, because any signal bringing the server down
-        # will cause an error in the client server communication
-        # therefore the clients will also quit 
-        Signal_to_SIG_IGN(signals=[signal.SIGINT, signal.SIGTERM])
-        time.sleep(delay)
+                      show_counter_only       = False):
+
         client = client_class(server='localhost',
                               authkey                 = authkey,
                               port                    = port,
@@ -1343,8 +1368,10 @@ class JobManager_Local(JobManager_Server):
                               nice                    = nice,
                               verbose                 = verbose,
                               show_statusbar_for_jobs = show_statusbar_for_jobs,
-                              show_counter_only       = show_counter_only)
-        
+                              show_counter_only       = show_counter_only,
+                              use_special_SIG_INT_handler = False)
+
+        Signal_to_sys_exit(signals=[signal.SIGINT, signal.SIGTERM])
         client.start()
         
         
@@ -1355,12 +1382,14 @@ class JobManager_Local(JobManager_Server):
                                     self.client_class, 
                                     self.nproc,
                                     self.niceness_clients, 
-                                    self.delay,
                                     self.verbose_client,
                                     self.show_statusbar_for_jobs,
                                     self.show_counter_only))
+
+        JobManager_Local.bring_him_up(self)
         p_client.start()
-        super(JobManager_Local, self).start()             
+        JobManager_Local.join(self)
+
         progress.check_process_termination(p_client, 
                                            prefix  = 'local_client',
                                            timeout = 2)
