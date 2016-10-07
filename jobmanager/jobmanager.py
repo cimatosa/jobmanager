@@ -854,7 +854,8 @@ class JobManager_Server(object):
                  fname_dump                = 'auto',
                  speed_calc_cycles         = 50,
                  keep_new_result_in_memory = False,
-                 hide_progress             = False):
+                 hide_progress             = False,
+                 show_statistics           = True):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -894,6 +895,7 @@ class JobManager_Server(object):
             warnings.warn("verbose is deprecated", DeprecationWarning)
 
         self.hide_progress = hide_progress
+        self.show_stat = show_statistics
         
         log.debug("I'm the JobManager_Server main process (pid %s)", os.getpid())
         
@@ -1079,30 +1081,31 @@ class JobManager_Server(object):
         log.info("JobManager_Server was successfully shut down")
         
     def show_statistics(self):
-        all_jobs = self.numjobs
-        succeeded = self.numresults
-        failed = self.fail_q.qsize()
-        all_processed = succeeded + failed
-        
-        id1 = self.__class__.__name__+" "
-        l = len(id1)
-        id2 = ' '*l + "| " 
-        
-        print("{}total number of jobs  : {}".format(id1, all_jobs))
-        print("{}  processed   : {}".format(id2, all_processed))
-        print("{}    succeeded : {}".format(id2, succeeded))
-        print("{}    failed    : {}".format(id2, failed))
-        
-        all_not_processed = all_jobs - all_processed
-        not_queried = self.job_q.qsize()
-        queried_but_not_processed = all_not_processed - not_queried  
-        
-        print("{}  not processed     : {}".format(id2, all_not_processed))
-        print("{}    queried         : {}".format(id2, queried_but_not_processed))
-        print("{}    not queried yet : {}".format(id2, not_queried))
-        print("{}len(args_dict) : {}".format(id2, len(self.args_dict)))
-        if (all_not_processed + failed) != len(self.args_dict):
-            log.error("'all_not_processed != len(self.args_dict)' something is inconsistent!")
+        if self.show_stat:
+            all_jobs = self.numjobs
+            succeeded = self.numresults
+            failed = self.fail_q.qsize()
+            all_processed = succeeded + failed
+
+            id1 = self.__class__.__name__+" "
+            l = len(id1)
+            id2 = ' '*l + "| "
+
+            print("{}total number of jobs  : {}".format(id1, all_jobs))
+            print("{}  processed   : {}".format(id2, all_processed))
+            print("{}    succeeded : {}".format(id2, succeeded))
+            print("{}    failed    : {}".format(id2, failed))
+
+            all_not_processed = all_jobs - all_processed
+            not_queried = self.job_q.qsize()
+            queried_but_not_processed = all_not_processed - not_queried
+
+            print("{}  not processed     : {}".format(id2, all_not_processed))
+            print("{}    queried         : {}".format(id2, queried_but_not_processed))
+            print("{}    not queried yet : {}".format(id2, not_queried))
+            print("{}len(args_dict) : {}".format(id2, len(self.args_dict)))
+            if (all_not_processed + failed) != len(self.args_dict):
+                log.error("'all_not_processed != len(self.args_dict)' something is inconsistent!")
             
     def all_successfully_processed(self):
         return self.numjobs == self.numresults
@@ -1236,7 +1239,7 @@ class JobManager_Server(object):
             raise RuntimeError("inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
         
         if self.numjobs == 0:
-            log.warning("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
+            log.info("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
             return
         else:
             log.info("started (host:%s authkey:%s port:%s jobs:%s)", self.hostname, self.authkey.decode(), self.port, self.numjobs)
