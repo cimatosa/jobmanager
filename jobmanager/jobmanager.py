@@ -1231,7 +1231,7 @@ class JobManager_Server(object):
 
     def print_jm_ready(self):
         # please overwrite for individual hooks to notify that the server process runs
-        print("jobmanager awaits client results")
+        print("{} awaits client results".format(self.__class__.__name__))
 
     def bring_him_up(self):
         if not self.__start_SyncManager():
@@ -1258,6 +1258,11 @@ class JobManager_Server(object):
         else:
             log.info("started (host:%s authkey:%s port:%s jobs:%s)", self.hostname, self.authkey.decode(), self.port,
                      self.numjobs)
+            print("{} started (host:{} authkey:{} port:{} jobs:{})".format(self.__class__.__name__, 
+                                                                           self.hostname, 
+                                                                           self.authkey.decode(), 
+                                                                           self.port,
+                                                                           self.numjobs))
 
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
 
