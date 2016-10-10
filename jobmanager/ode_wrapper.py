@@ -3,6 +3,27 @@
 import numpy as np
 import warnings
 from time import time
+import logging
+import sys
+
+# taken from here: https://mail.python.org/pipermail/python-list/2010-November/591474.html
+class MultiLineFormatter(logging.Formatter):
+    def format(self, record):
+        _str = logging.Formatter.format(self, record)
+        header = _str.split(record.message)[0]
+        _str = _str.replace('\n', '\n' + ' '*len(header))
+        return _str
+   
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+console_hand = logging.StreamHandler(stream = sys.stderr)
+console_hand.setLevel(logging.DEBUG)
+fmt = MultiLineFormatter('%(asctime)s %(name)s %(levelname)s : %(message)s')
+console_hand.setFormatter(fmt)
+log.addHandler(console_hand)
+
+
 
 try:
     from scipy.integrate import ode
@@ -50,8 +71,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         # define real derivative (separation for real and imaginary part)
         f_ = lambda t, x: wrap_complex_intgeration(f_partial_complex)(t, x)
         x0_ = complex_to_real(x0)
-        if verbose > 0:
-            print("PERFORMANCE WARNING, avoid using 'vode' or 'lsoda' for complex ode's")
+        log.warning("PERFORMANCE WARNING, avoid using 'vode' or 'lsoda' for complex ode's")
     else:
         raise RuntimeError("unknown integrator '{}'".format(integrator))
     
@@ -117,7 +137,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
             i += 1
     
         if not r.successful():
-            print("INTEGRATION WARNING, NOT successful!")
+            log.warning("INTEGRATION WARNING, NOT successful!")
             
     # having to compute multiple result types
     else:
@@ -147,19 +167,19 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
                 # real integration -> mapping from R^2 to C needed
                 for a in range(res_list_len):
                     x[a][i] = x_to_res[a](r.t, real_to_complex(r.y))
-            t_conv += (time()-_t)            
+            t_conv += (time()-_t)
+            log.debug("step {}: integration:{:.2%} conversion:{:.2%}".format(i, t_int / (t_int + t_conv), t_conv / (t_int + t_conv)))            
                 
             t[i] = r.t
             c.value = i
             i += 1
     
         if not r.successful():
-            print("INTEGRATION WARNING, NOT successful!")        
+            log.warning("INTEGRATION WARNING, NOT successful!")        
     
-    if verbose > 1:
-        print("integration summary")
-        print("integration     time {:.2g}s ({:.2%})".format(t_int, t_int / (t_int + t_conv)))
-        print("data conversion time {:.2g}s ({:.2%})".format(t_conv, t_conv / (t_int + t_conv)))
+    log.info("integration summary\n"+
+             "integration     time {:.2g}s ({:.2%})\n".format(t_int, t_int / (t_int + t_conv))+
+             "data conversion time {:.2g}s ({:.2%})\n".format(t_conv, t_conv / (t_int + t_conv)))
     return t, x
         
 def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=None, x_to_res=None, **kwargs):
@@ -208,17 +228,17 @@ def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         _t = time()
         x[i] = x_to_res(r.t, r.y)
         t_conv += (time()-_t)
+        log.debug("step {}: integration:{:.2%} conversion:{:.2%}".format(i, t_int / (t_int + t_conv), t_conv / (t_int + t_conv)))
         
         t[i] = r.t
         c.value = i
         i += 1
 
     if not r.successful():
-        print("INTEGRATION WARNING, NOT successful!")
+        log.warning("INTEGRATION WARNING, NOT successful!")
 
-    if verbose > 1:
-        print("integration summary")
-        print("integration     time {:.2g} ({:.2%})".format(t_int, t_int / (t_int + t_conv)))
-        print("data conversion time {:.2g} ({:.2%})".format(t_conv, t_conv / (t_int + t_conv)))        
+    log.info("integration summary\n"+
+             "integration     time {:.2g}s ({:.2%})\n".format(t_int, t_int / (t_int + t_conv))+
+             "data conversion time {:.2g}s ({:.2%})\n".format(t_conv, t_conv / (t_int + t_conv)))    
         
     return t, x
