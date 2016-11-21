@@ -5,24 +5,20 @@ from os.path import abspath, dirname, split
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 
-
 import numpy as np
 from scipy.integrate import ode
 from scipy.special import mathieu_sem, mathieu_cem, mathieu_a, mathieu_b
 import time
-import warnings
 
-#from mpl_toolkits.mplot3d import Axes3D
+import warnings
 try:
     from matplotlib import cm
     import matplotlib.pyplot as plt
 except ImportError:
     warnings.warn("Plotting options not available."+\
                   " Reason: {}.".format(sys.exc_info()[1]))
-
-
-warnings.filterwarnings('error')
-#warnings.filterwarnings('always', category=DeprecationWarning)
+warnings.filterwarnings('ignore', module='traitlets', append=False, category=DeprecationWarning)
+warnings.filterwarnings('error', append=True)
 
 import jobmanager as jm
 
@@ -121,10 +117,10 @@ def test_distributed_mathieu():
     const_arg['verbose'] = 0
     
     authkey = 'integration_jm'
-    
+    PORT = np.random.randint(10000, 60000)
     with jm.JobManager_Local(client_class = jm.clients.Integration_Client_REAL,
                              authkey = authkey,
-                             port = 42520,
+                             port = PORT,
                              const_arg = const_arg,
                              nproc=1,
                              niceness_clients=0,

@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import multiprocessing as mp
+from multiprocessing.managers import BaseManager
 import socket
 import signal
 import logging
@@ -18,8 +19,6 @@ from os.path import abspath, dirname, split
 
 # Add parent directory to beginning of path variable
 sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
-
-import jobmanager
 import binfootprint
 import progression as progress
 
@@ -28,19 +27,29 @@ if sys.version_info[0] == 2:
 elif sys.version_info[0] == 3:
     TIMEOUT = 15
 
-progress.log.setLevel(logging.ERROR)
-
-from jobmanager.jobmanager import log as jm_log
-
-jm_log.setLevel(logging.WARNING)
-
 import warnings
-warnings.filterwarnings('error')
-#warnings.filterwarnings('always', category=ImportWarning)
+warnings.filterwarnings('ignore', module='traitlets', append=False, category=DeprecationWarning)
+warnings.filterwarnings('error', append=True)
+
+import jobmanager
+
+#logging.getLogger('jobmanager').setLevel(logging.INFO)
+logging.getLogger('progression').setLevel(logging.ERROR)
+logging.basicConfig(level = logging.INFO)
+
+
 
 AUTHKEY = 'testing'
 PORT = random.randint(10000, 60000)
 SERVER = socket.gethostname()
+
+def test_WarningError():
+    try:
+        warnings.warn("test warning, should be an error")
+    except:
+        pass
+    else:
+        assert False
 
 def test_Signal_to_SIG_IGN():
     from jobmanager.jobmanager import Signal_to_SIG_IGN
@@ -187,6 +196,8 @@ def start_client(hide_progress=True):
     jm_client.start()
     
 def test_start_server_with_no_args():
+    global PORT
+    PORT += 1
     n = 10
     args = range(1,n)
     
@@ -197,6 +208,8 @@ def test_start_server_with_no_args():
         jm_server.start()    
     
 def test_start_server():
+    global PORT
+    PORT += 1
     n = 10
     args = range(1,n)
     
@@ -216,6 +229,8 @@ def test_start_server():
         jm_server.start()
     
 def test_jobmanager_static_client_call():
+    global PORT
+    PORT += 1   
     jm_client = jobmanager.JobManager_Client(server  = SERVER,
                                              authkey = AUTHKEY,
                                              port    = PORT,
@@ -292,10 +307,10 @@ def test_jobmanager_basic():
             assert not p_client.is_alive(), "the client did not terminate on time!"
             # client must not throw an exception
             assert p_client.exitcode == 0, "the client raised an exception"
-            p_server.join(3)
+            p_server.join(5)
             # server should have come down
             assert not p_server.is_alive(), "the server did not terminate on time!"
-             
+            assert p_server.exitcode == 0, "the server raised an exception"
             print("[+] client and server terminated")
               
             fname = 'jobmanager.dump'
@@ -339,20 +354,17 @@ def test_jobmanager_server_signals():
             print("[+] still alive (assume shut down takes some time)")
             p_server.join(timeout)
             assert not p_server.is_alive(), "timeout for server shutdown reached"
+            assert p_server.exitcode == 0, "the server raised an exception"
             print("[+] now terminated (timeout of {}s not reached)".format(timeout))
             
             fname = 'jobmanager.dump'
             with open(fname, 'rb') as f:
                 data = jobmanager.JobManager_Server.static_load(f)    
-            
-            args_set = set(data['args_dict'].keys())
-            args_ref = range(1,n)
-            ref_set = set()
-            for a in args_ref:
-                ref_set.add(binfootprint.dump(a))
-            
-            assert len(args_set) == len(ref_set)
-            assert len(ref_set - args_set) == 0
+
+            ac = data['job_q']
+            assert ac.qsize() == n-1
+            assert ac.marked_items() == 0
+
             print("[+] args_set from dump contains all arguments")
         except:
             if p_server is not None:
@@ -385,7 +397,7 @@ def test_shutdown_server_while_client_running():
         p_client = None
         
         try:
-            p_server = mp.Process(target=start_server, args=(n,False,1))
+            p_server = mp.Process(target=start_server, args=(n,False,0.1))
             p_server.start()       
             time.sleep(0.5)
             assert p_server.is_alive()
@@ -400,8 +412,10 @@ def test_shutdown_server_while_client_running():
             
             p_server.join(TIMEOUT)
             assert not p_server.is_alive(), "server did not shut down on time"
+            assert p_server.exitcode == 0, "the server raised an exception"
             p_client.join(TIMEOUT)
             assert not p_client.is_alive(), "client did not shut down on time"
+            assert p_client.exitcode == 0, "the client raised an exception"
 
 
             print("[+] server and client joined {}".format(datetime.datetime.now().isoformat()))
@@ -410,7 +424,8 @@ def test_shutdown_server_while_client_running():
             with open(fname, 'rb') as f:
                 data = jobmanager.JobManager_Server.static_load(f)    
         
-            args_set = set(data['args_dict'].keys())
+            ac = data['job_q']
+            args_set = {binfootprint.dump(ac.data['_'+str(id_)]) for id_ in ac._not_gotten_ids}
             final_result = data['final_result']
         
             final_res_args = {binfootprint.dump(a[0]) for a in final_result}
@@ -499,7 +514,8 @@ def shutdown_client(sig):
         with open(fname, 'rb') as f:
             data = jobmanager.JobManager_Server.static_load(f)
 
-        assert len(data['args_dict']) == 0
+        ac = data['job_q']
+        assert ac.qsize() == 0
         print("[+] args_set is empty -> all args processed & none failed")
 
         final_res_args_set = {a[0] for a in data['final_result']}
@@ -516,70 +532,6 @@ def shutdown_client(sig):
         if p_client is not None:
             p_client.terminate()
         raise
-
-def test_check_fail():
-    global PORT
-    PORT += 1
-    class Client_Random_Error(jobmanager.JobManager_Client):
-        def func(self, args, const_args, c, m):
-            c.value = 0
-            m.value = -1
-            fail_on = [3,5,13]
-            time.sleep(0.1)
-            if args in fail_on:
-                raise RuntimeError("fail_on Error")
-            return os.getpid()
-
-    
-    n = 20
-    p_server = mp.Process(target=start_server, args=(n,))
-    p_server.start()
-    
-    time.sleep(1)
-    
-    print("START CLIENT")
-    jm_client = Client_Random_Error(server=SERVER, 
-                                    authkey=AUTHKEY,
-                                    port=PORT, 
-                                    nproc=0)
-    
-    p_client = mp.Process(target=jm_client.start)
-    p_client.start()
-    
-    try:
-        assert p_server.is_alive()
-        assert p_client.is_alive()
-    except:
-        p_client.terminate()
-        p_server.terminate()
-        raise
-    
-    print("[+] server and client running")
-    
-    p_server.join(60)
-    p_client.join(60)
-    
-    assert not p_server.is_alive()
-    assert not p_client.is_alive()
-    
-    print("[+] server and client stopped")
-    
-    fname = 'jobmanager.dump'
-    with open(fname, 'rb') as f:
-        data = jobmanager.JobManager_Server.static_load(f)    
-
-    
-    set_ref = {binfootprint.dump(a) for a in range(1,n)}
-    
-    args_set = set(data['args_dict'].keys())   
-    assert args_set == data['fail_set']
-    
-    final_result_args_set = {binfootprint.dump(a[0]) for a in data['final_result']}
-    
-    all_set = final_result_args_set | data['fail_set']
-    
-    assert len(set_ref - all_set) == 0, "final result union with reported failure do not correspond to all args!" 
-    print("[+] all argumsents found in final_results | reported failure")
 
 def test_jobmanager_read_old_stat():
     """
@@ -609,6 +561,8 @@ def test_jobmanager_read_old_stat():
  
     assert not p_client.is_alive(), "the client did not terminate on time!"
     assert not p_server.is_alive(), "the server did not terminate on time!"
+    assert p_client.exitcode == 0
+    assert p_server.exitcode == 0
     print("[+] client and server terminated")
     
     time.sleep(1)
@@ -627,6 +581,8 @@ def test_jobmanager_read_old_stat():
  
     assert not p_client.is_alive(), "the client did not terminate on time!"
     assert not p_server.is_alive(), "the server did not terminate on time!"
+    assert p_client.exitcode == 0
+    assert p_server.exitcode == 0
     print("[+] client and server terminated")    
      
     fname = 'jobmanager.dump'
@@ -717,23 +673,19 @@ def test_start_server_on_used_port():
     p1.start()
     
     time.sleep(1)
-    
-    other_error = False
-    
+       
     try:
         start_server2()
     except (RuntimeError, OSError) as e:
         print("caught Exception '{}' {}".format(type(e).__name__, e))
     except:
-        other_error = True
-    
-    time.sleep(1)
-    p1.terminate()
-    time.sleep(1)
-    p1.join()    
-    
-    assert not other_error
-        
+        raise
+    finally:
+        time.sleep(1)
+        p1.terminate()
+        time.sleep(1)
+        p1.join()    
+            
 def test_shared_const_arg():
     global PORT
     PORT += 1
@@ -820,6 +772,190 @@ def test_hum_size():
     assert humanize_size(1024**2) == '1.00GB'
     assert humanize_size(1024**3) == '1.00TB'
     assert humanize_size(1024**4) == '1024.00TB'
+
+def test_ArgsContainer():
+    from jobmanager.jobmanager import ArgsContainer
+    from shutil import rmtree
+    path = 'argscont'
+    try:
+        rmtree(path)
+    except FileNotFoundError:
+        pass
+
+    for p in [None, path]:
+
+        ac = ArgsContainer(p)
+        for arg in 'abcde':
+            ac.put(arg)
+
+        assert ac.qsize() == 5
+
+        item1 = ac.get()
+        item2 = ac.get()
+        
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 0
+        assert ac.unmarked_items() == 5
+        
+        # reinserting a non marked item is allowed
+        ac.put(item1)
+        assert ac.qsize() == 4
+        assert ac.marked_items() == 0
+        assert ac.unmarked_items() == 5
+        
+        # marking an item that has not been gotten yet failes
+        try:
+            ac.mark(item1)
+        except ValueError:
+            pass
+        else:
+            assert False
+        assert ac.qsize() == 4
+        assert ac.marked_items() == 0
+        assert ac.unmarked_items() == 5    
+            
+                
+        ac.mark(item2)
+        assert ac.qsize() == 4
+        assert ac.marked_items() == 1
+        assert ac.unmarked_items() == 4
+
+        # already marked items can not be reinserted        
+        try:
+            ac.put(item2)
+        except:
+            pass
+        else:
+            assert False
+        
+        assert ac.qsize() == 4
+        assert ac.marked_items() == 1
+        assert ac.unmarked_items() == 4
+
+        # remarking raises a RuntimeWarning
+        try:
+            ac.mark(item2)
+        except RuntimeWarning:
+            pass
+        else:
+            assert False
+            
+        item3 = ac.get()
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 1
+        assert ac.unmarked_items() == 4
+
+        import pickle
+        ac_dump = pickle.dumps(ac)
+        del ac
+        ac2 = pickle.loads(ac_dump)
+        
+        # note here, when loading, the _not_gottem_id are all ids
+        # except the marked its
+
+        assert ac2.qsize() == 4
+        from jobmanager.jobmanager import bf, hashlib
+        item3_hash = hashlib.sha256(bf.dump(item3)).hexdigest()
+        assert item3_hash in ac2.data
+        assert ac2.marked_items() == 1
+        assert ac2.unmarked_items() == 4
+        
+        ac2.get()
+        ac2.get()
+        ac2.get()
+        item = ac2.get()
+        assert ac2.qsize() == 0
+        assert ac2.marked_items() == 1
+        assert ac2.unmarked_items() == 4
+        
+        ac2.mark(item)      
+        assert ac2.qsize() == 0
+        assert ac2.marked_items() == 2
+        assert ac2.unmarked_items() == 3
+
+        import queue
+        try:
+            ac2.get()
+        except queue.Empty:
+            pass
+        else:
+            assert False
+
+        ac2.clear()
+
+def put_from_subprocess(port):
+    class MM_remote(BaseManager):
+        pass
+    try:
+        MM_remote.register('get_job_q')
+        m = MM_remote(('localhost', port), b'test_argscomnt')
+        m.connect()
+        ac = m.get_job_q()
+        for item in range(1, 200):
+            ac.put(item)
+            time.sleep(0.01)
+            
+    except ValueError:
+        pass
+
+
+def test_ArgsContainer_BaseManager():
+    from jobmanager.jobmanager import ArgsContainer
+    global PORT
+       
+    path = 'argscont'
+    from shutil import rmtree
+    try:
+        rmtree(path)
+    except FileNotFoundError:
+        pass
+    
+    for p in [path, None]:
+        PORT += 1
+        ac_inst = ArgsContainer(p)
+        #ac_inst.close_shelve()
+        class MM(BaseManager):
+            pass
+        MM.register('get_job_q', callable=lambda: ac_inst, exposed = ['put', 'get'])
+       
+        def start_manager_thread():
+            m = MM(('', PORT), b'test_argscomnt')
+
+            m.get_server().serve_forever()
+        server_thr = threading.Thread(target=start_manager_thread, daemon=True)
+
+        
+        class MM_remote(BaseManager):
+            pass
+        
+        MM_remote.register('get_job_q')
+        m = MM_remote(('localhost', PORT), b'test_argscomnt')
+        
+        
+        server_thr.start()
+        m.connect()
+        
+        
+        
+        pr = mp.Process(target = put_from_subprocess, args=(PORT,))
+        pr.start()
+        
+        try:
+            for arg in range(200, 0,-1):
+                ac_inst.put(arg)
+                time.sleep(0.01)
+        except ValueError:
+            pass
+            
+        pr.join()
+        assert pr.exitcode == 0
+        print(ac_inst.qsize())
+
+        assert ac_inst.qsize() == 200
+
+         
+
+
     
 if __name__ == "__main__":  
     jm_log.setLevel(logging.INFO)
@@ -831,29 +967,28 @@ if __name__ == "__main__":
         pass
     else:    
         func = [
-        
-#         test_hum_size,
-#         test_Signal_to_SIG_IGN,
-#         test_Signal_to_sys_exit,
-#         test_Signal_to_terminate_process_list,
-#         test_jobmanager_static_client_call,
-#         test_start_server_with_no_args,
-#         test_start_server,
-#         test_client,
-        test_jobmanager_basic,
-#         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
-#         test_check_fail,
-#         test_jobmanager_read_old_stat,
-#         test_client_status,
-#         test_jobmanager_local,
-#         test_start_server_on_used_port,
-#         test_shared_const_arg,
-#         test_digest_rejected,
-#         test_hum_size,
-
-        lambda : print("END")
+#             test_ArgsContainer,
+#             test_ArgsContainer_BaseManager,
+#             test_hum_size,
+#             test_Signal_to_SIG_IGN,
+#             test_Signal_to_sys_exit,
+#             test_Signal_to_terminate_process_list,
+#             test_jobmanager_static_client_call,
+#             test_start_server_with_no_args,
+#             test_start_server,
+#             test_client,
+#             test_jobmanager_basic,
+            test_jobmanager_server_signals,
+#             test_shutdown_server_while_client_running,
+#             test_shutdown_client,
+#             test_jobmanager_read_old_stat,
+#             test_client_status,
+#             test_jobmanager_local,
+#             test_start_server_on_used_port,
+#             test_shared_const_arg,
+#             test_digest_rejected,
+#             test_hum_size,
+            lambda : print("END")
         ]
         for f in func:
             print()

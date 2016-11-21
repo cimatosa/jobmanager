@@ -16,9 +16,12 @@ class PersistentData_Server(JobManager_Server):
                  msg_interval=1, 
                  fname_dump=None,
                  speed_calc_cycles=50,
-                 overwrite=False):
+                 overwrite=False,
+                 **kwargs):
          
-        JobManager_Server.__init__(self, authkey, const_arg=const_arg, port=port, verbose=verbose, msg_interval=msg_interval, fname_dump=fname_dump, speed_calc_cycles=speed_calc_cycles)
+        JobManager_Server.__init__(self, authkey, const_arg=const_arg, port=port, verbose=verbose, 
+                                   msg_interval=msg_interval, fname_dump=fname_dump, 
+                                   speed_calc_cycles=speed_calc_cycles, **kwargs)
         self.pds = persistent_data_structure
         self.overwrite = overwrite
         if self.overwrite:
