@@ -36,7 +36,7 @@ jm_log.setLevel(logging.WARNING)
 
 import warnings
 warnings.filterwarnings('error')
-#warnings.filterwarnings('always', category=DeprecationWarning)
+#warnings.filterwarnings('always', category=ImportWarning)
 
 AUTHKEY = 'testing'
 PORT = random.randint(10000, 60000)
@@ -160,7 +160,7 @@ def test_Signal_to_terminate_process_list():
     
 
  
-def start_server(n, read_old_state=False, client_sleep=0.1, hide_progress=False):
+def start_server(n, read_old_state=False, client_sleep=0.1, hide_progress=False, job_q_on_disk=False):
     print("START SERVER")
     args = range(1,n)
     with jobmanager.JobManager_Server(authkey       = AUTHKEY,
@@ -168,7 +168,8 @@ def start_server(n, read_old_state=False, client_sleep=0.1, hide_progress=False)
                                       msg_interval  = 1,
                                       const_arg     = client_sleep,
                                       fname_dump    = 'jobmanager.dump',
-                                      hide_progress = hide_progress) as jm_server:
+                                      hide_progress = hide_progress,
+                                      job_q_on_disk = job_q_on_disk) as jm_server:
         if not read_old_state:
             jm_server.args_from_list(args)
         else:
@@ -182,9 +183,6 @@ def start_client(hide_progress=True):
                                              port    = PORT,
                                              nproc   = 3,
                                              reconnect_tries = 0,
-                                             job_q_put_timeout = 1,
-                                             result_q_put_timeout = 1,
-                                             fail_q_put_timeout = 1,
                                              hide_progress = hide_progress)
     jm_client.start()
     
@@ -222,10 +220,7 @@ def test_jobmanager_static_client_call():
                                              authkey = AUTHKEY,
                                              port    = PORT,
                                              nproc   = 3,
-                                             reconnect_tries = 0,
-                                             job_q_put_timeout = 1,
-                                             result_q_put_timeout = 1,
-                                             fail_q_put_timeout = 1)
+                                             reconnect_tries = 0)
     jm_client.func(arg=1, const_arg=1)
 
 
@@ -247,10 +242,7 @@ def test_client():
                                            authkey = AUTHKEY,
                                            port    = PORT,
                                            nproc   = 3,
-                                           reconnect_tries = 0,
-                                           job_q_put_timeout = 1,
-                                           result_q_put_timeout = 1,
-                                           fail_q_put_timeout = 1)
+                                           reconnect_tries = 0)
         jmc.start()
         
         p_server.join(5)
@@ -271,56 +263,58 @@ def test_jobmanager_basic():
     check if all arguments are found in final_result of dump
     """
     global PORT
-    PORT += 1
-    n = 5
-
-    p_server = None
-    p_client = None
-
-    try:
-        # start a server
-        p_server = mp.Process(target=start_server, args=(n,False))
-        p_server.start()
-        time.sleep(0.5)
-        # server needs to be running
-        assert p_server.is_alive()
+   
     
-        # start client
-        p_client = mp.Process(target=start_client)
-        p_client.start()
-        
-        p_client.join(10)
-        # client should have processed all
-        if sys.version_info.major == 2:
-            p_client.terminate()
-            p_client.join(3)
+    for jqd in [False, True]:
+        PORT += 1
+        n = 5
+        p_server = None
+        p_client = None
 
-        assert not p_client.is_alive(), "the client did not terminate on time!"
-        # client must not throw an exception
-        assert p_client.exitcode == 0, "the client raised an exception"
-        p_server.join(3)
-        # server should have come down
-        assert not p_server.is_alive(), "the server did not terminate on time!"
-         
-        print("[+] client and server terminated")
-          
-        fname = 'jobmanager.dump'
-        with open(fname, 'rb') as f:
-            data = jobmanager.JobManager_Server.static_load(f)
+        try:
+            # start a server
+            p_server = mp.Process(target=start_server, args=(n,False), kwargs={'job_q_on_disk': jqd})
+            p_server.start()
+            time.sleep(0.5)
+            # server needs to be running
+            assert p_server.is_alive()
         
-        
-        final_res_args_set = {a[0] for a in data['final_result']}
-        set_ref = set(range(1,n))
-        intersect = set_ref - final_res_args_set
-          
-        assert len(intersect) == 0, "final result does not contain all arguments!"
-        print("[+] all arguments found in final_results")
-    except:
-        if p_server is not None:
-            p_server.terminate()
-        if p_client is not None:
-            p_client.terminate()
-        raise
+            # start client
+            p_client = mp.Process(target=start_client)
+            p_client.start()
+            
+            p_client.join(10)
+            # client should have processed all
+            if sys.version_info.major == 2:
+                p_client.terminate()
+                p_client.join(3)
+    
+            assert not p_client.is_alive(), "the client did not terminate on time!"
+            # client must not throw an exception
+            assert p_client.exitcode == 0, "the client raised an exception"
+            p_server.join(3)
+            # server should have come down
+            assert not p_server.is_alive(), "the server did not terminate on time!"
+             
+            print("[+] client and server terminated")
+              
+            fname = 'jobmanager.dump'
+            with open(fname, 'rb') as f:
+                data = jobmanager.JobManager_Server.static_load(f)
+            
+            
+            final_res_args_set = {a[0] for a in data['final_result']}
+            set_ref = set(range(1,n))
+            intersect = set_ref - final_res_args_set
+              
+            assert len(intersect) == 0, "final result does not contain all arguments!"
+            print("[+] all arguments found in final_results")
+        except:
+            if p_server is not None:
+                p_server.terminate()
+            if p_client is not None:
+                p_client.terminate()
+            raise
     
 def test_jobmanager_server_signals():
     """
@@ -470,7 +464,7 @@ def shutdown_client(sig):
     
     try:
     
-        p_server = mp.Process(target=start_server, args=(n, False, 0.1))
+        p_server = mp.Process(target=start_server, args=(n, False, 0.4))
         p_server.start()
 
         time.sleep(0.5)
@@ -577,7 +571,7 @@ def test_check_fail():
     
     set_ref = {binfootprint.dump(a) for a in range(1,n)}
     
-    args_set = set(data['args_dict'].keys())    
+    args_set = set(data['args_dict'].keys())   
     assert args_set == data['fail_set']
     
     final_result_args_set = {binfootprint.dump(a[0]) for a in data['final_result']}
@@ -828,10 +822,10 @@ def test_hum_size():
     assert humanize_size(1024**4) == '1024.00TB'
     
 if __name__ == "__main__":  
-    jm_log.setLevel(logging.DEBUG)
-    progress.log.setLevel(logging.DEBUG)
+    jm_log.setLevel(logging.INFO)
+#     progress.log.setLevel(logging.DEBUG)
 #     jm_log.setLevel(logging.ERROR)
-#     progress.log.setLevel(logging.ERROR)
+    progress.log.setLevel(logging.ERROR)
 
     if len(sys.argv) > 1:
         pass
@@ -846,14 +840,14 @@ if __name__ == "__main__":
 #         test_start_server_with_no_args,
 #         test_start_server,
 #         test_client,
-#         test_jobmanager_basic,
+        test_jobmanager_basic,
 #         test_jobmanager_server_signals,
 #         test_shutdown_server_while_client_running,
 #         test_shutdown_client,
 #         test_check_fail,
 #         test_jobmanager_read_old_stat,
 #         test_client_status,
-        test_jobmanager_local,
+#         test_jobmanager_local,
 #         test_start_server_on_used_port,
 #         test_shared_const_arg,
 #         test_digest_rejected,
