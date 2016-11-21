@@ -48,6 +48,7 @@ import binfootprint as bf
 import progression as progress
 #import queuelib
 import shelve
+import hashlib
 import logging
 import threading
 import ctypes
@@ -120,7 +121,7 @@ else:
 class JMHostNotReachableError(JMConnectionError):
     pass
 
-myQueue = mp.Queue
+myQueue = queue.Queue
 AuthenticationError = mp.AuthenticationError
 
 def humanize_size(size_in_bytes):
@@ -826,29 +827,90 @@ def get_shared_status(ss):
     else:
         return ss.value
     
-class PersistentQueue(object):
-    def __init__(self, fname):
+class ContainerClosedError(Exception):
+    pass
+
+class ClosableQueue(object):
+    def __init__(self):
+        self.q = myQueue()
+        self._close = False
+        
+    def put(self, item):
+        if self._close:
+            raise ContainerClosedError
+        self.q.put(item)
+        
+    def get(self, timeout=None):
+        if self._close:
+            raise ContainerClosedError
+        return self.q.get(timeout)
+    
+    def qsize(self):
+        return self.q.qsize()
+    
+    def close(self):
+        self._close = True
+        
+    
+class JobQContainer(object):
+    def __init__(self, fname=None):
         self._path = fname
-        self.q = shelve.open(self._path)
+        if self._path is None:
+            self.q = {}
+        else:
+            self.q = shelve.open(self._path)
         self.head = 0
         self.tail = 0
+        self.cnt_done = 0 
+        self._close = False
         
     def close(self):
-        self.q.close()
-        os.remove(self._path)
+        self._close = True
+        
+    def clear(self):
+        if self._path is not None:
+            self.q.close()
+            os.remove(self._path)
+        else:
+            self.q.clear()
         
     def qsize(self):
         # log.info("qsize: this is thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
         # log.info("qsize {} ({},{})".format(self.tail - self.head, self.tail, self.head))
         return self.tail - self.head
+    
+    def gotten_items(self):
+        return self.head
+    
+    def marked_items(self):
+        return self.cnt_done
+    
+    def unmarked_items(self):
+        return self.qsize() - self.cnt_done
         
     def put(self, item):
         # log.info("put item {}".format(item))
-        self.q[str(self.tail)] = item
+        if self._close:
+            raise ContainerClosedError
+        item_id = '_'+str(self.tail)
+        item_hash = hashlib.sha256(bf.dump(item)).hexdigest()
+        
+        if item_hash in self.q:
+            msg = ("do not add the same argument twice! If you are sure, they are not the same, "+
+                   "there might be an error with the binfootprint mehtods or a hash collision!")
+            log.critical(msg)
+            raise ValueError(msg)
+        
+        self.q[item_id] = item
+        self.q[item_hash] = (item_id, False)
+        
         self.tail += 1
     
     def get(self):
+        if self._close:
+            raise ContainerClosedError
         try:
+            log.info("q id {}".format(str(self.head)))
             item = self.q[str(self.head)]
         except KeyError:
             raise queue.Empty
@@ -856,6 +918,14 @@ class PersistentQueue(object):
         self.head += 1
         # log.info("get item {}".format(item))       
         return item
+    
+    def mark(self, item):
+        item_hash = hashlib.sha256(bf.dump(item)).hexdigest()
+        item_id, state = self.q[item_hash]
+        if state is True:
+            raise RuntimeWarning("item allready marked as 'done'")
+        self.q[item_hash] = (item_id, True)
+        self.cnt_done += 1 
 
 
 RAND_STR_ASCII_IDX_LIST = list(range(48,58)) + list(range(65,91)) + list(range(97,123)) 
@@ -1004,28 +1074,26 @@ class JobManager_Server(object):
         self.args_dict = dict()   # has the bin footprint in it
         self.args_list = []       # has the actual args object
         
-        # thread safe integer values  
-        self._numresults = mp.Value('i', 0)  # count the successfully processed jobs
-        self._numjobs = mp.Value('i', 0)     # overall number of jobs
         
         # final result as list, other types can be achieved by subclassing 
         self.final_result = []
         
         # NOTE: it only works using multiprocessing.Queue()
         # the Queue class from the module queue does NOT work
-        self.job_q_on_disk = job_q_on_disk
-        if job_q_on_disk:
-            fname = _new_rand_file_name(job_q_on_disk_path, '.jobqdb')
-            self.job_q = PersistentQueue(fname)  
-        else:
-            self.job_q = myQueue()    # queue holding args to process
-        self.result_q = myQueue() # queue holding returned results
-        self.fail_q = myQueue()   # queue holding args where processing failed
-
+        
         self.manager = None
         self.hostname = socket.gethostname()
+        self.job_q_on_disk = job_q_on_disk
+        self.job_q_on_disk_path = job_q_on_disk_path
+        if not self._start_manager():
+            log.critical("could not manager")
+            raise RuntimeError("could not start manager")
         
-    def __stop_SyncManager(self):
+        self.job_q = self.manager.get_job_q()  
+        self.result_q = self.manager.get_result_q()
+        self.fail_q = self.manager.get_fail_q()
+        
+    def _stop_manager(self):
         if self.manager == None:
             return
         
@@ -1037,27 +1105,46 @@ class JobManager_Server(object):
                                            prefix                   = 'SyncManager: ', 
                                            timeout                  = 2,
                                            auto_kill_on_last_resort = True)
-
-    def __check_bind(self):
+    
+    @staticmethod
+    def _check_bind(host, port):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.bind((self.hostname, self.port))
+            s.bind((host, port))
         except:
-            log.critical("test bind to %s:%s failed", self.hostname, self.port)
+            log.critical("test bind to %s:%s failed", host, port)
             raise
         finally:
             s.close()
-                
-    def __start_SyncManager(self):
-        self.__check_bind()
+               
+    def _start_manager(self):
+        self._check_bind(self.hostname, self.port)
         
         class JobQueueManager(BaseManager):
             pass
-
+        
+        
+        if self.job_q_on_disk:
+            fname = _new_rand_file_name(self.job_q_on_disk_path, '.jobqdb')
+        else:
+            fname = None
+            
+        self._job_q = JobQContainer(fname)
+        self._result_q = ClosableQueue()
+        self._fail_q = ClosableQueue()
+            
         # make job_q, result_q, fail_q, const_arg available via network
-        JobQueueManager.register('get_job_q', callable=lambda: self.job_q)
-        JobQueueManager.register('get_result_q', callable=lambda: self.result_q)
-        JobQueueManager.register('get_fail_q', callable=lambda: self.fail_q)
+        JobQueueManager.register('get_job_q', callable=lambda: self._job_q, exposed=['close',
+                                                                                              'clear',
+                                                                                              'qsize',
+                                                                                              'gotten_items',
+                                                                                              'marked_items',
+                                                                                              'unmarked_items',
+                                                                                              'put',
+                                                                                              'get',
+                                                                                              'mark'])
+        JobQueueManager.register('get_result_q', callable=lambda: self._result_q, exposed=['put', 'get', 'close', 'qsize'])
+        JobQueueManager.register('get_fail_q', callable=lambda: self._fail_q, exposed=['put', 'get', 'close', 'qsize'])
         JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg)
     
         address=('', self.port)   #ip='' means local
@@ -1087,9 +1174,9 @@ class JobManager_Server(object):
         log.info("SyncManager with PID %s started on %s:%s (%s)", self.manager._process.pid, self.hostname, self.port, authkey)
         return True
     
-    def __restart_SyncManager(self):
-        self.__stop_SyncManager()
-        if not self.__start_SyncManager():
+    def _restart_manager(self):
+        self._stop_manager()
+        if not self._start_manager():
             log.critical("faild to restart SyncManager")
             raise RuntimeError("could not start server")
         
@@ -1112,19 +1199,19 @@ class JobManager_Server(object):
             # causes exception traceback to be printed
             return False
              
-    @property    
-    def numjobs(self):
-        return self._numjobs.value
-    @numjobs.setter
-    def numjobs(self, numjobs):
-        self._numjobs.value = numjobs
-        
-    @property    
-    def numresults(self):
-        return self._numresults.value
-    @numresults.setter
-    def numresults(self, numresults):
-        self._numresults.value = numresults
+#     @property    
+#     def numjobs(self):
+#         return self._numjobs.value
+#     @numjobs.setter
+#     def numjobs(self, numjobs):
+#         self._numjobs.value = numjobs
+#         
+#     @property    
+#     def numresults(self):
+#         return self._numresults.value
+#     @numresults.setter
+#     def numresults(self, numresults):
+#         self._numresults.value = numresults
 
     def shutdown(self):
         """"stop all spawned processes and clean up
@@ -1134,8 +1221,10 @@ class JobManager_Server(object):
         """
         # will only be False when _shutdown was started in subprocess
         self.job_q.close()
-        self.__stop_SyncManager()       
-        log.debug("SyncManager stopped!")        
+        self.result_q.close()
+        self.fail_q.close()
+        log.debug("queues closed!")
+        
         # do user defined final processing
         self.process_final_result()
         log.debug("process_final_result done!")
@@ -1161,6 +1250,9 @@ class JobManager_Server(object):
         assert self._pid == os.getpid()
         
         self.show_statistics()
+        
+        self._stop_manager()       
+        log.debug("SyncManager stopped!")
         
 
         log.info("JobManager_Server was successfully shut down")
@@ -1263,21 +1355,23 @@ class JobManager_Server(object):
     def put_arg(self, a):
         """add argument a to the job_q
         """
-        bfa = bf.dump(a)
-        if bfa in self.args_dict:
-            log.critical("do not add the same argument twice! If you are sure, they are not the same, there might be an error with the binfootprint mehtods!")
-            raise ValueError("do not add the same argument twice! If you are sure, they are not the same, there might be an error with the binfootprint mehtods!")
+        #hash_bfa = hashlib.sha256(bf.dump(a)).digest()
+#         if hash_bfa in self.args_dict:
+#             msg = ("do not add the same argument twice! If you are sure, they are not the same, "+
+#                    "there might be an error with the binfootprint mehtods or a hash collision!")
+#             log.critical(msg)
+#             raise ValueError(msg)
         
         # this dict associates an unique index with each argument 'a'
         # or better with its binary footprint
-        self.args_dict[bfa] = len(self.args_list)
+        #self.args_dict[hash_bfa] = len(self.args_list)
+        #self.args_list.append(a)
         
-        self.args_list.append(a)
         # the actual shared queue
-        self.job_q.put(copy.copy(a))
+        self.job_q.put(a)
         
-        with self._numjobs.get_lock():
-            self._numjobs.value += 1
+        #with self._numjobs.get_lock():
+        #    self._numjobs.value += 1
         
     def args_from_list(self, args):
         """serialize a list of arguments to the job_q
@@ -1302,35 +1396,33 @@ class JobManager_Server(object):
         print("{} awaits client results".format(self.__class__.__name__))
 
     def bring_him_up(self):
-        if not self.__start_SyncManager():
-            log.critical("could not start server")
-            raise RuntimeError("could not start server")
 
         if self._pid != os.getpid():
             log.critical("do not run JobManager_Server.start() in a subprocess")
             raise RuntimeError("do not run JobManager_Server.start() in a subprocess")
 
-        if (self.numjobs - self.numresults) != len(self.args_dict):
-            log.debug("numjobs:             %s\n" +
-                      "numresults:          %s\n" +
-                      "len(self.args_dict): %s", self.numjobs, self.numresults, len(self.args_dict))
+#         if (self.numjobs - self.numresults) != len(self.args_dict):
+#             log.debug("numjobs:             %s\n" +
+#                       "numresults:          %s\n" +
+#                       "len(self.args_dict): %s", self.numjobs, self.numresults, len(self.args_dict))
+# 
+#             log.critical(
+#                 "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
+#             raise RuntimeError(
+#                 "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
 
-            log.critical(
-                "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
-            raise RuntimeError(
-                "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
-
-        if self.numjobs == 0:
+        jobqsize = self.job_q.qsize() 
+        if jobqsize == 0:
             log.info("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
             return
         else:
             log.info("started (host:%s authkey:%s port:%s jobs:%s)", self.hostname, self.authkey.decode(), self.port,
-                     self.numjobs)
+                     jobqsize)
             print("{} started (host:{} authkey:{} port:{} jobs:{})".format(self.__class__.__name__, 
                                                                            self.hostname, 
                                                                            self.authkey.decode(), 
                                                                            self.port,
-                                                                           self.numjobs))
+                                                                           jobqsize))
 
         Signal_to_sys_exit(signals=[signal.SIGTERM, signal.SIGINT])
 
@@ -1345,40 +1437,40 @@ class JobManager_Server(object):
         """
         
         info_line = progress.StringValue(num_of_bytes=100)
-        with progress.ProgressBarFancy(count=self._numresults,
-                                       max_count=self._numjobs,
-                                       interval=self.msg_interval,
-                                       speed_calc_cycles=self.speed_calc_cycles,
-                                       sigint='ign',
-                                       sigterm='ign',
+        
+        numresults = progress.UnsignedIntValue(0)
+        numjobs = progress.UnsignedIntValue(self.job_q.qsize())
+        
+        with progress.ProgressBarFancy(count             = numresults,
+                                       max_count         = numjobs,
+                                       interval          = self.msg_interval,
+                                       speed_calc_cycles = self.speed_calc_cycles,
+                                       sigint            = 'ign',
+                                       sigterm           = 'ign',
                                        info_line=info_line) as stat:
             if not self.hide_progress:
                 stat.start()
 
-            while (len(self.args_dict) - self.fail_q.qsize()) > 0:
-                info_line.value = "result_q size:{}, job_q size:{}, recieved results:{}".format(self.result_q.qsize(),
-                                                                                                self.job_q.qsize(),
-                                                                                                self.numresults).encode(
-                    'utf-8')
+            while numresults.value < numjobs.value:
+                failqsize = self.fail_q.qsize()
+                jobqsize = self.job_q.qsize()
+                markeditems = self.job_q.marked_items()
+                numresults.value = failqsize + markeditems 
+                info_line.value = ("result_q size:{}, jobs: remaining:{}, "+
+                                   "done:{}, failed:{}, in progress:{}").format(self.result_q.qsize(),
+                                                                                jobqsize,
+                                                                                markeditems,
+                                                                                failqsize,
+                                                                                numjobs.value - numresults.value - jobqsize).encode('utf-8')
                 log.info("infoline {}".format(info_line.value))
-                log.info("failq size {}".format(self.fail_q.qsize()))
 
                 # allows for update of the info line
                 try:
                     arg, result = self.result_q.get(timeout=self.msg_interval)
                 except queue.Empty:
                     continue
-
-                bf_arg = bf.dump(arg)
-                if bf_arg not in self.args_dict:
-                    log.warning(
-                        "got an argument that is not listed in the args_dict (probably crunshed twice, uups) -> will be skipped")
-                    del arg
-                    del result
-                    continue
-
-                del self.args_dict[bf_arg]
-                self.numresults += 1
+                
+                self.job_q.mark(arg)               
                 self.process_new_result(arg, result)
                 if not self.keep_new_result_in_memory:
                     del arg
