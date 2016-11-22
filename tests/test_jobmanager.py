@@ -292,10 +292,10 @@ def test_jobmanager_basic():
             assert not p_client.is_alive(), "the client did not terminate on time!"
             # client must not throw an exception
             assert p_client.exitcode == 0, "the client raised an exception"
-            p_server.join(3)
+            p_server.join(5)
             # server should have come down
             assert not p_server.is_alive(), "the server did not terminate on time!"
-             
+            assert p_server.exitcode == 0, "the server raised an exception"
             print("[+] client and server terminated")
               
             fname = 'jobmanager.dump'
@@ -339,20 +339,20 @@ def test_jobmanager_server_signals():
             print("[+] still alive (assume shut down takes some time)")
             p_server.join(timeout)
             assert not p_server.is_alive(), "timeout for server shutdown reached"
+            assert p_server.exitcode == 0, "the server raised an exception"
             print("[+] now terminated (timeout of {}s not reached)".format(timeout))
             
             fname = 'jobmanager.dump'
             with open(fname, 'rb') as f:
                 data = jobmanager.JobManager_Server.static_load(f)    
-            
-            args_set = set(data['args_dict'].keys())
-            args_ref = range(1,n)
-            ref_set = set()
-            for a in args_ref:
-                ref_set.add(binfootprint.dump(a))
-            
-            assert len(args_set) == len(ref_set)
-            assert len(ref_set - args_set) == 0
+
+            from jobmanager.jobmanager import ArgsContainer
+            ac = ArgsContainer()
+            ac.setstate(data['job_q_state'])
+
+            for a in range(1,n):
+                ac.mark(a)
+
             print("[+] args_set from dump contains all arguments")
         except:
             if p_server is not None:
@@ -400,8 +400,10 @@ def test_shutdown_server_while_client_running():
             
             p_server.join(TIMEOUT)
             assert not p_server.is_alive(), "server did not shut down on time"
+            assert p_server.exitcode == 0, "the server raised an exception"
             p_client.join(TIMEOUT)
             assert not p_client.is_alive(), "client did not shut down on time"
+            assert p_client.exitcode == 0, "the client raised an exception"
 
 
             print("[+] server and client joined {}".format(datetime.datetime.now().isoformat()))
@@ -517,70 +519,6 @@ def shutdown_client(sig):
             p_client.terminate()
         raise
 
-def test_check_fail():
-    global PORT
-    PORT += 1
-    class Client_Random_Error(jobmanager.JobManager_Client):
-        def func(self, args, const_args, c, m):
-            c.value = 0
-            m.value = -1
-            fail_on = [3,5,13]
-            time.sleep(0.1)
-            if args in fail_on:
-                raise RuntimeError("fail_on Error")
-            return os.getpid()
-
-    
-    n = 20
-    p_server = mp.Process(target=start_server, args=(n,))
-    p_server.start()
-    
-    time.sleep(1)
-    
-    print("START CLIENT")
-    jm_client = Client_Random_Error(server=SERVER, 
-                                    authkey=AUTHKEY,
-                                    port=PORT, 
-                                    nproc=0)
-    
-    p_client = mp.Process(target=jm_client.start)
-    p_client.start()
-    
-    try:
-        assert p_server.is_alive()
-        assert p_client.is_alive()
-    except:
-        p_client.terminate()
-        p_server.terminate()
-        raise
-    
-    print("[+] server and client running")
-    
-    p_server.join(60)
-    p_client.join(60)
-    
-    assert not p_server.is_alive()
-    assert not p_client.is_alive()
-    
-    print("[+] server and client stopped")
-    
-    fname = 'jobmanager.dump'
-    with open(fname, 'rb') as f:
-        data = jobmanager.JobManager_Server.static_load(f)    
-
-    
-    set_ref = {binfootprint.dump(a) for a in range(1,n)}
-    
-    args_set = set(data['args_dict'].keys())   
-    assert args_set == data['fail_set']
-    
-    final_result_args_set = {binfootprint.dump(a[0]) for a in data['final_result']}
-    
-    all_set = final_result_args_set | data['fail_set']
-    
-    assert len(set_ref - all_set) == 0, "final result union with reported failure do not correspond to all args!" 
-    print("[+] all argumsents found in final_results | reported failure")
-
 def test_jobmanager_read_old_stat():
     """
     start server, start client, start process trivial jobs,
@@ -609,6 +547,8 @@ def test_jobmanager_read_old_stat():
  
     assert not p_client.is_alive(), "the client did not terminate on time!"
     assert not p_server.is_alive(), "the server did not terminate on time!"
+    assert p_client.exitcode == 0
+    assert p_server.exitcode == 0
     print("[+] client and server terminated")
     
     time.sleep(1)
@@ -627,6 +567,8 @@ def test_jobmanager_read_old_stat():
  
     assert not p_client.is_alive(), "the client did not terminate on time!"
     assert not p_server.is_alive(), "the server did not terminate on time!"
+    assert p_client.exitcode == 0
+    assert p_server.exitcode == 0
     print("[+] client and server terminated")    
      
     fname = 'jobmanager.dump'
@@ -820,6 +762,163 @@ def test_hum_size():
     assert humanize_size(1024**2) == '1.00GB'
     assert humanize_size(1024**3) == '1.00TB'
     assert humanize_size(1024**4) == '1024.00TB'
+
+def test_ArgsContainer():
+    from jobmanager.jobmanager import ArgsContainer
+
+    for fname in [None, 'argscont']:
+
+        ac = ArgsContainer(fname)
+        for arg in 'abcde':
+            ac.put(arg)
+
+        assert ac.qsize() == 5
+
+        assert ac.get() == 'a'
+        assert ac.get() == 'b'
+
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 0
+        assert ac.unmarked_items() == 5
+
+        ac.mark('b')
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 1
+        assert ac.unmarked_items() == 4
+
+        ac.mark('a')
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 2
+        assert ac.unmarked_items() == 3
+
+        try:
+            ac.mark('a')
+        except RuntimeWarning:
+            pass
+        else:
+            assert False
+
+        try:
+            ac.put('a')
+        except ValueError:
+            pass
+        else:
+            assert False
+
+        import pickle
+        ac_dump = pickle.dumps(ac)
+        del ac
+        ac2 = pickle.loads(ac_dump)
+
+        assert ac2.qsize() == 3
+        assert ac2.marked_items() == 2
+        assert ac2.unmarked_items() == 3
+
+        assert ac2.get() == 'c'
+        assert ac2.get() == 'd'
+        assert ac2.get() == 'e'
+
+        assert ac2.qsize() == 0
+        assert ac2.marked_items() == 2
+        assert ac2.unmarked_items() == 3
+
+        import queue
+        try:
+            ac2.get()
+        except queue.Empty:
+            pass
+        else:
+            assert False
+
+        ac2.clear()
+
+
+def test_ArgsContainer_BaseManager():
+    from jobmanager.jobmanager import ArgsContainer
+    from multiprocessing.managers import BaseManager
+
+    global PORT
+
+    class MM(BaseManager):
+        pass
+
+    for fname in [None, 'argscont']:
+        PORT += 1
+        ac_inst = ArgsContainer(fname)
+        MM.register('get_job_q', callable=lambda: ac_inst)
+
+        m = MM(('', PORT), b'test_argscomnt')
+        m.start()
+        ac = m.get_job_q()
+        for arg in 'abcde':
+            ac.put(arg)
+
+        assert ac.qsize() == 5
+
+        assert ac.get() == 'a'
+        assert ac.get() == 'b'
+
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 0
+        assert ac.unmarked_items() == 5
+
+        ac.mark('b')
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 1
+        assert ac.unmarked_items() == 4
+
+        ac.mark('a')
+        assert ac.qsize() == 3
+        assert ac.marked_items() == 2
+        assert ac.unmarked_items() == 3
+
+        try:
+            ac.mark('a')
+        except RuntimeWarning:
+            pass
+        else:
+            assert False
+
+        try:
+            ac.put('a')
+        except ValueError:
+            pass
+        else:
+            assert False
+
+        import pickle
+        ac_dump = pickle.dumps(ac.getstate())
+        del ac
+        ac_state = pickle.loads(ac_dump)
+        ac2 = m.get_job_q()
+        ac2.setstate(ac_state)
+
+
+        assert ac2.qsize() == 3
+        assert ac2.marked_items() == 2
+        assert ac2.unmarked_items() == 3
+
+        assert ac2.get() == 'c'
+        assert ac2.get() == 'd'
+        assert ac2.get() == 'e'
+
+        assert ac2.qsize() == 0
+        assert ac2.marked_items() == 2
+        assert ac2.unmarked_items() == 3
+
+        import queue
+        try:
+            ac2.get()
+        except queue.Empty:
+            pass
+        else:
+            assert False
+
+        ac2.clear()
+
+
+
+
     
 if __name__ == "__main__":  
     jm_log.setLevel(logging.INFO)
@@ -831,27 +930,27 @@ if __name__ == "__main__":
         pass
     else:    
         func = [
-        
-#         test_hum_size,
-#         test_Signal_to_SIG_IGN,
-#         test_Signal_to_sys_exit,
-#         test_Signal_to_terminate_process_list,
-#         test_jobmanager_static_client_call,
-#         test_start_server_with_no_args,
-#         test_start_server,
-#         test_client,
+            test_ArgsContainer,
+            test_ArgsContainer_BaseManager,
+        test_hum_size,
+        test_Signal_to_SIG_IGN,
+        test_Signal_to_sys_exit,
+        test_Signal_to_terminate_process_list,
+        test_jobmanager_static_client_call,
+        test_start_server_with_no_args,
+        test_start_server,
+        test_client,
         test_jobmanager_basic,
         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
-        test_check_fail,
-        test_jobmanager_read_old_stat,
-#         test_client_status,
-#         test_jobmanager_local,
-#         test_start_server_on_used_port,
-#         test_shared_const_arg,
-#         test_digest_rejected,
-#         test_hum_size,
+        test_shutdown_server_while_client_running,
+        test_shutdown_client,
+        # test_jobmanager_read_old_stat,
+        test_client_status,
+        test_jobmanager_local,
+        test_start_server_on_used_port,
+        test_shared_const_arg,
+        test_digest_rejected,
+        test_hum_size,
 
         lambda : print("END")
         ]

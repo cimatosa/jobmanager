@@ -468,6 +468,10 @@ class JobManager_Client(object):
                 except queue.Empty:
                     log.info("finds empty job queue, processed %s jobs", cnt)
                     break
+                except ContainerClosedError:
+                    log.info("job queue was closed, processed %s jobs", cnt)
+                    break
+
                 # handle SystemExit in outer try ... except
                 except SystemExit as e:
                     arg = None
@@ -833,17 +837,15 @@ class ContainerClosedError(Exception):
 class ClosableQueue(object):
     def __init__(self):
         self.q = myQueue()
-        self._close = False
+        self._closed = False
         
     def put(self, item):
-        if self._close:
+        if self._closed:
             raise ContainerClosedError
         self.q.put(item)
         
     def get(self, timeout=None):
-        if self._close:
-            raise ContainerClosedError
-        return self.q.get(timeout)
+        return self.q.get(timeout=timeout)
     
     def qsize(self):
         return self.q.qsize()
@@ -852,80 +854,112 @@ class ClosableQueue(object):
         self._close = True
         
     
-class JobQContainer(object):
+class ArgsContainer(object):
     def __init__(self, fname=None):
         self._path = fname
         if self._path is None:
-            self.q = {}
+            self.data = {}
         else:
-            self.q = shelve.open(self._path)
-        self.head = 0
-        self.tail = 0
-        self.cnt_done = 0 
-        self._close = False
+            self.data = shelve.open(self._path)
+
+        self._closed = False
+        self._not_gotten_ids = set()
+        self._marked_ids = set()
+        self._max_id = 0
+
+    def __getstate__(self):
+        if self._path is None:
+            return (self.data, self._not_gotten_ids, self._marked_ids, self._max_id)
+        else:
+            return (self._path, self._not_gotten_ids, self._marked_ids, self._max_id)
+
+    def getstate(self):
+        return self.__getstate__()
+
+    def __setstate__(self, state):
+        tmp, tmp_not_gotten_ids, self._marked_ids, self._max_id = state
+        # the not gotten ones are all items except the markes ones
+        # the old gotten ones which are not marked where lost
+        self._not_gotten_ids = set(range(self._max_id)) - self._marked_ids
+        if isinstance(tmp, dict):
+            self.data = tmp
+            self._path = None
+        else:
+            self._path = tmp
+            self.data = shelve.open(self._path)
+        self._closed = False
+
+    def setstate(self, state):
+        self.__setstate__(state)
         
     def close(self):
-        self._close = True
+        self._closed = True
         
     def clear(self):
         if self._path is not None:
-            self.q.close()
-            os.remove(self._path)
+            self.data.close()
+            os.remove(self._path+'.db')
         else:
-            self.q.clear()
+            self.data.clear()
+        self._closed = False
+        self._not_gotten_ids = set()
+        self._marked_ids = set()
         
     def qsize(self):
-        # log.info("qsize: this is thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
-        # log.info("qsize {} ({},{})".format(self.tail - self.head, self.tail, self.head))
-        return self.tail - self.head
+        return len(self._not_gotten_ids)
+
+    def put_items_hlg(self):
+        s = len(self.data)//2
+        print("s", s)
+        return s
+
+    def marked_items(self):
+        return len(self._marked_ids)
     
     def gotten_items(self):
-        return self.head
-    
-    def marked_items(self):
-        return self.cnt_done
-    
+        return self.put_items_hlg() - self.qsize()
+
     def unmarked_items(self):
-        return self.qsize() - self.cnt_done
-        
+        return self.put_items_hlg() - self.marked_items()
+
+
     def put(self, item):
-        # log.info("put item {}".format(item))
-        if self._close:
+        if self._closed:
             raise ContainerClosedError
-        item_id = '_'+str(self.tail)
+
         item_hash = hashlib.sha256(bf.dump(item)).hexdigest()
-        
-        if item_hash in self.q:
+        if item_hash in self.data:
             msg = ("do not add the same argument twice! If you are sure, they are not the same, "+
                    "there might be an error with the binfootprint mehtods or a hash collision!")
             log.critical(msg)
             raise ValueError(msg)
-        
-        self.q[item_id] = item
-        self.q[item_hash] = (item_id, False)
-        
-        self.tail += 1
+
+        str_id = '_'+str(self._max_id)
+        self.data[str_id] = item
+        self.data[item_hash] = self._max_id
+        self._not_gotten_ids.add(self._max_id)
+        self._max_id += 1
     
     def get(self):
-        if self._close:
+        if self._closed:
             raise ContainerClosedError
         try:
-            log.info("q id {}".format(str(self.head)))
-            item = self.q[str(self.head)]
+            get_idx = self._not_gotten_ids.pop()
         except KeyError:
             raise queue.Empty
 
-        self.head += 1
-        # log.info("get item {}".format(item))       
+        str_id = '_' + str(get_idx)
+        item = self.data[str_id]
         return item
     
     def mark(self, item):
         item_hash = hashlib.sha256(bf.dump(item)).hexdigest()
-        item_id, state = self.q[item_hash]
-        if state is True:
-            raise RuntimeWarning("item allready marked as 'done'")
-        self.q[item_hash] = (item_id, True)
-        self.cnt_done += 1 
+        item_id = self.data[item_hash]
+        if item_id in self._marked_ids:
+            raise RuntimeWarning("item allready marked")
+        self._marked_ids.add(item_id)
+
+
 
 
 RAND_STR_ASCII_IDX_LIST = list(range(48,58)) + list(range(65,91)) + list(range(97,123)) 
@@ -947,7 +981,11 @@ def _new_rand_file_name(path='.', end='', l=8):
         if c > 10:
             l += 2
             c = 0
-            print("INFO: increase random file name length to", l)        
+            print("INFO: increase random file name length to", l)
+
+
+class JobManager_Manager(BaseManager):
+    pass
 
 class JobManager_Server(object):
     """general usage:
@@ -1071,8 +1109,8 @@ class JobManager_Server(object):
         # from the set if it was caught by the result_q
         # so iff all results have been processed successfully,
         # the args_dict will be empty
-        self.args_dict = dict()   # has the bin footprint in it
-        self.args_list = []       # has the actual args object
+        #self.args_dict = dict()   # has the bin footprint in it
+        #self.args_list = []       # has the actual args object
         
         
         # final result as list, other types can be achieved by subclassing 
@@ -1119,38 +1157,27 @@ class JobManager_Server(object):
                
     def _start_manager(self):
         self._check_bind(self.hostname, self.port)
-        
-        class JobQueueManager(BaseManager):
-            pass
-        
+
         
         if self.job_q_on_disk:
             fname = _new_rand_file_name(self.job_q_on_disk_path, '.jobqdb')
         else:
             fname = None
             
-        self._job_q = JobQContainer(fname)
+        self._job_q = ArgsContainer(fname)
         self._result_q = ClosableQueue()
         self._fail_q = ClosableQueue()
             
         # make job_q, result_q, fail_q, const_arg available via network
-        JobQueueManager.register('get_job_q', callable=lambda: self._job_q, exposed=['close',
-                                                                                              'clear',
-                                                                                              'qsize',
-                                                                                              'gotten_items',
-                                                                                              'marked_items',
-                                                                                              'unmarked_items',
-                                                                                              'put',
-                                                                                              'get',
-                                                                                              'mark'])
-        JobQueueManager.register('get_result_q', callable=lambda: self._result_q, exposed=['put', 'get', 'close', 'qsize'])
-        JobQueueManager.register('get_fail_q', callable=lambda: self._fail_q, exposed=['put', 'get', 'close', 'qsize'])
-        JobQueueManager.register('get_const_arg', callable=lambda: self.const_arg)
+        JobManager_Manager.register('get_job_q', callable=lambda: self._job_q)
+        JobManager_Manager.register('get_result_q', callable=lambda: self._result_q)
+        JobManager_Manager.register('get_fail_q', callable=lambda: self._fail_q)
+        JobManager_Manager.register('get_const_arg', callable=lambda: self.const_arg)
     
         address=('', self.port)   #ip='' means local
         authkey=self.authkey
     
-        self.manager = JobQueueManager(address, authkey)
+        self.manager = JobManager_Manager(address, authkey)
             
         # start manager with non default signal handling given by
         # the additional init function setup_SIG_handler_manager
@@ -1224,11 +1251,11 @@ class JobManager_Server(object):
         self.result_q.close()
         self.fail_q.close()
         log.debug("queues closed!")
-        
+
         # do user defined final processing
         self.process_final_result()
         log.debug("process_final_result done!")
-        
+
         # print(self.fname_dump)
         if self.fname_dump is not None:
             if self.fname_dump == 'auto':
@@ -1236,7 +1263,8 @@ class JobManager_Server(object):
             else:
                 fname = self.fname_dump
             
-            log.info("dump current state to '%s'", fname)    
+            log.info("dump current state to '%s'", fname)
+
             with open(fname, 'wb') as f:
                 self.__dump(f)
 
@@ -1259,9 +1287,10 @@ class JobManager_Server(object):
         
     def show_statistics(self):
         if self.show_stat:
-            all_jobs = self.numjobs
-            succeeded = self.numresults
+            all_jobs = self.job_q.put_items_hlg()
+            succeeded = self.job_q.marked_items()
             failed = self.fail_q.qsize()
+
             all_processed = succeeded + failed
 
             id1 = self.__class__.__name__+" "
@@ -1280,61 +1309,41 @@ class JobManager_Server(object):
             print("{}  not processed     : {}".format(id2, all_not_processed))
             print("{}    queried         : {}".format(id2, queried_but_not_processed))
             print("{}    not queried yet : {}".format(id2, not_queried))
-            print("{}len(args_dict) : {}".format(id2, len(self.args_dict)))
-            if (all_not_processed + failed) != len(self.args_dict):
-                log.error("'all_not_processed != len(self.args_dict)' something is inconsistent!")
-            
+
     def all_successfully_processed(self):
         return self.numjobs == self.numresults
 
     @staticmethod
     def static_load(f):
         data = {}
-        data['numjobs'] = pickle.load(f)
-        data['numresults'] = pickle.load(f)        
         data['final_result'] = pickle.load(f)        
-        data['args_dict'] = pickle.load(f)
-        data['args_list'] = pickle.load(f)
-        
-        fail_list = pickle.load(f)
-        data['fail_set'] = {bf.dump(fail_item[0]) for fail_item in fail_list}
-        
-        data['fail_q'] = myQueue()
-        data['job_q'] = myQueue()
-        
-        for fail_item in fail_list:
-            data['fail_q'].put_nowait(fail_item)
-        for arg in data['args_dict']:
-            if arg not in data['fail_set']:
-                arg_idx = data['args_dict'][arg] 
-                data['job_q'].put_nowait(data['args_list'][arg_idx])
-
+        data['job_q_state'] = pickle.load(f)
+        data['fail_list'] = pickle.load(f)
         return data
 
     def __load(self, f):
         data = JobManager_Server.static_load(f)
-        for key in ['numjobs', 'numresults', 'final_result',
-                    'args_dict', 'args_list', 'fail_q','job_q']:
-            self.__setattr__(key, data[key])
+        self.final_result = data['final_result']
+        self.job_q.setstate(data['job_q_state'])
+        for fail_item in data['fail_list']:
+            self.fail_q.put(fail_item)
+
+
         
     def __dump(self, f):
-        pickle.dump(self.numjobs, f, protocol=pickle.HIGHEST_PROTOCOL)
-        pickle.dump(self.numresults, f, protocol=pickle.HIGHEST_PROTOCOL)
         pickle.dump(self.final_result, f, protocol=pickle.HIGHEST_PROTOCOL)
-        pickle.dump(self.args_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
-        pickle.dump(self.args_list, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(self.job_q.getstate(), f, protocol=pickle.HIGHEST_PROTOCOL)
         fail_list = []
         log.info("__dump: failq size {}".format(self.fail_q.qsize()))
         try:
             while True:
-                fail_list.append(self.fail_q.get_nowait())
+                fail_list.append(self.fail_q.get(timeout = 0))
         except queue.Empty:
             pass
         pickle.dump(fail_list, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         
     def read_old_state(self, fname_dump=None):
-        
         if fname_dump == None:
             fname_dump = self.fname_dump
         if fname_dump == 'auto':
@@ -1463,14 +1472,13 @@ class JobManager_Server(object):
                                                                                 failqsize,
                                                                                 numjobs.value - numresults.value - jobqsize).encode('utf-8')
                 log.info("infoline {}".format(info_line.value))
-
                 # allows for update of the info line
                 try:
                     arg, result = self.result_q.get(timeout=self.msg_interval)
                 except queue.Empty:
                     continue
-                
-                self.job_q.mark(arg)               
+
+                self.job_q.mark(arg)
                 self.process_new_result(arg, result)
                 if not self.keep_new_result_in_memory:
                     del arg
