@@ -1111,17 +1111,7 @@ class JobManager_Server(object):
         self.msg_interval = msg_interval
         self.speed_calc_cycles = speed_calc_cycles
         self.keep_new_result_in_memory = keep_new_result_in_memory
-
-        # to do some redundant checking, might be removed
-        # the args_dict holds all arguments to be processed
-        # in contrast to the job_q, an argument will only be removed
-        # from the set if it was caught by the result_q
-        # so iff all results have been processed successfully,
-        # the args_dict will be empty
-        #self.args_dict = dict()   # has the bin footprint in it
-        #self.args_list = []       # has the actual args object
-        
-        
+       
         # final result as list, other types can be achieved by subclassing 
         self.final_result = []
         
@@ -1197,20 +1187,6 @@ class JobManager_Server(object):
             # causes exception traceback to be printed
             return False
              
-#     @property    
-#     def numjobs(self):
-#         return self._numjobs.value
-#     @numjobs.setter
-#     def numjobs(self, numjobs):
-#         self._numjobs.value = numjobs
-#         
-#     @property    
-#     def numresults(self):
-#         return self._numresults.value
-#     @numresults.setter
-#     def numresults(self, numresults):
-#         self._numresults.value = numresults
-
     def shutdown(self):
         """"stop all spawned processes and clean up
         
