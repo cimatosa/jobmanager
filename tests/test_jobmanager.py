@@ -6,6 +6,8 @@ import os
 import sys
 import time
 import multiprocessing as mp
+from multiprocessing import util
+util.log_to_stderr()
 from multiprocessing.managers import BaseManager
 import socket
 import signal
@@ -953,16 +955,105 @@ def test_ArgsContainer_BaseManager():
 
         assert ac_inst.qsize() == 200
 
-         
+def test_unbind_adresse():
+    from multiprocessing import managers
+    from multiprocessing import connection
+    from multiprocessing import process
+    import time
+    import threading
+    
+    import socket
+    import psutil
+    
+    class MyServer(managers.Server):
+        def accepter(self):
+            while True:
+                try:
+                    print("hallo")
+                    c = self.listener.accept()
+                except OSError:
+                    print("hallo")
+                    continue
+                print("hallo")
+                t = threading.Thread(target=self.handle_request, args=(c,))
+                t.daemon = True
+                t.start()
+                
+        def serve_forever(self):
+            '''
+            Run the server forever
+            '''
+            self.stop_event = threading.Event()
+            process.current_process()._manager_server = self
+            try:
+                accepter = threading.Thread(target=self.accepter)
+                accepter.daemon = True
+                print("started accepter thread")
+                accepter.start()
+                try:
+                    while not self.stop_event.is_set():
+                        self.stop_event.wait(1)
+                        print(self.stop_event.is_set(), accepter.getName())
+                except (KeyboardInterrupt, SystemExit):
+                    pass
+            finally:
+                if sys.stdout != sys.__stdout__:
+                    util.debug('resetting stdout, stderr')
+                    sys.stdout = sys.__stdout__
+                    sys.stderr = sys.__stderr__
+                print("end serve_forever")
+                self.listener.close()
+                accepter.join()
+                
+                sys.exit(0)
+                
 
-
+        
+                
+    managers.Server = MyServer
+    
+    address = ('localhost', 12345)
+    family =connection.address_type(address)
+    
+    
+    print("### 1 ###")
+    m = managers.BaseManager(address=address, authkey=b'test')
+    s = m.get_server()
+    
+    thr_before = [tid[0] for tid in psutil.Process().threads()]
+    thr = threading.Thread(target=s.serve_forever)
+    thr.start()
+    thr_after = [tid[0] for tid in psutil.Process().threads()]
+    
+    print(thr_before)
+    print(thr_after)   
+    
+    time.sleep(3)
+    s.stop_event.set()
+    thr.join()
+    
+    thr_after_join = [tid[0] for tid in psutil.Process().threads()]
+    print(thr_after_join)
+  
+     
+    time.sleep(10)
+    
+   
+    print("### 2 ###")
+    m = managers.BaseManager(address=address, authkey=b'test')
+    m.start()
+    m.shutdown()
+    
+    
+    
+#     m = managers.BaseManager(address=address, authkey=b'test')
+#     m.start()
+#     
+#     time.sleep(1)
+#     m.shutdown()
+    
     
 if __name__ == "__main__":  
-    jm_log.setLevel(logging.INFO)
-#     progress.log.setLevel(logging.DEBUG)
-#     jm_log.setLevel(logging.ERROR)
-    progress.log.setLevel(logging.ERROR)
-
     if len(sys.argv) > 1:
         pass
     else:    
@@ -978,7 +1069,7 @@ if __name__ == "__main__":
 #             test_start_server,
 #             test_client,
 #             test_jobmanager_basic,
-            test_jobmanager_server_signals,
+#             test_jobmanager_server_signals,
 #             test_shutdown_server_while_client_running,
 #             test_shutdown_client,
 #             test_jobmanager_read_old_stat,
@@ -988,6 +1079,7 @@ if __name__ == "__main__":
 #             test_shared_const_arg,
 #             test_digest_rejected,
 #             test_hum_size,
+            test_unbind_adresse,
             lambda : print("END")
         ]
         for f in func:

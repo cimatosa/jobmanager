@@ -1153,7 +1153,8 @@ class JobManager_Server(object):
     
         address=('', self.port)   #ip='' means local
         authkey=self.authkey
-        self.manager_server = JobManager_Manager(address, authkey).get_server()
+        self.manager = JobManager_Manager(address, authkey)
+        self.manager_server = self.manager.get_server()
         
         server_thr = threading.Thread(target=self.manager_server.serve_forever)
         server_thr.daemon = True
@@ -1186,6 +1187,10 @@ class JobManager_Server(object):
             self.shutdown()
             # causes exception traceback to be printed
             return False
+        
+    @property
+    def numjobs(self):
+        return self.job_q.qsize()
              
     def shutdown(self):
         """"stop all spawned processes and clean up
@@ -1208,6 +1213,8 @@ class JobManager_Server(object):
         # do user defined final processing
         self.process_final_result()
         log.debug("process_final_result done!")
+        
+        self.show_statistics()
 
         # print(self.fname_dump)
         if self.fname_dump is not None:
@@ -1225,12 +1232,13 @@ class JobManager_Server(object):
 
         else:
             log.info("fname_dump == None, ignore dumping current state!")
+            self.job_q.clear()
         
         # start also makes sure that it was not started as subprocess
         # so at default behavior this assertion will allays be True
         assert self._pid == os.getpid()
         
-        self.show_statistics()
+        
         log.info("JobManager_Server was successfully shut down")
         
     def show_statistics(self):
