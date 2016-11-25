@@ -850,14 +850,14 @@ class ArgsContainerQueue(object):
         
     
 class ArgsContainer(object):
-    def __init__(self, path=None):
+    def __init__(self, path=None, new_shelve=True):
         self._path = path
         self._lock = threading.Lock()
         
         if self._path is None:
             self.data = {}
         else:
-            self._open_shelve()
+            self._open_shelve(new_shelve)
 
         self._closed = False
         self._not_gotten_ids = set()
@@ -870,11 +870,11 @@ class ArgsContainer(object):
 
         thr_in_reader = threading.Thread(target=self._receiver)
         thr_in_reader.daemon = True
-        thr_in_reader.start()
+        #thr_in_reader.start()
 
         thr_out_sender = threading.Thread(target=self._sender)
         thr_out_sender.daemon = True
-        thr_out_sender.start()
+        #thr_out_sender.start()
 
 
     def _receiver(self):
@@ -895,17 +895,17 @@ class ArgsContainer(object):
         if os.path.exists(self._path):
             if os.path.isfile(self._path):
                 raise RuntimeWarning("can not create shelve, path '{}' is an existing file".format(self._path))
-
-    def __getstate__(self):
-        if self._path is None:
-            return (self.data, self._not_gotten_ids, self._marked_ids, self._max_id)
+            if new_shelve:
+                raise RuntimeError("a shelve with name {} already exists".format(self._path))
+            print("shelve exists")
         else:
             os.makedirs(self._path)
         fname = os.path.join(self._path, 'args')
-        if os.path.exists(fname) and new_shelve:
-            raise RuntimeError("a shelve with name {} already exists".format(fname))
 
         self.data = shelve.open(fname)
+        print("open shelve", fname, len(self.data), type(self.data))
+
+
             
     def __getstate__(self):
         with self._lock:
@@ -919,6 +919,7 @@ class ArgsContainer(object):
         # the not gotten ones are all items except the markes ones
         # the old gotten ones which are not marked where lost
         self._not_gotten_ids = set(range(self._max_id)) - self._marked_ids
+        print("getstate", tmp)
         if isinstance(tmp, dict):
             self.data = tmp
             self._path = None

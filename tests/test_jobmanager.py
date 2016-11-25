@@ -778,19 +778,69 @@ def test_hum_size():
 def test_ArgsContainer():
     from jobmanager.jobmanager import ArgsContainer
     from shutil import rmtree
+    import shelve
+
+    s = shelve.open("test")
+    s['a'] = 1
+    s.close()
+    s2 = shelve.open("test")
+    assert s2['a'] == 1
+
+
+
     path = 'argscont'
+
+    ac = ArgsContainer(path, new_shelve=False)
+    ac.data['1'] = 'item11'
+    print(len(ac.data))
+    ac.close()
+    time.sleep(1)
+
+
+    fname = '/home/cima/uni/myGit/hierarchies/libs/externals/dev/jobmanager_package/tests/argscont/args'
+    s = shelve.open(fname)
+    time.sleep(1)
+    print(len(s))
+
+    return
+
     try:
         rmtree(path)
     except FileNotFoundError:
         pass
 
-    for p in [None, path]:
+    ac = ArgsContainer(path)
+    try:
+        ac = ArgsContainer(path)
+    except RuntimeError:
+        pass
+    else:
+        assert False
+
+    ac.clear()
+    ac = ArgsContainer(path)
+    ac.put(1)
+    i = ac.get()
+    print(i)
+
+    ac2 = ArgsContainer(path, new_shelve=False)
+    print(ac2.qsize())
+    item = ac2.get()
+    print(item)
+
+    ac.clear()
+
+    return
+
+    #for p in [None, path]:
+    for p in [path]:
 
         ac = ArgsContainer(p)
         for arg in 'abcde':
             ac.put(arg)
 
         assert ac.qsize() == 5
+        print(len(ac.data), type(ac.data))
 
         item1 = ac.get()
         item2 = ac.get()
@@ -849,15 +899,36 @@ def test_ArgsContainer():
 
         import pickle
         ac_dump = pickle.dumps(ac)
-        del ac
-        ac2 = pickle.loads(ac_dump)
+
+        print(len(ac.data), type(ac.data))
+
+        fname = os.path.join(path, 'args')
+        print(fname)
+        s = shelve.open(fname, flag='c')
+        print(len(s), type(s))
+
+#        del ac
+#        ac2 = pickle.loads(ac_dump)
+
+
+
+
+        return
+
         
         # note here, when loading, the _not_gottem_id are all ids
         # except the marked its
 
         assert ac2.qsize() == 4
         from jobmanager.jobmanager import bf, hashlib
+
         item3_hash = hashlib.sha256(bf.dump(item3)).hexdigest()
+        print(item3)
+        print(item3_hash)
+        for k in ac2.data:
+            print(k)
+
+
         assert item3_hash in ac2.data
         assert ac2.marked_items() == 1
         assert ac2.unmarked_items() == 4
@@ -1059,7 +1130,7 @@ if __name__ == "__main__":
     else:    
         func = [
             test_ArgsContainer,
-            test_ArgsContainer_BaseManager,
+            # test_ArgsContainer_BaseManager,
         # test_hum_size,
         # test_Signal_to_SIG_IGN,
         # test_Signal_to_sys_exit,
