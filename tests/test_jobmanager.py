@@ -1058,29 +1058,29 @@ if __name__ == "__main__":
         pass
     else:    
         func = [
-#             test_ArgsContainer,
-#             test_ArgsContainer_BaseManager,
-#             test_hum_size,
-#             test_Signal_to_SIG_IGN,
-#             test_Signal_to_sys_exit,
-#             test_Signal_to_terminate_process_list,
-#             test_jobmanager_static_client_call,
-#             test_start_server_with_no_args,
-#             test_start_server,
-#             test_client,
-#             test_jobmanager_basic,
-#             test_jobmanager_server_signals,
-#             test_shutdown_server_while_client_running,
-#             test_shutdown_client,
-#             test_jobmanager_read_old_stat,
-#             test_client_status,
-#             test_jobmanager_local,
-#             test_start_server_on_used_port,
-#             test_shared_const_arg,
-#             test_digest_rejected,
-#             test_hum_size,
-            test_unbind_adresse,
-            lambda : print("END")
+            test_ArgsContainer,
+            test_ArgsContainer_BaseManager,
+        # test_hum_size,
+        # test_Signal_to_SIG_IGN,
+        # test_Signal_to_sys_exit,
+        # test_Signal_to_terminate_process_list,
+        # test_jobmanager_static_client_call,
+        # test_start_server_with_no_args,
+        # test_start_server,
+        # test_client,
+        # test_jobmanager_basic,
+        # test_jobmanager_server_signals,
+        # test_shutdown_server_while_client_running,
+        # test_shutdown_client,
+        # # test_jobmanager_read_old_stat,
+        # test_client_status,
+        # test_jobmanager_local,
+        # test_start_server_on_used_port,
+        # test_shared_const_arg,
+        # test_digest_rejected,
+        # test_hum_size,
+
+        lambda : print("END")
         ]
         for f in func:
             print()

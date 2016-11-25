@@ -835,6 +835,18 @@ class ClosableQueue(object):
     
     def close(self):
         self._close = True
+
+class ArgsContainerQueue(object):
+    def __init__(self, q_in, q_out):
+        self._q_in = q_in
+        self._q_out = q_out
+        self.timeout = 1
+
+    def put(self, item):
+        self._q_in.put(item)
+
+    def get(self):
+        return self._q_out.get(timeout = self.timeout)
         
     
 class ArgsContainer(object):
@@ -851,11 +863,42 @@ class ArgsContainer(object):
         self._not_gotten_ids = set()
         self._marked_ids = set()
         self._max_id = 0
-        
+
+        self._q_in = mp.Queue()
+        self._q_out = mp.Queue()
+        self.q_out_size = 10
+
+        thr_in_reader = threading.Thread(target=self._receiver)
+        thr_in_reader.daemon = True
+        thr_in_reader.start()
+
+        thr_out_sender = threading.Thread(target=self._sender)
+        thr_out_sender.daemon = True
+        thr_out_sender.start()
+
+
+    def _receiver(self):
+        while True:
+            item = self._q_in.get()
+            self.put(item)
+
+
+    def _sender(self):
+        while self._q_out.qsize() < self.q_out_size:
+            try:
+                self._q_out.put(self.get())
+            except queue.Empty:
+                break
+
+
     def _open_shelve(self, new_shelve=True):
         if os.path.exists(self._path):
             if os.path.isfile(self._path):
                 raise RuntimeWarning("can not create shelve, path '{}' is an existing file".format(self._path))
+
+    def __getstate__(self):
+        if self._path is None:
+            return (self.data, self._not_gotten_ids, self._marked_ids, self._max_id)
         else:
             os.makedirs(self._path)
         fname = os.path.join(self._path, 'args')
@@ -918,6 +961,7 @@ class ArgsContainer(object):
 
     def unmarked_items(self):
         return self.put_items() - self.marked_items()
+
 
     def put(self, item):
         with self._lock:
