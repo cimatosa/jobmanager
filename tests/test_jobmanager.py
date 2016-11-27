@@ -7,7 +7,7 @@ import sys
 import time
 import multiprocessing as mp
 from multiprocessing import util
-util.log_to_stderr()
+# util.log_to_stderr()
 from multiprocessing.managers import BaseManager
 import socket
 import signal
@@ -780,6 +780,8 @@ def test_ArgsContainer():
     from shutil import rmtree
     import shelve
 
+
+    # simple test on shelve, close is needed to write data to disk
     s = shelve.open("test")
     s['a'] = 1
     s.close()
@@ -787,50 +789,21 @@ def test_ArgsContainer():
     assert s2['a'] == 1
 
 
-
     path = 'argscont'
-
-    ac = ArgsContainer(path, new_shelve=False)
-    ac.data['1'] = 'item11'
-    print(len(ac.data))
-    ac.close()
-    time.sleep(1)
-
-
-    fname = '/home/cima/uni/myGit/hierarchies/libs/externals/dev/jobmanager_package/tests/argscont/args'
-    s = shelve.open(fname)
-    time.sleep(1)
-    print(len(s))
-
-    return
-
+    # remove old test data
     try:
         rmtree(path)
     except FileNotFoundError:
         pass
 
     ac = ArgsContainer(path)
-    try:
+    try:                            # error as ac already exists on disk
         ac = ArgsContainer(path)
     except RuntimeError:
         pass
     else:
         assert False
-
-    ac.clear()
-    ac = ArgsContainer(path)
-    ac.put(1)
-    i = ac.get()
-    print(i)
-
-    ac2 = ArgsContainer(path, new_shelve=False)
-    print(ac2.qsize())
-    item = ac2.get()
-    print(item)
-
-    ac.clear()
-
-    return
+    ac.clear()                      # remove ac from disk
 
     #for p in [None, path]:
     for p in [path]:
@@ -840,8 +813,6 @@ def test_ArgsContainer():
             ac.put(arg)
 
         assert ac.qsize() == 5
-        print(len(ac.data), type(ac.data))
-
         item1 = ac.get()
         item2 = ac.get()
         
@@ -899,36 +870,17 @@ def test_ArgsContainer():
 
         import pickle
         ac_dump = pickle.dumps(ac)
-
-        print(len(ac.data), type(ac.data))
-
-        fname = os.path.join(path, 'args')
-        print(fname)
-        s = shelve.open(fname, flag='c')
-        print(len(s), type(s))
-
-#        del ac
-#        ac2 = pickle.loads(ac_dump)
-
-
-
-
-        return
+        ac.close_shelve() # the shelve need to be closed, so that the data gets flushed to disk
 
         
         # note here, when loading, the _not_gottem_id are all ids
         # except the marked its
+        ac2 = pickle.loads(ac_dump)
 
         assert ac2.qsize() == 4
         from jobmanager.jobmanager import bf, hashlib
 
         item3_hash = hashlib.sha256(bf.dump(item3)).hexdigest()
-        print(item3)
-        print(item3_hash)
-        for k in ac2.data:
-            print(k)
-
-
         assert item3_hash in ac2.data
         assert ac2.marked_items() == 1
         assert ac2.unmarked_items() == 4
@@ -1025,6 +977,105 @@ def test_ArgsContainer_BaseManager():
         print(ac_inst.qsize())
 
         assert ac_inst.qsize() == 200
+
+
+def test_ArgsContainer_BaseManager_in_subprocess():
+    from jobmanager.jobmanager import ArgsContainer
+    from jobmanager.jobmanager import ContainerClosedError
+    import queue
+    global PORT
+
+    path = 'argscont'
+    from shutil import rmtree
+    try:
+        rmtree(path)
+    except FileNotFoundError:
+        pass
+
+    for p in [path, None]:
+        PORT += 1
+        ac_inst = ArgsContainer(p)
+        ac_inst.put('a')
+        assert ac_inst.qsize() == 1
+        assert ac_inst.gotten_items() == 0
+        assert ac_inst.marked_items() == 0
+
+
+        class MM(BaseManager):
+            pass
+
+        q = ac_inst.get_queue()
+        MM.register('get_job_q', callable=lambda: q, exposed=['put', 'get'])
+        m = MM(('', PORT), b'test_argscomnt')
+        m.start()
+
+        class MM_remote(BaseManager):
+            pass
+
+        MM_remote.register('get_job_q')
+        mr = MM_remote(('localhost', PORT), b'test_argscomnt')
+        mr.connect()
+
+        acr = mr.get_job_q()
+        acr.put('b')
+        acr.put('c')
+        time.sleep(0.1)
+
+        assert ac_inst.qsize() == 3
+        assert ac_inst.gotten_items() == 0
+        assert ac_inst.marked_items() == 0
+
+
+        it = ac_inst.get()
+        assert ac_inst.qsize() == 2
+        assert ac_inst.gotten_items() == 1
+        assert ac_inst.marked_items() == 0
+
+        ac_inst.mark(it)
+        assert ac_inst.qsize() == 2
+        assert ac_inst.gotten_items() == 1
+        assert ac_inst.marked_items() == 1
+
+        it = acr.get()
+        assert ac_inst.qsize() == 1
+        assert ac_inst.gotten_items() == 2
+        assert ac_inst.marked_items() == 1
+
+        ac_inst.mark(it)
+        assert ac_inst.qsize() == 1
+        assert ac_inst.gotten_items() == 2
+        assert ac_inst.marked_items() == 2
+
+
+        acr.get()
+        assert ac_inst.qsize() == 0
+        try:
+            acr.get()
+        except queue.Empty:
+            print("caught queue.Empty")
+        else:
+            assert False
+
+        acr.put('e')
+        time.sleep(0.1)
+
+        assert ac_inst.qsize() == 1
+
+        ac_inst.close()
+        try:
+            acr.put('f')
+        except ContainerClosedError:
+            print("caught ContainerClosedError")
+        else:
+            assert False
+
+        try:
+            acr.get()
+        except ContainerClosedError:
+            print("caught ContainerClosedError")
+        else:
+            assert False
+
 
 def test_unbind_adresse():
     from multiprocessing import managers
@@ -1129,8 +1180,9 @@ if __name__ == "__main__":
         pass
     else:    
         func = [
-            test_ArgsContainer,
+            # test_ArgsContainer,
             # test_ArgsContainer_BaseManager,
+            test_ArgsContainer_BaseManager_in_subprocess,
         # test_hum_size,
         # test_Signal_to_SIG_IGN,
         # test_Signal_to_sys_exit,
