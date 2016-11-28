@@ -35,7 +35,7 @@ warnings.filterwarnings('error', append=True)
 
 import jobmanager
 
-#logging.getLogger('jobmanager').setLevel(logging.INFO)
+logging.getLogger('jobmanager').setLevel(logging.WARNING)
 logging.getLogger('progression').setLevel(logging.ERROR)
 logging.basicConfig(level = logging.INFO)
 
@@ -480,8 +480,7 @@ def shutdown_client(sig):
     p_client = None
     
     try:
-    
-        p_server = mp.Process(target=start_server, args=(n, False, 0.4))
+        p_server = mp.Process(target=start_server, args=(n, False, 0.4, True))
         p_server.start()
 
         time.sleep(0.5)
@@ -642,7 +641,8 @@ def test_jobmanager_local():
     with jobmanager.JobManager_Local(client_class = jobmanager.JobManager_Client,
                                      authkey      = AUTHKEY,
                                      port         = PORT,
-                                     const_arg    = 0.1) as jm_server:
+                                     const_arg    = 0.1,
+                                     nproc        = 4) as jm_server:
         jm_server.args_from_list(args)
         jm_server.start()
     
@@ -1076,132 +1076,168 @@ def test_ArgsContainer_BaseManager_in_subprocess():
         else:
             assert False
 
-
-def test_unbind_adresse():
-    from multiprocessing import managers
-    from multiprocessing import connection
-    from multiprocessing import process
-    import time
-    import threading
+def test_ClosableQueue():
+    from jobmanager.jobmanager import ClosableQueue
+    from jobmanager.jobmanager import ContainerClosedError
+    import queue
     
-    import socket
-    import psutil
-    
-    class MyServer(managers.Server):
-        def accepter(self):
-            while True:
-                try:
-                    print("hallo")
-                    c = self.listener.accept()
-                except OSError:
-                    print("hallo")
-                    continue
-                print("hallo")
-                t = threading.Thread(target=self.handle_request, args=(c,))
-                t.daemon = True
-                t.start()
-                
-        def serve_forever(self):
-            '''
-            Run the server forever
-            '''
-            self.stop_event = threading.Event()
-            process.current_process()._manager_server = self
-            try:
-                accepter = threading.Thread(target=self.accepter)
-                accepter.daemon = True
-                print("started accepter thread")
-                accepter.start()
-                try:
-                    while not self.stop_event.is_set():
-                        self.stop_event.wait(1)
-                        print(self.stop_event.is_set(), accepter.getName())
-                except (KeyboardInterrupt, SystemExit):
-                    pass
-            finally:
-                if sys.stdout != sys.__stdout__:
-                    util.debug('resetting stdout, stderr')
-                    sys.stdout = sys.__stdout__
-                    sys.stderr = sys.__stderr__
-                print("end serve_forever")
-                self.listener.close()
-                accepter.join()
-                
-                sys.exit(0)
-                
-
+    q = ClosableQueue()
         
-                
-    managers.Server = MyServer
+    def get_on_empty_q(q):
+        try:
+            q.get(timeout=0.1)
+        except queue.Empty:
+            pass
+        else:
+            assert False
+    get_on_empty_q(q)
     
-    address = ('localhost', 12345)
-    family =connection.address_type(address)
+    p = mp.Process(target=get_on_empty_q, args=(q,))
+    p.start()
+    p.join()
+    assert p.exitcode == 0
+    
+    q = ClosableQueue()
+    
+    # doing things local
+    d = {'key': 'value'}
+    
+    q.put(1)
+    q.put('a')
+    q.put(d)
+    assert q.get() == 1
+    assert q.get() == 'a'
+    assert q.get() == d 
+    
+    # put data in subprocess to queue
+    def put_in_sp(q):
+        q.put(1)
+        q.put('a')
+        q.put({'key': 'value'})
+    p = mp.Process(target=put_in_sp, args=(q,))
+    p.start()
+    p.join()
+    assert p.exitcode == 0
+    assert q.get() == 1
+    assert q.get() == 'a'
+    assert q.get() == d
+    
+    # get data in subprocess from queue
+    def get_in_sp(q):
+        assert q.get() == 1
+        assert q.get() == 'a'
+        assert q.get() == d
+        
+    q.put(1)
+    q.put('a')
+    q.put(d)
+    p = mp.Process(target=get_in_sp, args=(q,))
+    p.start()
+    p.join()
+    assert p.exitcode == 0
     
     
-    print("### 1 ###")
-    m = managers.BaseManager(address=address, authkey=b'test')
-    s = m.get_server()
+    q = ClosableQueue()
+    q.put(1)
+    q.put('a')
+    q.close()
+    def put_on_closed_q(q):
+        try:
+            q.put(None)
+        except ContainerClosedError:
+            pass
+        else:
+            assert False            
+    put_on_closed_q(q)
+        
+    p = mp.Process(target=put_on_closed_q, args=(q,))
+    p.start()
+    p.join()
+    assert p.exitcode == 0
     
-    thr_before = [tid[0] for tid in psutil.Process().threads()]
-    thr = threading.Thread(target=s.serve_forever)
-    thr.start()
-    thr_after = [tid[0] for tid in psutil.Process().threads()]
+        
     
-    print(thr_before)
-    print(thr_after)   
+def test_ClosableQueue_with_manager():
     
-    time.sleep(3)
-    s.stop_event.set()
-    thr.join()
+    from jobmanager.jobmanager import ClosableQueue
+    from jobmanager.jobmanager import ContainerClosedError
+    from multiprocessing.managers import BaseManager
+    import pickle
     
-    thr_after_join = [tid[0] for tid in psutil.Process().threads()]
-    print(thr_after_join)
-  
-     
-    time.sleep(10)
+    class MM(BaseManager):
+        pass
     
-   
-    print("### 2 ###")
-    m = managers.BaseManager(address=address, authkey=b'test')
+    q = ClosableQueue()
+    q_client = q.client()
+
+    MM.register('q', callable = lambda: q_client, exposed=['get', 'put', 'qsize'])    
+    m = MM(address=('', 12347), authkey=b'b')
+    
+    
+    
     m.start()
-    m.shutdown()
+    
+    m_remote = MM(address=('', 12347), authkey=b'b')
+    m_remote.connect()
+    q_remote = m_remote.q()
+    
+    m_remote2 = MM(address=('', 12347), authkey=b'b')
+    m_remote2.connect()
+    q_remote2= m_remote.q()
+    
+    m_remote3 = MM(address=('', 12347), authkey=b'b')
+    m_remote3.connect()
+    q_remote3 = m_remote.q()
+    
+    q.put(0)
+    q_remote.put(1)
+    q_remote.put('a')
+    q_remote2.put(2)
+    q_remote2.put('b')
+    q_remote3.put(3)
+    q_remote3.put('c')
+    
+    time.sleep(0.5)
+    
+    print(q.get(timeout=1))
+    print(q.get(timeout=1))
+    print(q.get(timeout=1))
+    print(q.get(timeout=1))
+    print(q.get(timeout=1))
+    print(q.get(timeout=1))
     
     
     
-#     m = managers.BaseManager(address=address, authkey=b'test')
-#     m.start()
-#     
-#     time.sleep(1)
-#     m.shutdown()
-    
-    
-if __name__ == "__main__":  
+if __name__ == "__main__":
+    logging.getLogger('jobmanager').setLevel(logging.DEBUG)  
     if len(sys.argv) > 1:
         pass
     else:    
         func = [
-            # test_ArgsContainer,
-            # test_ArgsContainer_BaseManager,
-            test_ArgsContainer_BaseManager_in_subprocess,
-        # test_hum_size,
-        # test_Signal_to_SIG_IGN,
-        # test_Signal_to_sys_exit,
-        # test_Signal_to_terminate_process_list,
-        # test_jobmanager_static_client_call,
-        # test_start_server_with_no_args,
-        # test_start_server,
-        # test_client,
-        # test_jobmanager_basic,
-        # test_jobmanager_server_signals,
-        # test_shutdown_server_while_client_running,
-        # test_shutdown_client,
-        # # test_jobmanager_read_old_stat,
-        # test_client_status,
-        # test_jobmanager_local,
-        # test_start_server_on_used_port,
-        # test_shared_const_arg,
-        # test_digest_rejected,
-        # test_hum_size,
+#             test_ArgsContainer,
+#             test_ArgsContainer_BaseManager,
+#             test_ArgsContainer_BaseManager_in_subprocess,
+#             test_ClosableQueue,
+#             test_ClosableQueue_with_manager,
+#         test_hum_size,
+#         test_Signal_to_SIG_IGN,
+#         test_Signal_to_sys_exit,
+#         test_Signal_to_terminate_process_list,
+#         test_jobmanager_static_client_call,
+#         test_start_server_with_no_args,
+        test_start_server,
+#         test_client,
+#         test_jobmanager_basic,
+#         test_jobmanager_server_signals,
+#         test_shutdown_server_while_client_running,
+#         test_shutdown_client,
+#         # test_jobmanager_read_old_stat,
+#         test_client_status,
+#         test_jobmanager_local,
+#         test_start_server_on_used_port,
+#         test_shared_const_arg,
+#         test_digest_rejected,
+#         test_hum_size,
 
         lambda : print("END")
         ]

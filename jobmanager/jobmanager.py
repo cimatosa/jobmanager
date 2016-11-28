@@ -332,9 +332,7 @@ class JobManager_Client(object):
             log.info(traceback.format_exc())
             return None
             
-        job_q = manager.get_job_q()
-        log.info("found job_q with %s jobs", job_q.qsize())
-        
+        job_q = manager.get_job_q()       
         result_q = manager.get_result_q()
         fail_q = manager.get_fail_q()
         # deep copy const_arg from manager -> non shared object in local memory
@@ -391,8 +389,10 @@ class JobManager_Client(object):
         global log
         log = logging.getLogger(__name__+'.'+progress.get_identifier(name='worker{}'.format(i+1), bold=False))
         log.setLevel(loglevel)
+        
+        q_lock = threading.Lock()
 
-        Signal_to_sys_exit(signals=[signal.SIGTERM])
+        Signal_to_sys_exit(signals=[signal.SIGTERM], lock = q_lock)
         Signal_to_SIG_IGN(signals=[signal.SIGINT])
 
         n = os.nice(0)
@@ -443,8 +443,10 @@ class JobManager_Client(object):
 
                 # try to get an item from the job_q
                 tg_0 = time.time()                
-                try:                    
-                    arg = job_q_get()
+                try:                 
+                    with q_lock:   
+                        arg = job_q_get()
+                        log.debug("process {}".format(arg))
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
                     log.info("finds empty job queue, processed %s jobs", cnt)
@@ -495,7 +497,8 @@ class JobManager_Client(object):
 
                     log.debug("put arg to local fail_q")
                     try:
-                        local_fail_q.put((arg, err.__name__, hostname))
+                        with q_lock:
+                            local_fail_q.put((arg, err.__name__, hostname))
                     # handle SystemExit in outer try ... except                        
                     except SystemExit as e:
                         log.warning('putting arg to local fail_q failed due to SystemExit')
@@ -513,7 +516,8 @@ class JobManager_Client(object):
                 else:
                     try:
                         tp_0 = time.time()
-                        local_result_q.put((arg, res))
+                        with q_lock:
+                            local_result_q.put((arg, res))
                         tp_1 = time.time()
                         time_queue += (tp_1-tp_0)
                         
@@ -544,7 +548,8 @@ class JobManager_Client(object):
                 log.warning("SystemExit, quit processing, reinsert current argument, please wait")
                 log.debug("put arg back to local job_q")
                 try:
-                    local_job_q.put(arg)
+                    with q_lock:
+                        local_job_q.put(arg)
                 # handle SystemExit in outer try ... except                        
                 except SystemExit as e:
                     log.error("puting arg back to local job_q failed due to SystemExit")
@@ -642,7 +647,9 @@ class JobManager_Client(object):
 #             log.debug("this is thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
             while True:
                 data = local_job_q.get()
+                log.debug('reinsert {}'.format(data))
                 job_q_put(data)
+                
 #             log.debug("stopped thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
 
  
@@ -651,7 +658,8 @@ class JobManager_Client(object):
             try:
                 while True:
                     data = local_result_q.get()
-                    result_q_put(data)
+                    log.debug("result_q client forward {}".format(data))
+                    result_q.put(data)                    
             except Exception as e:
                 log.error("thr_result_q_put caught error %s", type(e))
                 log.info(traceback.format_exc())
@@ -750,16 +758,17 @@ class JobManager_Client(object):
         log.debug("progressBar context has been left")
         
         while (not local_job_q.empty()):
-            log.debug("still data in local_job_q (%s)", local_job_q.qsize())
+            log.info("still data in local_job_q (%s)", local_job_q.qsize())
             if thr_job_q_put.is_alive():
                 log.debug("allow the thread thr_job_q_put to process items")
                 time.sleep(1)
             else:
                 log.warning("the thread thr_job_q_put has died, can not process remaining items")
                 break
+        log.info("local_job_q now empty")
 
         while (not local_result_q.empty()):
-            log.debug("still data in local_result_q (%s)", local_result_q.qsize())
+            log.info("still data in local_result_q (%s)", local_result_q.qsize())
             if thr_result_q_put.is_alive():
                 log.debug("allow the thread thr_result_q_put to process items")
                 time.sleep(1)
@@ -769,15 +778,17 @@ class JobManager_Client(object):
                     arg, res = local_result_q.get()
                     emergency_dump(arg, res, self.emergency_dump_path, self.server, self.port, self.authkey)
                 break
+        log.info("local_result_q now empty")
 
         while (not local_fail_q.empty()):
-            log.debug("still data in local_fail_q (%s)", local_fail_q.qsize())
+            log.info("still data in local_fail_q (%s)", local_fail_q.qsize())
             if thr_fail_q_put.is_alive():
                 log.debug("allow the thread thr_fail_q_put to process items")
                 time.sleep(1)
             else:
                 log.warning("the thread thr_fail_q_put has died, can not process remaining items")
                 break
+        log.info("local_fail_q now empty")
             
         log.info("client stopped")
 
@@ -816,24 +827,105 @@ def get_shared_status(ss):
 class ContainerClosedError(Exception):
     pass
 
-class ClosableQueue(object):
+class ClosableQueue_Data(object):
     def __init__(self):
         self.q = myQueue()
-        self._closed = False
+        self.is_closed = False
+        self.lock = threading.Lock()
         
-    def put(self, item):
-        if self._closed:
-            raise ContainerClosedError
-        self.q.put(item)
+    def new_conn(self):
+        conn1, conn2 = mp.Pipe()
+        log.debug("create new pair of connections, {}".format(conn2))
+        thr_listener = threading.Thread(target=self._listener, args=(conn1, ))
+        thr_listener.daemon = True
+        thr_listener.start()
+        return conn2
+    
+    @staticmethod
+    def _exec_cmd(f, conn, args):
+        try:
+            res = f(*args)
+        except Exception as e:
+            log.debug("exec_cmd '{}' raises exception '{}'".format(f.__name__, type(e)))
+            conn.send( ('#exc', e) )
+        else:
+            log.debug("exec_cmd succesfull")
+            conn.send( ('#suc', res) )
         
-    def get(self, timeout=None):
-        return self.q.get(timeout=timeout)
+    def _listener(self, conn):
+        while True:
+            try:
+                cmd = conn.recv()
+                log.debug("listener got cmd '{}'".format(cmd))
+                args = conn.recv()
+                if cmd == '#put':
+                    self._exec_cmd(self.put, conn, args)
+                elif cmd == '#get':
+                    self._exec_cmd(self.get, conn, args)                    
+                elif cmd == '#close':
+                    self._exec_cmd(self.close, conn, args)
+                elif cmd == '#qsize':
+                    self._exec_cmd(self.qsize, conn, args)
+                else:
+                    raise ValueError("unknown command '{}'".format(cmd))
+            except EOFError:
+                break 
+        
+    def put(self, item, block=True, timeout=None):
+        with self.lock:
+            if self.is_closed:
+                raise ContainerClosedError
+            self.q.put(item, block, timeout)
+        
+    def get(self, block=True, timeout=None):
+        with self.lock:
+            return self.q.get(block, timeout)
     
     def qsize(self):
-        return self.q.qsize()
+        with self.lock:
+            return self.q.qsize()
     
     def close(self):
-        self._close = True
+        with self.lock:
+            self.is_closed = True
+            log.debug("queue closed")
+        
+class ClosableQueue(object):
+    def __init__(self):
+        self.data = ClosableQueue_Data()
+        self.conn = self.data.new_conn()
+                        
+    def client(self):
+        cls = ClosableQueue.__new__(ClosableQueue)
+        cls.data = None
+        cls.conn = self.data.new_conn()
+        return cls
+           
+    @staticmethod 
+    def _communicate(cmd, args, conn):
+        while conn.poll():
+            print(conn.recv())
+        
+        conn.send(cmd)
+        conn.send(args)
+        res = conn.recv()
+
+        if res[0] == '#exc':
+            raise res[1]
+        else:
+            return res[1]       
+        
+    def put(self, item, block=True, timeout=None):
+        return self._communicate('#put', (item, block, timeout), self.conn)           
+        
+    def get(self, block=True, timeout=None):
+        return self._communicate('#get', (block, timeout), self.conn)
+    
+    def qsize(self):
+        return self._communicate('#qsize', tuple(), self.conn)
+    
+    def close(self):
+        return self._communicate('#close', tuple(), self.conn)
 
 class ArgsContainerQueue(object):
     def __init__(self, put_conn, get_conn):
@@ -1211,7 +1303,7 @@ class JobManager_Server(object):
         # NOTE: it only works using multiprocessing.Queue()
         # the Queue class from the module queue does NOT work
         
-        self.manager_server = None
+        self.manager = None
         self.hostname = socket.gethostname()
         self.job_q_on_disk = job_q_on_disk
         self.job_q_on_disk_path = job_q_on_disk_path
@@ -1221,8 +1313,11 @@ class JobManager_Server(object):
             fname = None
         
         self.job_q = ArgsContainer(fname)
-        self.result_q = ClosableQueue()
-        self.fail_q = ClosableQueue()
+#         self.result_q = ClosableQueue()
+#         self.fail_q = ClosableQueue()
+        
+        self.result_q = mp.Queue()
+        self.fail_q = mp.Queue()
     
     @staticmethod
     def _check_bind(host, port):
@@ -1235,23 +1330,29 @@ class JobManager_Server(object):
         finally:
             s.close()
                
-    def _start_manager_thread(self):
+    def _start_manager(self):
         self._check_bind(self.hostname, self.port)
             
         # make job_q, result_q, fail_q, const_arg available via network
-        JobManager_Manager.register('get_job_q', callable=lambda: self.job_q, exposed=['get', 'put', 'qsize'])
+        q = self.job_q.get_queue()        
+        JobManager_Manager.register('get_job_q', callable=lambda: q, exposed=['get', 'put'])
+        JobManager_Manager.register('get_const_arg', callable=lambda: self.const_arg)
+        
+        
+#         rc = self.result_q.client()
+#         fc = self.fail_q.client()
+#         JobManager_Manager.register('get_result_q', callable=lambda: rc, exposed=['get', 'put', 'qsize'])
+#         JobManager_Manager.register('get_fail_q', callable=lambda: fc, exposed=['get', 'put', 'qsize'])
+        
         JobManager_Manager.register('get_result_q', callable=lambda: self.result_q, exposed=['get', 'put', 'qsize'])
         JobManager_Manager.register('get_fail_q', callable=lambda: self.fail_q, exposed=['get', 'put', 'qsize'])
-        JobManager_Manager.register('get_const_arg', callable=lambda: self.const_arg)
+        
+        
     
         address=('', self.port)   #ip='' means local
         authkey=self.authkey
         self.manager = JobManager_Manager(address, authkey)
-        self.manager_server = self.manager.get_server()
-        
-        server_thr = threading.Thread(target=self.manager_server.serve_forever)
-        server_thr.daemon = True
-        server_thr.start()
+        self.manager.start()
         
         m_test = BaseManager(('localhost', self.port), authkey)
         try:
@@ -1259,7 +1360,20 @@ class JobManager_Server(object):
         except:
             raise ConnectionError("test conntect to JobManager_Manager failed")
             
-        log.info("JobManager_Manager thread started on %s:%s (%s)", self.hostname, self.port, authkey)
+        log.info("JobManager_Manager started on %s:%s (%s)", self.hostname, self.port, authkey)
+        
+    def _stop_manager(self):
+        if self.manager == None:
+            return
+        
+        manager_proc = self.manager._process        
+        # stop SyncManager
+        self.manager.shutdown()        
+        log.info("JobManager Manager shutdown triggered")
+        progress.check_process_termination(proc                     = manager_proc, 
+                                           prefix                   = 'JobManager Manager: ', 
+                                           timeout                  = 2,
+                                           auto_kill_on_last_resort = True)
     
         
     def __enter__(self):
@@ -1292,16 +1406,14 @@ class JobManager_Server(object):
         - if job_q is not empty dump remaining job_q
         """
         # will only be False when _shutdown was started in subprocess
-        if sys.version_info[0] == 3:
-            if self.manager_server is not None:
-                self.manager_server.stop_event.set()
-                log.debug("set stopEvent for JobManager_Manager server")
-                self.manager_server = None
-        
 #         self.job_q.close()
 #         self.result_q.close()
 #         self.fail_q.close()
 #         log.debug("queues closed!")
+        
+        self._stop_manager()
+        
+
 
         # do user defined final processing
         self.process_final_result()
@@ -1454,7 +1566,7 @@ class JobManager_Server(object):
 
     def bring_him_up(self):
         
-        self._start_manager_thread()
+        self._start_manager()
 
         if self._pid != os.getpid():
             log.critical("do not run JobManager_Server.start() in a subprocess")
@@ -1524,11 +1636,12 @@ class JobManager_Server(object):
                 log.info("infoline {}".format(info_line.value))
                 # allows for update of the info line
                 try:
-                    arg, result = self.result_q.get(timeout=self.msg_interval)
+                    arg, result = self.result_q.get(timeout=self.msg_interval)  
                 except queue.Empty:
                     continue
 
                 self.job_q.mark(arg)
+                log.debug("received {}".format(arg))
                 self.process_new_result(arg, result)
                 if not self.keep_new_result_in_memory:
                     del arg
@@ -1641,7 +1754,7 @@ class Signal_handler_for_Jobmanager_client(object):
             self.client_object.pbc.pause()
         
         try:
-            r = input_promt(progress.ESC_BOLD + progress.ESC_LIGHT_RED+"<q> - quit, <i> - server info: " + progress.ESC_NO_CHAR_ATTR)
+            r = input_promt(progress.terminal.ESC_BOLD + progress.terminal.ESC_LIGHT_RED+"<q> - quit, <i> - server info: " + progress.terminal.ESC_NO_CHAR_ATTR)
         except Exception as e:
             log.error("Exception during input %s", type(e))
             log.info(traceback.format_exc())
@@ -1654,8 +1767,8 @@ class Signal_handler_for_Jobmanager_client(object):
         elif r == 'q':
             log.info("terminate worker functions")
             self.exit_handler._handler(sig, frame)
-            log.info("call sys.exit -> raise SystemExit")
-            sys.exit('exit due to user')
+#            log.info("call sys.exit -> raise SystemExit")
+#            sys.exit('exit due to user')
         else:
             print("input '{}' ignored".format(r))
         
@@ -1665,9 +1778,8 @@ class Signal_handler_for_Jobmanager_client(object):
     def _show_server_info(self):
         self.client_object.server
         self.client_object.authkey
-        print("{}: connected to {} using authkey {}".format(self.client_object._identifier,
-                                                            self.client_object.server,
-                                                            self.client_object.authkey))   
+        print("connected to {} using authkey {}".format(self.client_object.server,
+                                                        self.client_object.authkey))   
 
 
 class Signal_to_SIG_IGN(object):
@@ -1680,12 +1792,27 @@ class Signal_to_SIG_IGN(object):
 
 
 class Signal_to_sys_exit(object):
-    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM]):
+    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM], lock=threading.Lock()):
+        self.lock = lock
+        self.c = 0
         for s in signals:
             signal.signal(s, self._handler)
-    def _handler(self, signal, frame):
+    
+    def _exit(self, signal):
         log.info("PID %s: received signal %s -> call sys.exit -> raise SystemExit", os.getpid(), progress.signal_dict[signal])
-        sys.exit('exit due to signal {}'.format(progress.signal_dict[signal]))
+        sys.exit('exit due to signal {}'.format(progress.signal_dict[signal]))        
+    
+    def _handler(self, signal, frame):
+        if self.c == 1:
+            log.warning("PID %s: received signal %s more than once, ignore lock", os.getpid(), progress.signal_dict[signal])
+            self._exit(signal)
+        self.c += 1
+        while not self.lock.acquire(timeout = 10):
+            log.warning("sys exit is stalled while aquiring lock")
+        try:
+            self._exit(signal)
+        finally:
+            self.lock.release()
         
  
 class Signal_to_terminate_process_list(object):
