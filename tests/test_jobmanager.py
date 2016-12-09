@@ -42,7 +42,7 @@ logging.basicConfig(level = logging.INFO)
 
 
 AUTHKEY = 'testing'
-PORT = random.randint(10000, 60000)
+PORT = random.randint(30000, 40000)
 SERVER = socket.gethostname()
 
 def test_WarningError():
@@ -1075,6 +1075,61 @@ def test_ArgsContainer_BaseManager_in_subprocess():
             print("caught ContainerClosedError")
         else:
             assert False
+            
+def test_havy_load_on_ArgsContainer():
+    from jobmanager.jobmanager import ArgsContainer
+    from jobmanager.jobmanager import ContainerClosedError
+    import queue
+    global PORT
+
+    path = 'argscont2'
+    from shutil import rmtree
+    try:
+        rmtree(path)
+    except FileNotFoundError:
+        pass
+    
+    for p in [path, None]:
+        PORT += 1
+        ac_inst = ArgsContainer(p)
+        for i in range(2000):
+            ac_inst.put(i)
+
+        q = ac_inst.get_queue()
+           
+        time.sleep(1)
+        
+        class MM(BaseManager):
+            pass    
+        MM.register('get_job_q', callable=lambda: q, exposed=['put', 'get'])
+        m = MM(('', PORT), b'test_argscomnt')
+        m.start()
+        
+        def cl():
+            m = MM(('', PORT), b'test_argscomnt')
+            m.connect()
+            qr = m.get_job_q()
+            for i in range(50):
+                item = qr.get()
+                qr.put(item)
+                
+        plist = []
+        for i in range(40):
+            pr = mp.Process(target=cl)
+            plist.append(pr)
+        
+        for pr in plist:
+            pr.start()
+            
+        for pr in plist:
+            pr.join()
+            assert pr.exitcode == 0
+            
+        m.shutdown()
+        time.sleep(1)
+        
+        print(ac_inst.qsize())
+            
 
 def test_ClosableQueue():
     from jobmanager.jobmanager import ClosableQueue
@@ -1214,30 +1269,31 @@ if __name__ == "__main__":
         pass
     else:    
         func = [
-#             test_ArgsContainer,
-#             test_ArgsContainer_BaseManager,
-#             test_ArgsContainer_BaseManager_in_subprocess,
+            test_ArgsContainer,
+            test_ArgsContainer_BaseManager,
+            test_ArgsContainer_BaseManager_in_subprocess,
+            test_havy_load_on_ArgsContainer,
 #             test_ClosableQueue,
 #             test_ClosableQueue_with_manager,
-#         test_hum_size,
-#         test_Signal_to_SIG_IGN,
-#         test_Signal_to_sys_exit,
-#         test_Signal_to_terminate_process_list,
-#         test_jobmanager_static_client_call,
-#         test_start_server_with_no_args,
-        test_start_server,
-#         test_client,
-#         test_jobmanager_basic,
-#         test_jobmanager_server_signals,
-#         test_shutdown_server_while_client_running,
-#         test_shutdown_client,
-#         # test_jobmanager_read_old_stat,
-#         test_client_status,
-#         test_jobmanager_local,
-#         test_start_server_on_used_port,
-#         test_shared_const_arg,
-#         test_digest_rejected,
-#         test_hum_size,
+#             test_hum_size,
+#             test_Signal_to_SIG_IGN,
+#             test_Signal_to_sys_exit,
+#             test_Signal_to_terminate_process_list,
+#             test_jobmanager_static_client_call,
+#             test_start_server_with_no_args,
+#             test_start_server,
+#             test_client,
+#             test_jobmanager_basic,
+#             test_jobmanager_server_signals,
+#             test_shutdown_server_while_client_running,
+#             test_shutdown_client,
+#             test_jobmanager_read_old_stat,
+#             test_client_status,
+#             test_jobmanager_local,
+#             test_start_server_on_used_port,
+#             test_shared_const_arg,
+#             test_digest_rejected,
+#             test_hum_size,
 
         lambda : print("END")
         ]

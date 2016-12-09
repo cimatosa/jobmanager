@@ -150,7 +150,12 @@ def test_distributed_mathieu():
         res = f[1]
         
         a, q = arg['args']
-        t, x_t = f[1]
+        t, x_t, err = f[1]
+        
+        if err is not None:
+            exc, trb = err
+            print(trb)
+            raise exc
         
         assert np.max(np.abs(t_ref - t)) < 1e-15
         time1 = time.time()

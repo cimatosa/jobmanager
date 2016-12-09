@@ -854,7 +854,7 @@ class ClosableQueue_Data(object):
         
     def _listener(self, conn):
         while True:
-            try:
+            try:                
                 cmd = conn.recv()
                 log.debug("listener got cmd '{}'".format(cmd))
                 args = conn.recv()
@@ -869,6 +869,7 @@ class ClosableQueue_Data(object):
                 else:
                     raise ValueError("unknown command '{}'".format(cmd))
             except EOFError:
+                log.debug("listener got EOFError, stop thread")
                 break 
         
     def put(self, item, block=True, timeout=None):
@@ -894,21 +895,26 @@ class ClosableQueue(object):
     def __init__(self):
         self.data = ClosableQueue_Data()
         self.conn = self.data.new_conn()
+        self.lock = threading.Lock()
                         
     def client(self):
         cls = ClosableQueue.__new__(ClosableQueue)
         cls.data = None
         cls.conn = self.data.new_conn()
+        cls.lock = threading.Lock()
         return cls
-           
-    @staticmethod 
-    def _communicate(cmd, args, conn):
-        while conn.poll():
-            print(conn.recv())
-        
-        conn.send(cmd)
-        conn.send(args)
-        res = conn.recv()
+            
+    def _communicate(self, cmd, args):
+        with self.lock:
+            try:
+                self.conn.send(cmd)
+                self.conn.send(args)
+                res = self.conn.recv()
+            except:
+                # in case of any Error clear the pipe
+                while self.conn.poll(timeout = 1):
+                    self.conn.recv()
+                raise
 
         if res[0] == '#exc':
             raise res[1]
@@ -916,25 +922,33 @@ class ClosableQueue(object):
             return res[1]       
         
     def put(self, item, block=True, timeout=None):
-        return self._communicate('#put', (item, block, timeout), self.conn)           
+        return self._communicate('#put', (item, block, timeout))           
         
     def get(self, block=True, timeout=None):
-        return self._communicate('#get', (block, timeout), self.conn)
+        return self._communicate('#get', (block, timeout))
     
     def qsize(self):
-        return self._communicate('#qsize', tuple(), self.conn)
+        return self._communicate('#qsize', tuple())
     
     def close(self):
-        return self._communicate('#close', tuple(), self.conn)
+        return self._communicate('#close', tuple())
 
 class ArgsContainerQueue(object):
     def __init__(self, put_conn, get_conn):
         self.put_conn = put_conn
         self.get_conn = get_conn
+        self.put_lock = threading.Lock()
+        self.get_lock = threading.Lock()
 
     def put(self, item):
-        self.put_conn.send(item)
-        kind, res = self.put_conn.recv()
+        with self.put_lock:
+            try:
+                self.put_conn.send(item)
+                kind, res = self.put_conn.recv()
+            except:
+                while self.put_conn.poll(timeout=1):
+                    self.put_conn.recv()
+                raise
         if kind == '#suc':
             return
         elif kind == '#exc':
@@ -943,8 +957,14 @@ class ArgsContainerQueue(object):
             raise RuntimeError("unknown kind '{}'".format(kind))
 
     def get(self):
-        self.get_conn.send('#GET')
-        kind, res = self.get_conn.recv()
+        with self.get_lock:
+            try:
+                self.get_conn.send('#GET')
+                kind, res = self.get_conn.recv()
+            except:
+                while self.get_conn.poll(timeout=1):
+                    self.get_conn.recv()
+                raise
         if kind == '#res':
             return res
         elif kind == '#exc':
@@ -1129,9 +1149,12 @@ class ArgsContainer(object):
                 self.data[item_hash] = self._max_id
                 self._not_gotten_ids.add(self._max_id)
                 self._max_id += 1
+
+            #print("put", self._not_gotten_ids, self._marked_ids)
     
     def get(self):
         with self._lock:
+            #print("get", self._not_gotten_ids, self._marked_ids)
             if self._closed:
                 raise ContainerClosedError
             try:
@@ -1147,6 +1170,7 @@ class ArgsContainer(object):
         with self._lock:
             item_hash = hashlib.sha256(bf.dump(item)).hexdigest()
             item_id = self.data[item_hash]
+            #print("mark", item_id, self._not_gotten_ids, self._marked_ids)
             if item_id in self._not_gotten_ids:
                 raise ValueError("item not gotten yet, can not be marked")
             if item_id in self._marked_ids:
@@ -1313,11 +1337,11 @@ class JobManager_Server(object):
             fname = None
         
         self.job_q = ArgsContainer(fname)
-#         self.result_q = ClosableQueue()
-#         self.fail_q = ClosableQueue()
+        self.result_q = ClosableQueue()
+        self.fail_q = ClosableQueue()
         
-        self.result_q = mp.Queue()
-        self.fail_q = mp.Queue()
+#        self.result_q = mp.Queue()
+#        self.fail_q = mp.Queue()
     
     @staticmethod
     def _check_bind(host, port):
@@ -1339,13 +1363,13 @@ class JobManager_Server(object):
         JobManager_Manager.register('get_const_arg', callable=lambda: self.const_arg)
         
         
-#         rc = self.result_q.client()
-#         fc = self.fail_q.client()
-#         JobManager_Manager.register('get_result_q', callable=lambda: rc, exposed=['get', 'put', 'qsize'])
-#         JobManager_Manager.register('get_fail_q', callable=lambda: fc, exposed=['get', 'put', 'qsize'])
+        rc = self.result_q.client()
+        fc = self.fail_q.client()
+        JobManager_Manager.register('get_result_q', callable=lambda: rc, exposed=['get', 'put', 'qsize'])
+        JobManager_Manager.register('get_fail_q', callable=lambda: fc, exposed=['get', 'put', 'qsize'])
         
-        JobManager_Manager.register('get_result_q', callable=lambda: self.result_q, exposed=['get', 'put', 'qsize'])
-        JobManager_Manager.register('get_fail_q', callable=lambda: self.fail_q, exposed=['get', 'put', 'qsize'])
+#        JobManager_Manager.register('get_result_q', callable=lambda: self.result_q, exposed=['get', 'put', 'qsize'])
+#        JobManager_Manager.register('get_fail_q', callable=lambda: self.fail_q, exposed=['get', 'put', 'qsize'])
         
         
     
@@ -1406,10 +1430,10 @@ class JobManager_Server(object):
         - if job_q is not empty dump remaining job_q
         """
         # will only be False when _shutdown was started in subprocess
-#         self.job_q.close()
-#         self.result_q.close()
-#         self.fail_q.close()
-#         log.debug("queues closed!")
+        self.job_q.close()
+        self.result_q.close()
+        self.fail_q.close()
+        log.debug("queues closed!")
         
         self._stop_manager()
         
@@ -1537,7 +1561,7 @@ class JobManager_Server(object):
         #self.args_list.append(a)
         
         # the actual shared queue
-        self.job_q.put(a)
+        self.job_q.put(copy.copy(a))
         
         #with self._numjobs.get_lock():
         #    self._numjobs.value += 1
@@ -1639,7 +1663,6 @@ class JobManager_Server(object):
                     arg, result = self.result_q.get(timeout=self.msg_interval)  
                 except queue.Empty:
                     continue
-
                 self.job_q.mark(arg)
                 log.debug("received {}".format(arg))
                 self.process_new_result(arg, result)
@@ -1748,6 +1771,7 @@ class Signal_handler_for_Jobmanager_client(object):
             signal.signal(s, self._handler)
             
     def _handler(self, sig, frame):
+        
         log.info("received signal %s", progress.signal_dict[sig])
         
         if self.client_object.pbc is not None:

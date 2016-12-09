@@ -5,25 +5,9 @@ import warnings
 from time import time
 import logging
 import sys
-
-# taken from here: https://mail.python.org/pipermail/python-list/2010-November/591474.html
-class MultiLineFormatter(logging.Formatter):
-    def format(self, record):
-        _str = logging.Formatter.format(self, record)
-        header = _str.split(record.message)[0]
-        _str = _str.replace('\n', '\n' + ' '*len(header))
-        return _str
-   
+import traceback
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
-console_hand = logging.StreamHandler(stream = sys.stderr)
-console_hand.setLevel(logging.DEBUG)
-fmt = MultiLineFormatter('%(asctime)s %(name)s %(levelname)s : %(message)s')
-console_hand.setFormatter(fmt)
-log.addHandler(console_hand)
-
-
 
 try:
     from scipy.integrate import ode
@@ -59,9 +43,18 @@ def wrap_complex_intgeration(f_complex):
         return complex_to_real( f_complex(t, real_to_complex(yr)) ) 
     
     return f_real
+
+def timed_f(f, time_as_list):
+    def new_f(t, x):
+        t0 = time()
+        res = f(t, x)
+        t1 = time()
+        time_as_list[0] += t1-t0
+        return res
+    return new_f
     
 
-def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=None, x_to_res=None, **kwargs):
+def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res=None, **kwargs):
     f_partial_complex = lambda t, x: f(t, x, *args)
     if integrator == 'zvode':
         # define complex derivative
@@ -75,7 +68,12 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
     else:
         raise RuntimeError("unknown integrator '{}'".format(integrator))
     
-    r = ode(f_)
+    
+    time_as_list = [0.]
+    
+    f__ = timed_f(f_, time_as_list)
+    
+    r = ode(f__)
     
     if (integrator == 'dopri5') | (integrator == 'dop853'):
         if 'order' in kwargs:
@@ -95,6 +93,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
     
     if res_dim is None:
         res_dim = (len(x0), )
+        res_list_len = None
     else:
         try:
             res_list_len = len(res_dim)
@@ -117,27 +116,39 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         t_int = 0
         t_conv = 0
         
-        i = 1        
-        while r.successful() and i < N:
-            _t = time()
-            r.integrate(t[i])
-            t_int += (time()-_t)
+        i = 1
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            try:
+                while r.successful() and i < N:
+                    _t = time()
+                    r.integrate(t[i])
+                    t_int += (time()-_t)
+                    
+                    _t = time()
+                    if integrator == 'zvode':
+                        # complex integration -> yields complex values
+                        x[i] = x_to_res(r.t, r.y)
+                    else:
+                        # real integration -> mapping from R^2 to C needed
+                        x[i] = x_to_res(r.t, real_to_complex(r.y))
+                    t_conv += (time()-_t)            
+                    
+                    if abs(t[i]-r.t) > 1e-13:
+                        msg = "INTEGRATION WARNING: time mismatch (diff at step {}: {:.3e})".format(i, abs(t[i]-r.t))
+                        log.warning(msg)
+                        raise Warning(msg)
+                    t[i] = r.t
+                    c.value = i
+                    i += 1
             
-            _t = time()
-            if integrator == 'zvode':
-                # complex integration -> yields complex values
-                x[i] = x_to_res(r.t, r.y)
-            else:
-                # real integration -> mapping from R^2 to C needed
-                x[i] = x_to_res(r.t, real_to_complex(r.y))
-            t_conv += (time()-_t)            
-                
-            t[i] = r.t
-            c.value = i
-            i += 1
-    
-        if not r.successful():
-            log.warning("INTEGRATION WARNING, NOT successful!")
+                if not r.successful():
+                    msg = "INTEGRATION WARNING: NOT successful!"
+                    log.warning(msg)
+                    raise Warning(msg)
+            except Exception as e:
+                trb = traceback.format_exc()
+                return t[:i], x[:i], (e, trb)  
             
     # having to compute multiple result types
     else:
@@ -153,34 +164,46 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         t_conv = 0
         
         i = 1        
-        while r.successful() and i < N:
-            _t = time()
-            r.integrate(t[i])
-            t_int += (time()-_t)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            try:
+                while r.successful() and i < N:
+                    _t = time()
+                    r.integrate(t[i])
+                    t_int += (time()-_t)
+                    
+                    _t = time()
+                    if integrator == 'zvode':
+                        # complex integration -> yields complex values
+                        for a in range(res_list_len):
+                            x[a][i] = x_to_res[a](r.t, r.y)
+                    else:
+                        # real integration -> mapping from R^2 to C needed
+                        for a in range(res_list_len):
+                            x[a][i] = x_to_res[a](r.t, real_to_complex(r.y))
+                    t_conv += (time()-_t)
+                    if abs(t[i]-r.t) > 1e-13:
+                        msg = "INTEGRATION WARNING: time mismatch (diff at step {}: {:.3e})".format(i, abs(t[i]-r.t))
+                        log.warning(msg)
+                        raise Warning(msg)
+                    t[i] = r.t
+                    c.value = i
+                    i += 1
             
-            _t = time()
-            if integrator == 'zvode':
-                # complex integration -> yields complex values
-                for a in range(res_list_len):
-                    x[a][i] = x_to_res[a](r.t, r.y)
-            else:
-                # real integration -> mapping from R^2 to C needed
-                for a in range(res_list_len):
-                    x[a][i] = x_to_res[a](r.t, real_to_complex(r.y))
-            t_conv += (time()-_t)
-            log.debug("step {}: integration:{:.2%} conversion:{:.2%}".format(i, t_int / (t_int + t_conv), t_conv / (t_int + t_conv)))            
-                
-            t[i] = r.t
-            c.value = i
-            i += 1
-    
-        if not r.successful():
-            log.warning("INTEGRATION WARNING, NOT successful!")        
+                if not r.successful():
+                    msg = "INTEGRATION WARNING: NOT successful!"
+                    log.warning(msg)
+                    raise Warning(msg)
+            except Exception as e:
+                trb = traceback.format_exc()
+                return t[:i], x[:i], (e, trb)  
+                        
     
     log.info("integration summary\n"+
              "integration     time {:.2g}s ({:.2%})\n".format(t_int, t_int / (t_int + t_conv))+
+             "    f_dot eval       {:.2g}s ({:.2%})\n".format(time_as_list[0], time_as_list[0] / (t_int + t_conv))+
              "data conversion time {:.2g}s ({:.2%})\n".format(t_conv, t_conv / (t_int + t_conv)))
-    return t, x
+    return t, x, None
         
 def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=None, x_to_res=None, **kwargs):
     f_partial = lambda t, x: f(t, x, *args)
@@ -219,26 +242,36 @@ def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
     t_int = 0
     t_conv = 0
     
-    i = 1        
-    while r.successful() and i < N:
-        _t = time()
-        r.integrate(t[i])
-        t_int += (time()-_t)
+    i = 1
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        try:        
+            while r.successful() and i < N:
+                _t = time()
+                r.integrate(t[i])
+                t_int += (time()-_t)
+                
+                _t = time()
+                x[i] = x_to_res(r.t, r.y)
+                t_conv += (time()-_t)
+                if abs(t[i]-r.t) > 1e-13:
+                    msg = "INTEGRATION WARNING: time mismatch (diff at step {}: {:.3e})".format(i, abs(t[i]-r.t))
+                    log.warning(msg)
+                    raise Warning(msg)
+                t[i] = r.t
+                c.value = i
+                i += 1
         
-        _t = time()
-        x[i] = x_to_res(r.t, r.y)
-        t_conv += (time()-_t)
-        log.debug("step {}: integration:{:.2%} conversion:{:.2%}".format(i, t_int / (t_int + t_conv), t_conv / (t_int + t_conv)))
-        
-        t[i] = r.t
-        c.value = i
-        i += 1
-
-    if not r.successful():
-        log.warning("INTEGRATION WARNING, NOT successful!")
+            if not r.successful():
+                msg = "INTEGRATION WARNING: NOT successful!"
+                log.warning(msg)
+                raise Warning(msg)
+        except Exception as e:
+            trb = traceback.format_exc()
+            return t[:i], x[:i], (e, trb)  
 
     log.info("integration summary\n"+
              "integration     time {:.2g}s ({:.2%})\n".format(t_int, t_int / (t_int + t_conv))+
              "data conversion time {:.2g}s ({:.2%})\n".format(t_conv, t_conv / (t_int + t_conv)))    
         
-    return t, x
+    return t, x, None
