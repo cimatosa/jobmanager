@@ -443,7 +443,11 @@ class JobManager_Client(object):
 
                 # try to get an item from the job_q
                 tg_0 = time.time()                
-                try:                 
+                try:
+                    log.debug("wait until local result q is almost empty")
+                    while local_result_q.qsize() > 1:
+                        time.sleep(1)
+                    log.debug("done waiting, call job_q_get")
                     with q_lock:   
                         arg = job_q_get()
                         log.debug("process {}".format(arg))

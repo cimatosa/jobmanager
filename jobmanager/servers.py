@@ -17,6 +17,7 @@ class PersistentData_Server(JobManager_Server):
                  fname_dump=None,
                  speed_calc_cycles=50,
                  overwrite=False,
+                 return_args=True,
                  **kwargs):
          
         JobManager_Server.__init__(self, authkey, const_arg=const_arg, port=port, verbose=verbose, 
@@ -24,6 +25,7 @@ class PersistentData_Server(JobManager_Server):
                                    speed_calc_cycles=speed_calc_cycles, **kwargs)
         self.pds = persistent_data_structure
         self.overwrite = overwrite
+        self.return_args = return_args
         if self.overwrite:
             log.info("overwriting existing data is ENABLED")
         else:
@@ -38,6 +40,8 @@ class PersistentData_Server(JobManager_Server):
         """
         key = pickle.dumps(arg.id, protocol=2)
         has_key = key in self.pds
+        if not self.return_args:
+            arg = None
         self.pds[key] = (arg, result)
         return not has_key
         
@@ -52,7 +56,7 @@ class PersistentData_Server(JobManager_Server):
             log.debug("add arg (arg not found in db)")
             JobManager_Server.put_arg(self, a)
             return True
-        
+
         log.debug("skip arg (arg found in db)")
         return False
         
