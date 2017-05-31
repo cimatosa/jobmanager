@@ -178,7 +178,8 @@ class JobManager_Client(object):
                  ping_timeout            = 2,
                  ping_retry              = 3,
                  hide_progress           = False,
-                 use_special_SIG_INT_handler = True):
+                 use_special_SIG_INT_handler = True,
+                 timeout                 = None):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -284,6 +285,9 @@ class JobManager_Client(object):
         
         self.procs = []        
         self.manager_objects = None  # will be set via connect()
+
+        self.timeout = timeout
+        self.init_time = time.time()
         
     def connect(self):
         if self.manager_objects is None:
@@ -514,6 +518,8 @@ class JobManager_Client(object):
                         break
                     else:
                         log.debug('putting arg to local fail_q was successful')
+
+                    raise
                             
                 # processing the retrieved arguments succeeded
                 # - try to send the result back to the server                        
@@ -751,8 +757,15 @@ class JobManager_Client(object):
                                                  signals       = jm_client_special_interrupt_signals)
         
             for p in self.procs:
-
-                p.join()
+                while p.is_alive():
+                    if self.timeout and (self.timeout < time.time() - self.init_time):
+                        log.debug("TIMEOUT for Client reached, terminate worker process %s", p.pid)
+                        p.terminate()
+                        log.debug("wait for worker process %s to be joined ...", p.pid)
+                        p.join()
+                        log.debug("worker process %s was joined", p.pid)
+                        break
+                    p.join(10)
                 log.debug("worker process %s exitcode %s", p.pid, p.exitcode)
                 log.debug("worker process %s was joined", p.pid)
 
@@ -1068,7 +1081,6 @@ class ArgsContainer(object):
         else:
             os.makedirs(self._path)
         fname = os.path.abspath(os.path.join(self._path, 'args'))
-
         self.data = shelve.open(fname)
 
             
@@ -1197,7 +1209,7 @@ def _new_rand_file_name(path='.', pre='', end='', l=8):
         fname = pre + rand_str(l) + end
         full_name = os.path.join(path, fname)
         if not os.path.exists(full_name):
-            return fname
+            return full_name
             
         c += 1
         if c > 10:
@@ -1339,10 +1351,12 @@ class JobManager_Server(object):
             fname = _new_rand_file_name(path = self.job_q_on_disk_path, pre='.',end='_jobqdb')
         else:
             fname = None
-        
+
         self.job_q = ArgsContainer(fname)
         self.result_q = ClosableQueue()
         self.fail_q = ClosableQueue()
+
+        self.numjobs = progress.UnsignedIntValue(0)
         
 #        self.result_q = mp.Queue()
 #        self.fail_q = mp.Queue()
@@ -1423,10 +1437,7 @@ class JobManager_Server(object):
             # causes exception traceback to be printed
             return False
         
-    @property
-    def numjobs(self):
-        return self.job_q.qsize()
-             
+
     def shutdown(self):
         """"stop all spawned processes and clean up
         
@@ -1566,6 +1577,7 @@ class JobManager_Server(object):
         
         # the actual shared queue
         self.job_q.put(copy.copy(a))
+        self.numjobs.value += 1
         
         #with self._numjobs.get_lock():
         #    self._numjobs.value += 1
@@ -1638,10 +1650,10 @@ class JobManager_Server(object):
         info_line = progress.StringValue(num_of_bytes=100)
         
         numresults = progress.UnsignedIntValue(0)
-        numjobs = progress.UnsignedIntValue(self.job_q.put_items())
+        #numjobs = progress.UnsignedIntValue(self.job_q.put_items())
         
         with progress.ProgressBarFancy(count             = numresults,
-                                       max_count         = numjobs,
+                                       max_count         = self.numjobs,
                                        interval          = self.msg_interval,
                                        speed_calc_cycles = self.speed_calc_cycles,
                                        sigint            = 'ign',
@@ -1650,7 +1662,7 @@ class JobManager_Server(object):
             if not self.hide_progress:
                 stat.start()
 
-            while numresults.value < numjobs.value:
+            while numresults.value < self.numjobs.value:
                 failqsize = self.fail_q.qsize()
                 jobqsize = self.job_q.qsize()
                 markeditems = self.job_q.marked_items()
@@ -1660,7 +1672,7 @@ class JobManager_Server(object):
                                                                                 jobqsize,
                                                                                 markeditems,
                                                                                 failqsize,
-                                                                                numjobs.value - numresults.value - jobqsize).encode('utf-8')
+                                                                                self.numjobs.value - numresults.value - jobqsize).encode('utf-8')
                 log.info("infoline {}".format(info_line.value))
                 # allows for update of the info line
                 try:
@@ -1782,7 +1794,7 @@ class Signal_handler_for_Jobmanager_client(object):
             self.client_object.pbc.pause()
         
         try:
-            r = input_promt(progress.terminal.ESC_BOLD + progress.terminal.ESC_LIGHT_RED+"<q> - quit, <i> - server info: " + progress.terminal.ESC_NO_CHAR_ATTR)
+            r = input_promt(progress.terminal.ESC_BOLD + progress.terminal.ESC_LIGHT_RED+"<q> - quit, <i> - server info, <k> - kill: " + progress.terminal.ESC_NO_CHAR_ATTR)
         except Exception as e:
             log.error("Exception during input %s", type(e))
             log.info(traceback.format_exc())
@@ -1797,6 +1809,10 @@ class Signal_handler_for_Jobmanager_client(object):
             self.exit_handler._handler(sig, frame)
 #            log.info("call sys.exit -> raise SystemExit")
 #            sys.exit('exit due to user')
+        elif r == 'k':
+            for p in self.exit_handler.process_list:
+                print("send SIGKILL to", p)
+                os.kill(p, sig=signal.SIGKILL)
         else:
             print("input '{}' ignored".format(r))
         
