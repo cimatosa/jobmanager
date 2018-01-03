@@ -196,7 +196,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                     raise Warning(msg)
             except Exception as e:
                 trb = traceback.format_exc()
-                return t[:i], x[:i], (e, trb)  
+                return t[:i], [xa[:i] for xa in x], (e, trb)
                         
     
     log.info("integration summary\n"+
