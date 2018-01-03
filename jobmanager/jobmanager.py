@@ -1357,9 +1357,7 @@ class JobManager_Server(object):
         self.fail_q = ClosableQueue()
 
         self.numjobs = progress.UnsignedIntValue(0)
-        
-#        self.result_q = mp.Queue()
-#        self.fail_q = mp.Queue()
+
     
     @staticmethod
     def _check_bind(host, port):
