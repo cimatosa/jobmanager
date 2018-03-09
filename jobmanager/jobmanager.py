@@ -130,6 +130,15 @@ def get_user_num_process():
     out = subprocess.check_output('ps ut | wc -l', shell=True).decode().strip()
     return int(out)-2
 
+
+class ServerQueueManager(BaseManager):
+    pass
+
+ServerQueueManager.register('get_job_q')
+ServerQueueManager.register('get_result_q')
+ServerQueueManager.register('get_fail_q')
+ServerQueueManager.register('get_const_arg')
+
 class JobManager_Client(object):
     """
     Calls the functions self.func with arguments fetched from the job_q.
@@ -179,7 +188,9 @@ class JobManager_Client(object):
                  ping_retry              = 3,
                  hide_progress           = False,
                  use_special_SIG_INT_handler = True,
-                 timeout                 = None):
+                 timeout                 = None,
+                 loglevel                = logging.WARNING,
+                 ask_on_sigterm          = True):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -215,6 +226,7 @@ class JobManager_Client(object):
 
         global log
         log = logging.getLogger(__name__+'.'+self.__class__.__name__)
+        log.setLevel(loglevel)
 
         self._pid = os.getpid()
         self._sid = os.getsid(self._pid)
@@ -288,6 +300,7 @@ class JobManager_Client(object):
 
         self.timeout = timeout
         self.init_time = time.time()
+        self.ask_on_sigterm = ask_on_sigterm
         
     def connect(self):
         if self.manager_objects is None:
@@ -316,14 +329,7 @@ class JobManager_Client(object):
             const_arg will be deep copied from the manager and therefore live
             as non shared object in local memory
         """
-        class ServerQueueManager(BaseManager):
-            pass
-        
-        ServerQueueManager.register('get_job_q')
-        ServerQueueManager.register('get_result_q')
-        ServerQueueManager.register('get_fail_q')
-        ServerQueueManager.register('get_const_arg')
-    
+
         manager = ServerQueueManager(address=(self.server, self.port), authkey=self.authkey)
 
         try:
@@ -1792,7 +1798,10 @@ class Signal_handler_for_Jobmanager_client(object):
             self.client_object.pbc.pause()
         
         try:
-            r = input_promt(progress.terminal.ESC_BOLD + progress.terminal.ESC_LIGHT_RED+"<q> - quit, <i> - server info, <k> - kill: " + progress.terminal.ESC_NO_CHAR_ATTR)
+            if self.client_object.ask_on_sigterm:
+                r = input_promt(progress.terminal.ESC_BOLD + progress.terminal.ESC_LIGHT_RED+"<q> - quit, <i> - server info, <k> - kill: " + progress.terminal.ESC_NO_CHAR_ATTR)
+            else:
+                r = 'q'
         except Exception as e:
             log.error("Exception during input %s", type(e))
             log.info(traceback.format_exc())
