@@ -220,6 +220,8 @@ class JobManager_Client(object):
         no_warnings [bool] - call warnings.filterwarnings("ignore") -> all warnings are ignored
         
         verbose [int] - 0: quiet, 1: status only, 2: debug messages
+
+        timeout [int] - second until client stops automaticaly, if negative, do not start at all
         
         DO NOT SIGTERM CLIENT TOO ERLY, MAKE SURE THAT ALL SIGNAL HANDLERS ARE UP (see log at debug level)
         """
@@ -299,6 +301,9 @@ class JobManager_Client(object):
         self.manager_objects = None  # will be set via connect()
 
         self.timeout = timeout
+        if self.timeout < 0:
+            log.warning("negative timeout! client will not start")
+
         self.init_time = time.time()
         self.ask_on_sigterm = ask_on_sigterm
         
@@ -600,6 +605,9 @@ class JobManager_Client(object):
         
         retruns when all subprocesses have terminated
         """
+
+        if self.timeout < 0:
+            return
         
         self.connect()               # get shared objects from server
         if not self.connected:
