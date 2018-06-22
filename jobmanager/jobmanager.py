@@ -1372,6 +1372,8 @@ class JobManager_Server(object):
 
         self.numjobs = progress.UnsignedIntValue(0)
 
+        self.stat = None
+
     
     @staticmethod
     def _check_bind(host, port):
@@ -1670,9 +1672,9 @@ class JobManager_Server(object):
                                        speed_calc_cycles = self.speed_calc_cycles,
                                        sigint            = 'ign',
                                        sigterm           = 'ign',
-                                       info_line=info_line) as stat:
+                                       info_line=info_line) as self.stat:
             if not self.hide_progress:
-                stat.start()
+                self.stat.start()
 
             while numresults.value < self.numjobs.value:
                 failqsize = self.fail_q.qsize()
@@ -1697,6 +1699,8 @@ class JobManager_Server(object):
                 if not self.keep_new_result_in_memory:
                     del arg
                     del result
+
+        self.stat = None
 
         log.debug("wait %ss before trigger clean up", self.__wait_before_stop)
         time.sleep(self.__wait_before_stop)
