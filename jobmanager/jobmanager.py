@@ -301,7 +301,7 @@ class JobManager_Client(object):
         self.manager_objects = None  # will be set via connect()
 
         self.timeout = timeout
-        if self.timeout < 0:
+        if (self.timeout is not None) and (self.timeout < 0):
             log.warning("negative timeout! client will not start")
 
         self.init_time = time.time()
@@ -606,7 +606,7 @@ class JobManager_Client(object):
         retruns when all subprocesses have terminated
         """
 
-        if self.timeout < 0:
+        if (self.timeout is not None) and (self.timeout < 0):
             return
         
         self.connect()               # get shared objects from server
@@ -772,7 +772,7 @@ class JobManager_Client(object):
         
             for p in self.procs:
                 while p.is_alive():
-                    if self.timeout and (self.timeout < time.time() - self.init_time):
+                    if (self.timeout is not None) and (self.timeout < time.time() - self.init_time):
                         log.debug("TIMEOUT for Client reached, terminate worker process %s", p.pid)
                         p.terminate()
                         log.debug("wait for worker process %s to be joined ...", p.pid)
@@ -1685,7 +1685,7 @@ class JobManager_Server(object):
                 jobqsize = self.job_q.qsize()
                 markeditems = self.job_q.marked_items()
                 numresults.value = failqsize + markeditems
-                if self.timeout:
+                if (self.timeout is not None):
                     time_left = int(self.timeout - self.__wait_before_stop - (datetime.now() - self.start_time).total_seconds())
                     if time_left < 0:
                         if self.stat:
