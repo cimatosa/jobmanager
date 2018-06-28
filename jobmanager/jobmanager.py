@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """jobmanager module
 
-Richard Hartmann 2014
+Richard Hartmann 2014-2018
 
 
 This module provides an easy way to implement distributed computing
@@ -53,6 +53,7 @@ import logging
 import threading
 import ctypes
 from shutil import rmtree
+from .signalDelay import sig_delay
 
 log = logging.getLogger(__name__)
 
@@ -64,41 +65,14 @@ __all__ = ["JobManager_Client",
            "getDateForFileName"
           ]
 
-# Magic conversion from 3 to 2
-if sys.version_info[0] == 2:
-    # Python 2
-    import Queue as queue
-    class getfullargspec(object):
-        "A quick and dirty replacement for getfullargspec for Python 2"
-        def __init__(self, f):
-            self.args, self.varargs, self.varkw, self.defaults = \
-                inspect.getargspec(f)
-            self.annotations = getattr(f, '__annotations__', {})
-    inspect.getfullargspec = getfullargspec
-    
-    # IOError (socket.error) expection handling 
-    import errno
-    
-    class JMConnectionError(Exception):
-        pass
-    
-    class JMConnectionRefusedError(JMConnectionError):
-        pass
-    
-    class JMConnectionResetError(JMConnectionError):
-        pass
 
-    input_promt = raw_input
-    
-else:
-    # Python 3
-    import queue
-    
-    JMConnectionError = ConnectionError
-    JMConnectionRefusedError = ConnectionRefusedError
-    JMConnectionResetError = ConnectionResetError
+import queue
 
-    input_promt = input
+JMConnectionError = ConnectionError
+JMConnectionRefusedError = ConnectionRefusedError
+JMConnectionResetError = ConnectionResetError
+
+input_promt = input
     
 class JMHostNotReachableError(JMConnectionError):
     pass
@@ -405,9 +379,8 @@ class JobManager_Client(object):
         log = logging.getLogger(__name__+'.'+progress.get_identifier(name='worker{}'.format(i+1), bold=False))
         log.setLevel(loglevel)
         
-        q_lock = threading.Lock()
 
-        Signal_to_sys_exit(signals=[signal.SIGTERM], lock = q_lock)
+        Signal_to_sys_exit(signals=[signal.SIGTERM])
         Signal_to_SIG_IGN(signals=[signal.SIGINT])
 
         n = os.nice(0)
@@ -461,11 +434,13 @@ class JobManager_Client(object):
                 try:
                     log.debug("wait until local result q is almost empty")
                     while local_result_q.qsize() > 1:
-                        time.sleep(1)
+                         time.sleep(0.1)
                     log.debug("done waiting, call job_q_get")
-                    with q_lock:   
+
+                    with sig_delay([signal.SIGTERM]):
                         arg = job_q_get()
-                        log.debug("process {}".format(arg))
+                    log.debug("process {}".format(arg))
+
                 # regular case, just stop working when empty job_q was found
                 except queue.Empty:
                     log.info("finds empty job queue, processed %s jobs", cnt)
@@ -516,7 +491,7 @@ class JobManager_Client(object):
 
                     log.debug("put arg to local fail_q")
                     try:
-                        with q_lock:
+                        with sig_delay([signal.SIGTERM]):
                             local_fail_q.put((arg, err.__name__, hostname))
                     # handle SystemExit in outer try ... except                        
                     except SystemExit as e:
@@ -537,7 +512,7 @@ class JobManager_Client(object):
                 else:
                     try:
                         tp_0 = time.time()
-                        with q_lock:
+                        with sig_delay([signal.SIGTERM]):
                             local_result_q.put((arg, res))
                         tp_1 = time.time()
                         time_queue += (tp_1-tp_0)
@@ -569,7 +544,7 @@ class JobManager_Client(object):
                 log.warning("SystemExit, quit processing, reinsert current argument, please wait")
                 log.debug("put arg back to local job_q")
                 try:
-                    with q_lock:
+                    with sig_delay([signal.SIGTERM]):
                         local_job_q.put(arg)
                 # handle SystemExit in outer try ... except                        
                 except SystemExit as e:
@@ -633,8 +608,13 @@ class JobManager_Client(object):
             m_progress = None
                       
         prepend = []
-        infoline = progress.StringValue(num_of_bytes=12)
-        infoline = None
+
+        if self.timeout is None:
+            infoline = None
+        else:
+            infoline = progress.StringValue(num_of_bytes=32)
+            infoline.value = "timeout in: {}s".format(int(self.timeout - (time.time() - self.init_time))).encode('utf-8')
+
 
         # try:
         #     worker_stdout_queue = mp.Queue(-1)
@@ -772,13 +752,16 @@ class JobManager_Client(object):
         
             for p in self.procs:
                 while p.is_alive():
-                    if (self.timeout is not None) and (self.timeout < time.time() - self.init_time):
-                        log.debug("TIMEOUT for Client reached, terminate worker process %s", p.pid)
-                        p.terminate()
-                        log.debug("wait for worker process %s to be joined ...", p.pid)
-                        p.join()
-                        log.debug("worker process %s was joined", p.pid)
-                        break
+                    if self.timeout is not None:
+                        elps_time = int(time.time() - self.init_time)
+                        if self.timeout < elps_time:
+                            log.debug("TIMEOUT for Client reached, terminate worker process %s", p.pid)
+                            p.terminate()
+                            log.debug("wait for worker process %s to be joined ...", p.pid)
+                            p.join()
+                            log.debug("worker process %s was joined", p.pid)
+                            break
+                        infoline.value = "timeout in: {}s".format(int(self.timeout - elps_time)).encode('utf-8')
                     p.join(10)
                 log.debug("worker process %s exitcode %s", p.pid, p.exitcode)
                 log.debug("worker process %s was joined", p.pid)
@@ -859,14 +842,18 @@ class ContainerClosedError(Exception):
     pass
 
 class ClosableQueue_Data(object):
-    def __init__(self):
+    def __init__(self, name=None):
         self.q = myQueue()
         self.is_closed = False
         self.lock = threading.Lock()
+        if name:
+            self.log_prefix = 'ClosableQueue:{} - '.format(name)
+        else:
+            self.log_prefix = ''
         
     def new_conn(self):
         conn1, conn2 = mp.Pipe()
-        log.debug("create new pair of connections, {}".format(conn2))
+        log.debug("{}create new pair of connections, {}".format(self.log_prefix, conn2))
         thr_listener = threading.Thread(target=self._listener, args=(conn1, ))
         thr_listener.daemon = True
         thr_listener.start()
@@ -877,7 +864,7 @@ class ClosableQueue_Data(object):
         try:
             res = f(*args)
         except Exception as e:
-            log.debug("exec_cmd '{}' raises exception '{}'".format(f.__name__, type(e)))
+            log.debug("exec_cmd '{}' sends exception '{}'".format(f.__name__, type(e)))
             conn.send( ('#exc', e) )
         else:
             log.debug("exec_cmd succesfull")
@@ -887,7 +874,7 @@ class ClosableQueue_Data(object):
         while True:
             try:                
                 cmd = conn.recv()
-                log.debug("listener got cmd '{}'".format(cmd))
+                log.debug("{}listener got cmd '{}'".format(self.log_prefix, cmd))
                 args = conn.recv()
                 if cmd == '#put':
                     self._exec_cmd(self.put, conn, args)
@@ -900,7 +887,7 @@ class ClosableQueue_Data(object):
                 else:
                     raise ValueError("unknown command '{}'".format(cmd))
             except EOFError:
-                log.debug("listener got EOFError, stop thread")
+                log.debug("{}listener got EOFError, stop thread".format(self.log_prefix))
                 break 
         
     def put(self, item, block=True, timeout=None):
@@ -920,13 +907,14 @@ class ClosableQueue_Data(object):
     def close(self):
         with self.lock:
             self.is_closed = True
-            log.debug("queue closed")
+            log.debug("{}queue closed".format(self.log_prefix))
         
 class ClosableQueue(object):
-    def __init__(self):
-        self.data = ClosableQueue_Data()
+    def __init__(self, name=None):
+        self.data = ClosableQueue_Data(name)
         self.conn = self.data.new_conn()
         self.lock = threading.Lock()
+        self.name = name
                         
     def client(self):
         cls = ClosableQueue.__new__(ClosableQueue)
@@ -1368,10 +1356,8 @@ class JobManager_Server(object):
             fname = None
 
         self.job_q = ArgsContainer(fname)
-        self.result_q = ClosableQueue()
-        self.fail_q = ClosableQueue()
-
-        self.numjobs = progress.UnsignedIntValue(0)
+        self.result_q = ClosableQueue(name='result_q')
+        self.fail_q = ClosableQueue(name='fail_q')
 
         self.stat = None
 
@@ -1546,11 +1532,23 @@ class JobManager_Server(object):
         for fail_item in data['fail_list']:
             self.fail_q.put(fail_item)
 
+        log.debug("load: len(final_result): {}".format(len(self.final_result)))
+        log.debug("load: job_q.qsize: {}".format(self.job_q.qsize()))
+        log.debug("load: job_q.marked_items: {}".format(self.job_q.marked_items()))
+        log.debug("load: job_q.gotten_items: {}".format(self.job_q.gotten_items()))
+        log.debug("load: job_q.unmarked_items: {}".format(self.job_q.unmarked_items()))
+        log.debug("load: len(fail_q): {}".format(self.fail_q.qsize()))
 
-        
+
     def __dump(self, f):
         pickle.dump(self.final_result, f, protocol=pickle.HIGHEST_PROTOCOL)
+        log.debug("dump: len(final_result): {}".format(len(self.final_result)))
         pickle.dump(self.job_q, f, protocol=pickle.HIGHEST_PROTOCOL)
+        log.debug("dump: job_q.qsize: {}".format(self.job_q.qsize()))
+        log.debug("dump: job_q.marked_items: {}".format(self.job_q.marked_items()))
+        log.debug("dump: job_q.gotten_items: {}".format(self.job_q.gotten_items()))
+        log.debug("dump: job_q.unmarked_items: {}".format(self.job_q.unmarked_items()))
+
         fail_list = []
         try:
             while True:
@@ -1558,6 +1556,7 @@ class JobManager_Server(object):
         except queue.Empty:
             pass
         pickle.dump(fail_list, f, protocol=pickle.HIGHEST_PROTOCOL)
+        log.debug("dump: len(fail_q): {}".format(len(fail_list)))
 
         
     def read_old_state(self, fname_dump=None):
@@ -1595,8 +1594,7 @@ class JobManager_Server(object):
         
         # the actual shared queue
         self.job_q.put(copy.copy(a))
-        self.numjobs.value += 1
-        
+
         #with self._numjobs.get_lock():
         #    self._numjobs.value += 1
         
@@ -1630,17 +1628,7 @@ class JobManager_Server(object):
             log.critical("do not run JobManager_Server.start() in a subprocess")
             raise RuntimeError("do not run JobManager_Server.start() in a subprocess")
 
-#         if (self.numjobs - self.numresults) != len(self.args_dict):
-#             log.debug("numjobs:             %s\n" +
-#                       "numresults:          %s\n" +
-#                       "len(self.args_dict): %s", self.numjobs, self.numresults, len(self.args_dict))
-# 
-#             log.critical(
-#                 "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
-#             raise RuntimeError(
-#                 "inconsistency detected! (self.numjobs - self.numresults) != len(self.args_dict)! use JobManager_Server.put_arg to put arguments to the job_q")
-
-        jobqsize = self.job_q.qsize() 
+        jobqsize = self.job_q.qsize()
         if jobqsize == 0:
             log.info("no jobs to process! use JobManager_Server.put_arg to put arguments to the job_q")
             return
@@ -1667,11 +1655,15 @@ class JobManager_Server(object):
         
         info_line = progress.StringValue(num_of_bytes=100)
         
-        numresults = progress.UnsignedIntValue(0)
-        #numjobs = progress.UnsignedIntValue(self.job_q.put_items())
-        
+        numresults = progress.UnsignedIntValue(self.job_q.marked_items() + self.fail_q.qsize())
+        numjobs    = progress.UnsignedIntValue(self.job_q.put_items())
+
+        log.debug("at start: number of jobs: {}".format(numjobs.value))
+        log.debug("at start: number of results: {}".format(numresults.value))
+
+
         with progress.ProgressBarFancy(count             = numresults,
-                                       max_count         = self.numjobs,
+                                       max_count         = numjobs,
                                        interval          = self.msg_interval,
                                        speed_calc_cycles = self.speed_calc_cycles,
                                        sigint            = 'ign',
@@ -1680,7 +1672,8 @@ class JobManager_Server(object):
             if not self.hide_progress:
                 self.stat.start()
 
-            while numresults.value < self.numjobs.value:
+            while numresults.value < numjobs.value:
+                numjobs.value = self.job_q.put_items()
                 failqsize = self.fail_q.qsize()
                 jobqsize = self.job_q.qsize()
                 markeditems = self.job_q.marked_items()
@@ -1692,13 +1685,13 @@ class JobManager_Server(object):
                             self.stat.stop()
                         log.warning("timeout ({}s) exceeded -> quit server".format(self.timeout))
                         break
-                    info_line.value = ("result_q size:{}, jobs: remaining:{}, "+
-                                       "done:{}, failed:{}, in progress:{}, "+
+                    info_line.value = ("res_q size:{}, jobs: rem.:{}, "+
+                                       "done:{}, failed:{}, prog.:{}, "+
                                        "timeout in:{}s").format(self.result_q.qsize(),
                                                                 jobqsize,
                                                                 markeditems,
                                                                 failqsize,
-                                                                self.numjobs.value - numresults.value - jobqsize,
+                                                                numjobs.value - numresults.value - jobqsize,
                                                                 time_left).encode('utf-8')
                 else:
                     info_line.value = ("result_q size:{}, jobs: remaining:{}, "+
@@ -1706,7 +1699,7 @@ class JobManager_Server(object):
                                                                                     jobqsize,
                                                                                     markeditems,
                                                                                     failqsize,
-                                                                                    self.numjobs.value - numresults.value - jobqsize).encode('utf-8')
+                                                                                    numjobs.value - numresults.value - jobqsize).encode('utf-8')
                 log.info("infoline {}".format(info_line.value))
                 # allows for update of the info line
                 try:
@@ -1875,9 +1868,7 @@ class Signal_to_SIG_IGN(object):
 
 
 class Signal_to_sys_exit(object):
-    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM], lock=threading.Lock()):
-        self.lock = lock
-        self.c = 0
+    def __init__(self, signals=[signal.SIGINT, signal.SIGTERM]):
         for s in signals:
             signal.signal(s, self._handler)
     
@@ -1886,16 +1877,8 @@ class Signal_to_sys_exit(object):
         sys.exit('exit due to signal {}'.format(progress.signal_dict[signal]))        
     
     def _handler(self, signal, frame):
-        if self.c == 1:
-            log.warning("PID %s: received signal %s more than once, ignore lock", os.getpid(), progress.signal_dict[signal])
-            self._exit(signal)
-        self.c += 1
-        while not self.lock.acquire(timeout = 10):
-            log.warning("sys exit is stalled while aquiring lock")
-        try:
-            self._exit(signal)
-        finally:
-            self.lock.release()
+        self._exit(signal)
+
         
  
 class Signal_to_terminate_process_list(object):
@@ -2109,6 +2092,7 @@ def emergency_dump(arg, res, emergency_dump_path, host, port, authkey):
         pickle.dump(res, f)
 
 def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5):
+    output = ''
     for i in range(retry):
         try:
             cmd = 'ping -c 1 -W {} {}    '.format(int(timeout), adr)
@@ -2117,6 +2101,7 @@ def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5):
         except subprocess.CalledProcessError as e:
             # on exception, resume with loop
             log.warning("CalledProcessError on ping with message: %s", e)
+            output = e.output
             continue
         else:
             # no exception, ping was successful, return without error
@@ -2125,7 +2110,7 @@ def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5):
         
     # no early return happend, ping was never successful, raise error
     log.error("ping failed after %s retries", retry)
-    raise JMHostNotReachableError("could not reach host '{}'\nping error reads: {}".format(adr, e.output))
+    raise JMHostNotReachableError("could not reach host '{}'\nping error reads: {}".format(adr, output))
         
 
 def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconnect_tries=3, ping_timeout=2, ping_retry=5):

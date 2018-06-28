@@ -1,13 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import division, print_function
-
 import os
 import sys
 import time
 import multiprocessing as mp
-from multiprocessing import util
-# util.log_to_stderr()
 from multiprocessing.managers import BaseManager
 import socket
 import signal
@@ -16,18 +12,15 @@ import datetime
 import threading
 from numpy import random
 import pytest
+import shutil
 
-from os.path import abspath, dirname, split
+import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-# Add parent directory to beginning of path variable
-sys.path = [split(dirname(abspath(__file__)))[0]] + sys.path
 import binfootprint
 import progression as progress
 
-if sys.version_info[0] == 2:
-    TIMEOUT = 300
-elif sys.version_info[0] == 3:
-    TIMEOUT = 15
+TIMEOUT = 15
 
 import warnings
 warnings.filterwarnings('ignore', module='traitlets', append=False, category=DeprecationWarning)
@@ -35,7 +28,10 @@ warnings.filterwarnings('error', append=True)
 
 import jobmanager
 
-logging.getLogger('jobmanager').setLevel(logging.WARNING)
+logging.getLogger('jobmanager').setLevel(logging.INFO)
+# logging.getLogger('jobmanager').setLevel(logging.INFO)
+# logging.getLogger('jobmanager.jobmanager.JobManager_Server').setLevel(logging.INFO)
+logging.getLogger('jobmanager.signalDelay').setLevel(logging.INFO)
 logging.getLogger('progression').setLevel(logging.ERROR)
 logging.basicConfig(level = logging.INFO)
 
@@ -559,9 +555,16 @@ def test_jobmanager_read_old_stat():
      
     p_client.join(10)
     p_server.join(10)
- 
-    assert not p_client.is_alive(), "the client did not terminate on time!"
+
+
     assert not p_server.is_alive(), "the server did not terminate on time!"
+
+    try:
+        assert not p_client.is_alive(), "the client did not terminate on time!"
+    except AssertionError:
+        p_client.terminate()
+        raise
+
     assert p_client.exitcode == 0
     assert p_server.exitcode == 0
     print("[+] client and server terminated")
@@ -572,9 +575,10 @@ def test_jobmanager_read_old_stat():
     p_server = mp.Process(target=start_server, args=(n,True))
     p_server.start()
     
-    time.sleep(1)
+    time.sleep(2)
      
     p_client = mp.Process(target=start_client)
+    print("trigger start client")
     p_client.start()
 
     p_client.join(30)
@@ -637,16 +641,25 @@ def test_client_status():
 def test_jobmanager_local():
     global PORT
     PORT += 1
-    args = range(1,200)
+    args = range(1,201)
+    client_sleep = 0.1
+    num_client = 4
+    t0 = time.time()
     with jobmanager.JobManager_Local(client_class = jobmanager.JobManager_Client,
                                      authkey      = AUTHKEY,
                                      port         = PORT,
-                                     const_arg    = 0.1,
-                                     nproc        = 4) as jm_server:
+                                     const_arg    = client_sleep,
+                                     nproc        = num_client) as jm_server:
         jm_server.args_from_list(args)
         jm_server.start()
     
     assert jm_server.all_successfully_processed()
+    t1 = time.time()
+    print("local JM, nproc {}".format(num_client))
+    print("used time : {:.3}s".format(t1-t0))
+    print("ideal time: {}s".format(len(args)*client_sleep/num_client))
+
+
         
 def test_start_server_on_used_port():
     global PORT
@@ -780,13 +793,36 @@ def test_ArgsContainer():
     from shutil import rmtree
     import shelve
 
+    fname = "test.shelve"
+
+    try:
+        os.remove(fname)
+    except FileNotFoundError:
+        pass
+
+    try:
+        os.remove(fname+'.db')
+    except FileNotFoundError:
+        pass
 
     # simple test on shelve, close is needed to write data to disk
-    s = shelve.open("test")
+    s = shelve.open(fname)
     s['a'] = 1
     s.close()
-    s2 = shelve.open("test")
+    s2 = shelve.open(fname)
     assert s2['a'] == 1
+
+    try:
+        os.remove(fname)
+    except FileNotFoundError:
+        pass
+
+    try:
+        os.remove(fname+'.db')
+    except FileNotFoundError:
+        pass
+
+
 
 
     path = 'argscont'
@@ -978,6 +1014,9 @@ def test_ArgsContainer_BaseManager():
 
         assert ac_inst.qsize() == 200
 
+        ac_inst.clear()
+
+
 
 def test_ArgsContainer_BaseManager_in_subprocess():
     from jobmanager.jobmanager import ArgsContainer
@@ -1075,6 +1114,8 @@ def test_ArgsContainer_BaseManager_in_subprocess():
             print("caught ContainerClosedError")
         else:
             assert False
+
+        ac_inst.clear()
             
 def test_havy_load_on_ArgsContainer():
     from jobmanager.jobmanager import ArgsContainer
@@ -1129,6 +1170,7 @@ def test_havy_load_on_ArgsContainer():
         time.sleep(1)
         
         print(ac_inst.qsize())
+        ac_inst.clear()
             
 
 def test_ClosableQueue():
@@ -1264,36 +1306,36 @@ def test_ClosableQueue_with_manager():
     
     
 if __name__ == "__main__":
-    logging.getLogger('jobmanager').setLevel(logging.DEBUG)  
+    logging.getLogger('jobmanager').setLevel(logging.INFO)
     if len(sys.argv) > 1:
         pass
     else:    
         func = [
-            test_ArgsContainer,
-            test_ArgsContainer_BaseManager,
-            test_ArgsContainer_BaseManager_in_subprocess,
-            test_havy_load_on_ArgsContainer,
-#             test_ClosableQueue,
-#             test_ClosableQueue_with_manager,
-#             test_hum_size,
-#             test_Signal_to_SIG_IGN,
-#             test_Signal_to_sys_exit,
-#             test_Signal_to_terminate_process_list,
-#             test_jobmanager_static_client_call,
-#             test_start_server_with_no_args,
-#             test_start_server,
-#             test_client,
-#             test_jobmanager_basic,
-#             test_jobmanager_server_signals,
-#             test_shutdown_server_while_client_running,
-#             test_shutdown_client,
-#             test_jobmanager_read_old_stat,
-#             test_client_status,
-#             test_jobmanager_local,
-#             test_start_server_on_used_port,
-#             test_shared_const_arg,
-#             test_digest_rejected,
-#             test_hum_size,
+            # test_ArgsContainer,
+            # test_ArgsContainer_BaseManager,
+            # test_ArgsContainer_BaseManager_in_subprocess,
+            # test_havy_load_on_ArgsContainer,
+            # test_ClosableQueue,
+            # test_ClosableQueue_with_manager,
+            # test_hum_size,
+            # test_Signal_to_SIG_IGN,
+            # test_Signal_to_sys_exit,
+            # test_Signal_to_terminate_process_list,
+            # test_jobmanager_static_client_call,
+            # test_start_server_with_no_args,
+            # test_start_server,
+            # test_client,
+            # test_jobmanager_basic,
+            # test_jobmanager_server_signals,
+            # test_shutdown_server_while_client_running,
+            # test_shutdown_client,
+            # test_jobmanager_read_old_stat,
+            # test_client_status,
+            test_jobmanager_local,
+            # test_start_server_on_used_port,
+            # test_shared_const_arg,
+            # test_digest_rejected,
+            # test_hum_size,
 
         lambda : print("END")
         ]
@@ -1304,3 +1346,9 @@ if __name__ == "__main__":
             print()
             f()
             #time.sleep(1)
+
+    for f in os.listdir('./'):
+        if f.endswith('.dump'):
+            os.remove('./{}'.format(f))
+        elif f.endswith('_jobqdb'):
+            shutil.rmtree('./{}'.format(f))

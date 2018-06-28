@@ -75,10 +75,7 @@ if __name__ == "__main__":
                   "progress", "manager", "job", "persistent data", "scheduler"],
         classifiers= [
             'Operating System :: OS Independent',
-            #'Programming Language :: Python :: 2.7', #Todo
-            #'Programming Language :: Python :: 3.2', # also not very well tested
-            #'Programming Language :: Python :: 3.3', # also not very well tested
-            'Programming Language :: Python :: 3.4',
+            'Programming Language :: Python :: 3.6',
             'Intended Audience :: Science/Research'
                      ],
         platforms=['ALL'],
