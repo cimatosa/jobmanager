@@ -255,12 +255,16 @@ class JobManager_Client(object):
         log.debug("port:%s", self.port)
         self.nice = nice
         log.debug("nice:%s", self.nice)
-        if nproc > 0:
-            self.nproc = nproc
-        else:
-            self.nproc = mp.cpu_count() + nproc
+        if nproc >= 1:
+            self.nproc = int(nproc)
+        elif nproc <= 0:
+            self.nproc = int(mp.cpu_count() + nproc)
             if self.nproc <= 0:
                 raise RuntimeError("Invalid Number of Processes\ncan not spawn {} processes (cores found: {}, cores NOT to use: {} = -nproc)".format(self.nproc, mp.cpu_count(), abs(nproc)))
+        else:
+            self.nproc = int(nproc*mp.cpu_count())
+            if self.nproc == 0:
+                self.nproc = 1
         log.debug("nproc:%s", self.nproc)
         if njobs == 0:        # internally, njobs must be negative for infinite jobs
             njobs -= 1
@@ -1280,7 +1284,8 @@ class JobManager_Server(object):
                  show_statistics           = True,
                  job_q_on_disk             = False,
                  job_q_on_disk_path        = '.',
-                 timeout                   = None):
+                 timeout                   = None,
+                 log_level                 = logging.WARNING):
         """
         authkey [string] - authentication key used by the SyncManager. 
         Server and Client must have the same authkey.
@@ -1311,6 +1316,7 @@ class JobManager_Server(object):
         """
         global log
         log = logging.getLogger(__name__+'.'+self.__class__.__name__)
+        log.setLevel(log_level)
 
         self._pid = os.getpid()
         self._pid_start = None
