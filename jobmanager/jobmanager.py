@@ -163,7 +163,7 @@ class JobManager_Client(object):
                  hide_progress           = False,
                  use_special_SIG_INT_handler = True,
                  timeout                 = None,
-                 loglevel                = logging.WARNING,
+                 log_level                = logging.WARNING,
                  ask_on_sigterm          = True):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
@@ -202,7 +202,8 @@ class JobManager_Client(object):
 
         global log
         log = logging.getLogger(__name__+'.'+self.__class__.__name__)
-        log.setLevel(loglevel)
+        log.setLevel(log_level)
+        print("this client has logger:", log)
 
         self._pid = os.getpid()
         self._sid = os.getsid(self._pid)
@@ -380,7 +381,7 @@ class JobManager_Client(object):
         the wrapper spawned nproc times calling and handling self.func
         """
         global log
-        log = logging.getLogger(__name__+'.'+progress.get_identifier(name='worker{}'.format(i+1), bold=False))
+        log = logging.getLogger(__name__+'.worker{}'.format(i+1))
         log.setLevel(loglevel)
         
 
@@ -518,6 +519,7 @@ class JobManager_Client(object):
                         tp_0 = time.time()
                         with sig_delay([signal.SIGTERM]):
                             local_result_q.put((arg, res))
+                        log.warning('put result to local result_q, done!')
                         tp_1 = time.time()
                         time_queue += (tp_1-tp_0)
                         
@@ -593,6 +595,7 @@ class JobManager_Client(object):
             raise JMConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
         
         log.info("STARTING CLIENT\nserver:%s authkey:%s port:%s num proc:%s", self.server, self.authkey.decode(), self.port, self.nproc)
+        print("on start client, log.level", log.level)
             
         c = []
         for i in range(self.nproc):
@@ -650,42 +653,50 @@ class JobManager_Client(object):
         job_q_put = proxy_operation_decorator(proxy=job_q, operation='put', **kwargs)
         result_q_put = proxy_operation_decorator(proxy=result_q, operation='put', **kwargs)
         fail_q_put = proxy_operation_decorator(proxy=fail_q, operation='put', **kwargs)
+
+        result_q_put_pending_lock = threading.Lock()
+        job_q_put_pending_lock = threading.Lock()
+        fail_q_put_pending_lock = threading.Lock()
         
-        def pass_job_q_put(job_q_put, local_job_q):
+        def pass_job_q_put(job_q_put, local_job_q, job_q_put_pending_lock):
 #             log.debug("this is thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
             while True:
                 data = local_job_q.get()
                 log.debug('reinsert {}'.format(data))
-                job_q_put(data)
+                with job_q_put_pending_lock:
+                    job_q_put(data)
                 
 #             log.debug("stopped thread thr_job_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
 
  
-        def pass_result_q_put(result_q_put, local_result_q):
+        def pass_result_q_put(result_q_put, local_result_q, result_q_put_pending_lock):
             log.debug("this is thread thr_result_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
             try:
                 while True:
                     data = local_result_q.get()
-                    log.debug("result_q client forward {}".format(data))
-                    result_q.put(data)                    
+                    log.debug("result_q client forward...\n{}".format(data))
+                    with result_q_put_pending_lock:
+                        result_q_put(data)
+                    log.debug("result_q client forward, done!".format(data))
             except Exception as e:
                 log.error("thr_result_q_put caught error %s", type(e))
                 log.info(traceback.format_exc())
             log.debug("stopped thread thr_result_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
  
-        def pass_fail_q_put(fail_q_put, local_fail_q):
+        def pass_fail_q_put(fail_q_put, local_fail_q, fail_q_put_pending_lock):
 #             log.debug("this is thread thr_fail_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
             while True:
                 data = local_fail_q.get()
                 log.info("put {} to failq".format(data))
-                fail_q_put(data)  
+                with fail_q_put_pending_lock:
+                    fail_q_put(data)
 #             log.debug("stopped thread thr_fail_q_put with tid %s", ctypes.CDLL('libc.so.6').syscall(186))
 
-        thr_job_q_put           = threading.Thread(target=pass_job_q_put   , args=(job_q_put   , local_job_q))
+        thr_job_q_put           = threading.Thread(target=pass_job_q_put   , args=(job_q_put   , local_job_q, job_q_put_pending_lock))
         thr_job_q_put.daemon    = True
-        thr_result_q_put        = threading.Thread(target=pass_result_q_put, args=(result_q_put, local_result_q))
+        thr_result_q_put        = threading.Thread(target=pass_result_q_put, args=(result_q_put, local_result_q, result_q_put_pending_lock))
         thr_result_q_put.daemon = True
-        thr_fail_q_put          = threading.Thread(target=pass_fail_q_put  , args=(fail_q_put  , local_fail_q))
+        thr_fail_q_put          = threading.Thread(target=pass_fail_q_put  , args=(fail_q_put  , local_fail_q, fail_q_put_pending_lock))
         thr_fail_q_put.daemon   = True
 
         thr_job_q_put.start()       
@@ -775,7 +786,7 @@ class JobManager_Client(object):
 
         log.debug("progressBar context has been left")
         
-        while (not local_job_q.empty()):
+        while (not local_job_q.empty()) or job_q_put_pending_lock.locked():
             log.info("still data in local_job_q (%s)", local_job_q.qsize())
             if thr_job_q_put.is_alive():
                 log.debug("allow the thread thr_job_q_put to process items")
@@ -785,7 +796,7 @@ class JobManager_Client(object):
                 break
         log.info("local_job_q now empty")
 
-        while (not local_result_q.empty()):
+        while (not local_result_q.empty()) or result_q_put_pending_lock.locked():
             log.info("still data in local_result_q (%s)", local_result_q.qsize())
             if thr_result_q_put.is_alive():
                 log.debug("allow the thread thr_result_q_put to process items")
@@ -798,7 +809,7 @@ class JobManager_Client(object):
                 break
         log.info("local_result_q now empty")
 
-        while (not local_fail_q.empty()):
+        while (not local_fail_q.empty()) or fail_q_put_pending_lock.locked():
             log.info("still data in local_fail_q (%s)", local_fail_q.qsize())
             if thr_fail_q_put.is_alive():
                 log.debug("allow the thread thr_fail_q_put to process items")
@@ -1369,6 +1380,7 @@ class JobManager_Server(object):
 
         self.timeout = timeout
         self.start_time = datetime.now()
+
 
     
     @staticmethod
