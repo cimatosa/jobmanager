@@ -1862,7 +1862,7 @@ class Signal_handler_for_Jobmanager_client(object):
         elif r == 'k':
             for p in self.exit_handler.process_list:
                 print("send SIGKILL to", p)
-                os.kill(p, sig=signal.SIGKILL)
+                os.kill(p, signal.SIGKILL)
         else:
             print("input '{}' ignored".format(r))
         
