@@ -2142,7 +2142,7 @@ def check_if_host_is_reachable_unix_ping(adr, timeout=2, retry=5):
             return
 
         i += 1
-        if i >= retry:
+        if (i >= retry) and (retry > 0):
             break
         
     # no early return happend, ping was never successful, raise error
@@ -2167,7 +2167,7 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
                 log.warning("establishing connection to %s FAILED due to '%s'", dest, type(e))
                 log.debug("show traceback.format_stack()[-3]\n%s", traceback.format_stack()[-3].strip())
                 c += 1
-                if c > reconnect_tries:
+                if (c > reconnect_tries) and (reconnect_tries > 0):
                     log.error("reached maximum number of reconnect tries %s, raise exception", reconnect_tries)
                     raise e
                 log.info("wait %s seconds and retry", reconnect_wait)                
@@ -2189,7 +2189,7 @@ def proxy_operation_decorator_python3(proxy, operation, reconnect_wait=2, reconn
                     log.debug(traceback.print_exc(limit=1))
 
                     c += 1
-                    if c > reconnect_tries:
+                    if (c > reconnect_tries) and (reconnect_tries > 0):
                         log.error("reached maximum number of reconnect tries %s", reconnect_tries)
                         raise e
 
