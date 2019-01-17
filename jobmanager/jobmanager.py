@@ -162,7 +162,7 @@ class JobManager_Client(object):
                  hide_progress           = False,
                  use_special_SIG_INT_handler = True,
                  timeout                 = None,
-                 log_level                = logging.WARNING,
+                 log_level               = logging.WARNING,
                  ask_on_sigterm          = True):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
