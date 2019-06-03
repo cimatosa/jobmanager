@@ -1744,7 +1744,7 @@ class JobManager_Server(object):
         When finished, or on exception call stop() afterwards to shut down gracefully.
         """
         
-        info_line = progress.StringValue(num_of_bytes=100)
+        info_line = progress.StringValue(num_of_bytes=128)
         
         numresults = progress.UnsignedIntValue(self.job_q.marked_items() + self.fail_q.qsize())
         numjobs    = progress.UnsignedIntValue(self.job_q.put_items())
@@ -1781,17 +1781,17 @@ class JobManager_Server(object):
                             self.stat.stop()
                         log.warning("timeout ({}s) exceeded -> quit server".format(self.timeout))
                         break
-                    info_line.value = ("res_q size:{} {}/s, jobs: rem.:{}, "+
+                    info_line.value = ("res_q size:{} {}/s {}b, jobs: rem.:{}, "+
                                        "done:{}, failed:{}, prog.:{}, "+
-                                       "timeout in:{}s").format(self.result_q.qsize(), data_speed,
+                                       "timeout in:{}s").format(self.result_q.qsize(), data_speed, bytes_recieved,
                                                                 jobqsize,
                                                                 markeditems,
                                                                 failqsize,
                                                                 numjobs.value - numresults.value - jobqsize,
                                                                 time_left).encode('utf-8')
                 else:
-                    info_line.value = ("result_q size:{} {}/s, jobs: remaining:{}, "+
-                                       "done:{}, failed:{}, in progress:{}").format(self.result_q.qsize(), data_speed,
+                    info_line.value = ("result_q size:{} {}/s {}b, jobs: remaining:{}, "+
+                                       "done:{}, failed:{}, in progress:{}").format(self.result_q.qsize(), data_speed, bytes_recieved,
                                                                                     jobqsize,
                                                                                     markeditems,
                                                                                     failqsize,
