@@ -1763,14 +1763,16 @@ class JobManager_Server(object):
             if not self.hide_progress:
                 self.stat.start()
 
-            old_bytes = self.result_q.get_bytes_recieved()
-            old_time = time.time()
+            bytes_recieved = self.result_q.get_bytes_recieved()
+            curr_time = time.time()
             while numresults.value < numjobs.value:
                 numjobs.value = self.job_q.put_items()
                 failqsize = self.fail_q.qsize()
                 jobqsize = self.job_q.qsize()
                 markeditems = self.job_q.marked_items()
                 numresults.value = failqsize + markeditems
+                old_time = curr_time
+                old_bytes = bytes_recieved
                 bytes_recieved = self.result_q.get_bytes_recieved()
                 curr_time = time.time()
                 data_speed = humanize_size((bytes_recieved - old_bytes) / (curr_time - old_time))
@@ -1797,8 +1799,6 @@ class JobManager_Server(object):
                                                                                     failqsize,
                                                                                     numjobs.value - numresults.value - jobqsize).encode('utf-8')
                 log.info("infoline {}".format(info_line.value))
-                old_bytes = bytes_recieved
-                old_time = curr_time
                 # allows for update of the info line
                 try:
                     arg, result = self.result_q.get(timeout=self.msg_interval)  
