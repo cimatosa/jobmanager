@@ -1771,14 +1771,14 @@ class JobManager_Server(object):
                 jobqsize = self.job_q.qsize()
                 markeditems = self.job_q.marked_items()
                 numresults.value = failqsize + markeditems
-                old_time = curr_time
-                old_bytes = bytes_recieved
-                bytes_recieved = self.result_q.get_bytes_recieved()
-                curr_time = time.time()
-                data_speed = humanize_size((bytes_recieved - old_bytes) / (curr_time - old_time))
-                print()
-                print(bytes_recieved, (bytes_recieved - old_bytes), (curr_time - old_time), (bytes_recieved - old_bytes) / (curr_time - old_time))
-                print()
+                if (time.time() - curr_time) > self.msg_interval:
+                    old_time = curr_time
+                    old_bytes = bytes_recieved
+
+                    bytes_recieved = self.result_q.get_bytes_recieved()
+                    curr_time = time.time()
+                    data_speed = humanize_size((bytes_recieved - old_bytes) / (curr_time - old_time))
+
                 if (self.timeout is not None):
                     time_left = int(self.timeout - self.__wait_before_stop - (datetime.now() - self.start_time).total_seconds())
                     if time_left < 0:
@@ -1805,13 +1805,6 @@ class JobManager_Server(object):
                 # allows for update of the info line
                 try:
                     arg, result = self.result_q.get(timeout=self.msg_interval)
-                    d_args = pickle.dumps(arg)
-                    d_res = pickle.dumps(result)
-                    print()
-                    print("args", len(d_args), humanize_size(len(d_args)),"res", len(d_res), humanize_size(len(d_res)))
-                    print()
-                    del d_args
-                    del d_res
                 except queue.Empty:
                     continue
                 # print("got arg", arg)
