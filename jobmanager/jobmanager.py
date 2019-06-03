@@ -1804,7 +1804,9 @@ class JobManager_Server(object):
                     arg, result = self.result_q.get(timeout=self.msg_interval)
                     d_args = pickle.dumps(arg)
                     d_res = pickle.dumps(result)
+                    print()
                     print("args", len(d_args), humanize_size(len(d_args)),"res", len(d_res), humanize_size(len(d_res)))
+                    print()
                     del d_args
                     del d_res
                 except queue.Empty:
