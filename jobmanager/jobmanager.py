@@ -1798,7 +1798,7 @@ class JobManager_Server(object):
                                                                                     numjobs.value - numresults.value - jobqsize).encode('utf-8')
                 log.info("infoline {}".format(info_line.value))
                 old_bytes = bytes_recieved
-                old_time = time
+                old_time = curr_time
                 # allows for update of the info line
                 try:
                     arg, result = self.result_q.get(timeout=self.msg_interval)  
