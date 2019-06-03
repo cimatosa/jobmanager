@@ -1765,6 +1765,7 @@ class JobManager_Server(object):
 
             bytes_recieved = self.result_q.get_bytes_recieved()
             curr_time = time.time()
+            data_speed = 0
             while numresults.value < numjobs.value:
                 numjobs.value = self.job_q.put_items()
                 failqsize = self.fail_q.qsize()
