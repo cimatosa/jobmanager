@@ -174,7 +174,8 @@ class JobManager_Client(object):
                  timeout                 = None,
                  log_level               = logging.WARNING,
                  ask_on_sigterm          = True,
-                 nthreads                = 1):
+                 nthreads                = 1,
+                 status_output_for_srun  = False):
         """
         server [string] - ip address or hostname where the JobManager_Server is running
         
@@ -302,6 +303,7 @@ class JobManager_Client(object):
 
         self.init_time = time.time()
         self.ask_on_sigterm = ask_on_sigterm
+        self.status_output_for_srun = status_output_for_srun
         
     def connect(self):
         if self.manager_objects is None:
@@ -733,6 +735,10 @@ class JobManager_Client(object):
         thr_result_q_put.start()
         thr_fail_q_put.start()
         thr_update_infoline.start()
+
+        if self.status_output_for_srun:
+            self.hide_progress = True
+        this_hostname = socket.gethostname().split('.')[0]
         
         with progress.ProgressBarCounterFancy(count         = c, 
                                               max_count     = m_progress, 
@@ -811,6 +817,11 @@ class JobManager_Client(object):
                             break
                         infoline.value = "timeout in: {}s".format(int(self.timeout - elps_time)).encode('utf-8')
                     p.join(10)
+                    if self.status_output_for_srun:
+                        total_c = 0
+                        for i in range(self.nproc):
+                            total_c += self.pbc.counter_count[i].value
+                        print("{} : {} jobs ".format(this_hostname, total_c) + infoline.value)
                 log.debug("worker process %s exitcode %s", p.pid, p.exitcode)
                 log.debug("worker process %s was joined", p.pid)
 
