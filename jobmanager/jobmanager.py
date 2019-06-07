@@ -821,7 +821,7 @@ class JobManager_Client(object):
                         total_c = 0
                         for i in range(self.nproc):
                             total_c += self.pbc.counter_count[i].value
-                        print("{} : {} jobs ".format(this_hostname, total_c) + infoline.value)
+                        print("{} : {} jobs ".format(this_hostname, total_c) + infoline.value.decode('utf-8'))
                 log.debug("worker process %s exitcode %s", p.pid, p.exitcode)
                 log.debug("worker process %s was joined", p.pid)
 
