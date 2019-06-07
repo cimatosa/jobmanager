@@ -1820,9 +1820,9 @@ class JobManager_Server(object):
                             self.stat.stop()
                         log.warning("timeout ({}s) exceeded -> quit server".format(self.timeout))
                         break
-                    info_line.value = ("res_q #{} {}/s {}|rem.:{}, "+
-                                       "done:{}, failed:{}, prog.:{}, "+
-                                       "timeout in:{}s").format(self.result_q.qsize(), data_speed, humanize_size(bytes_recieved),
+                    info_line.value = ("res_q #{} {}/s {}|rem{} "+
+                                       "done{} fail{} prog{} "+
+                                       "timeout:{}s").format(self.result_q.qsize(), data_speed, humanize_size(bytes_recieved),
                                                                 jobqsize,
                                                                 markeditems,
                                                                 failqsize,
