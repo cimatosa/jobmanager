@@ -54,7 +54,7 @@ def timed_f(f, time_as_list):
     return new_f
     
 
-def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res=None, **kwargs):
+def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res=None, scale_function = None, **kwargs):
     f_partial_complex = lambda t, x: f(t, x, *args)
     if integrator == 'zvode':
         # define complex derivative
@@ -124,7 +124,11 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                     _t = time()
                     r.integrate(t[i])
                     t_int += (time()-_t)
-                    
+
+                    if scale_function:
+                        sc = scale_function(r.y)
+                        r.y /= sc
+
                     _t = time()
                     if integrator == 'zvode':
                         # complex integration -> yields complex values
@@ -171,7 +175,11 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                     _t = time()
                     r.integrate(t[i])
                     t_int += (time()-_t)
-                    
+
+                    if scale_function:
+                        sc = scale_function(r.y)
+                        r.y /= sc
+
                     _t = time()
                     if integrator == 'zvode':
                         # complex integration -> yields complex values

@@ -111,7 +111,9 @@ def set_mkl_threads(n):
         print("MKL threads not set!")
     else:
         mkl_rt = ctypes.CDLL('libmkl_rt.so')
+        #print("mkl_set_num_threads", n)
         mkl_rt.MKL_Set_Num_Threads(n)
+        #print("MKL threads", mkl_rt.mkl_get_max_threads())
 
 
 class ServerQueueManager(BaseManager):
@@ -264,7 +266,7 @@ class JobManager_Client(object):
         log.debug("server:%s", self.server)
         if isinstance(authkey, bytearray):
             self.authkey = authkey
-        else: 
+        else:
             self.authkey = bytearray(authkey, encoding='utf8')
         log.debug("authkey:%s", self.authkey.decode())
         self.port = port
@@ -442,7 +444,7 @@ class JobManager_Client(object):
             log.debug("found standard keyword arguments: [c, m]")
             _func = func
 
-        log.debug("set mkl threads to {}".format(nthreads))
+        log.info("set mkl threads to {}".format(nthreads))
         set_mkl_threads(nthreads)
 
             
