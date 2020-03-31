@@ -1865,12 +1865,14 @@ class JobManager_Server(object):
         self.join()
         
 
-class JobManager_Local(JobManager_Server):
+class JobManager_Local(object):
     def __init__(self,
+                 server_class,
                  client_class,
+                 server_init_kwargs = {},
+                 client_init_kwargs = {},
                  authkey                 = 'local_jobmanager',
                  nproc                   = -1,
-                 delay                   = 1,
                  const_arg               = None, 
                  port                    = 42524, 
                  verbose                 = None,
@@ -1882,19 +1884,20 @@ class JobManager_Local(JobManager_Server):
                  fname_dump              = 'auto',
                  speed_calc_cycles       = 50):
 
-        JobManager_Server.__init__(self,
-                                   authkey           = authkey,
+        self.server = server_class(authkey           = authkey,
                                    const_arg         = const_arg,
                                    port              = port,
                                    verbose           = verbose,
                                    msg_interval      = msg_interval,
                                    fname_dump        = fname_dump,
-                                   speed_calc_cycles = speed_calc_cycles)
+                                   speed_calc_cycles = speed_calc_cycles,
+                                   **server_init_kwargs)
         
         self.client_class = client_class
+        self.client_init_kwargs = client_init_kwargs
+        self.authkey = authkey
         self.port = port
         self.nproc = nproc
-        self.delay = delay
         self.verbose_client=verbose_client
         self.show_statusbar_for_jobs = show_statusbar_for_jobs
         self.show_counter_only = show_counter_only
@@ -1904,6 +1907,7 @@ class JobManager_Local(JobManager_Server):
     def _start_client(authkey,
                       port, 
                       client_class,
+                      client_init_kwargs,
                       nproc                   = 0, 
                       nice                    = 19,
                       verbose                 = None,
@@ -1918,30 +1922,33 @@ class JobManager_Local(JobManager_Server):
                               verbose                 = verbose,
                               show_statusbar_for_jobs = show_statusbar_for_jobs,
                               show_counter_only       = show_counter_only,
-                              use_special_SIG_INT_handler = False)
+                              use_special_SIG_INT_handler = False,
+                              **client_init_kwargs)
 
         Signal_to_sys_exit(signals=[signal.SIGINT, signal.SIGTERM])
         client.start()
-        
+
         
     def start(self):
         p_client = mp.Process(target=JobManager_Local._start_client,
                               args=(self.authkey,
                                     self.port, 
-                                    self.client_class, 
+                                    self.client_class,
+                                    self.client_init_kwargs,
                                     self.nproc,
                                     self.niceness_clients, 
                                     self.verbose_client,
                                     self.show_statusbar_for_jobs,
                                     self.show_counter_only))
 
-        JobManager_Local.bring_him_up(self)
+        self.server.bring_him_up()
         p_client.start()
-        JobManager_Local.join(self)
-
-        progress.check_process_termination(p_client, 
-                                           prefix  = 'local_client',
-                                           timeout = 2)
+        try:
+            self.server.join()
+        finally:
+            progress.check_process_termination(p_client,
+                                               prefix  = 'local_client',
+                                               timeout = 2)
 
 class RemoteKeyError(RemoteError):
     pass
