@@ -1429,8 +1429,6 @@ class JobManager_Server(object):
 
         if status_file_name:
             self.status_file = pathlib.Path(status_file_name)
-            if self.status_file.exists():
-                raise FileExistsError("the status file '{}' already exists".format(status_file_name))
             with open(self.status_file, 'w') as f:
                 f.write('init')
         else:
