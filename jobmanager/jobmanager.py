@@ -238,7 +238,7 @@ class JobManager_Client(object):
         global log
         log = logging.getLogger(__name__+'.'+self.__class__.__name__)
         log.setLevel(log_level)
-        print("this client has logger:", log)
+        # print("this client has logger:", log)
 
         self._pid = os.getpid()
         self._sid = os.getsid(self._pid)
@@ -613,7 +613,7 @@ class JobManager_Client(object):
                 pass
 
             log.info(stat)
-            print("client {}:{}\n".format(i, stat))
+            # print("client {}:{}\n".format(i, stat))
             log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
 
     def start(self):
@@ -633,7 +633,7 @@ class JobManager_Client(object):
             raise JMConnectionError("Can not start Client with no connection to server (shared objetcs are not available)")
         
         log.info("STARTING CLIENT\nserver:%s authkey:%s port:%s num proc:%s", self.server, self.authkey.decode(), self.port, self.nproc)
-        print("on start client, log.level", log.level)
+        # print("on start client, log.level", log.level)
             
         c = []
         for i in range(self.nproc):
@@ -1750,7 +1750,7 @@ class JobManager_Server(object):
 
     def print_jm_ready(self):
         # please overwrite for individual hooks to notify that the server process runs
-        print("{} awaits client results".format(self.__class__.__name__))
+        pass
 
     def bring_him_up(self, no_sys_exit_on_signal=False):
         
@@ -1767,11 +1767,11 @@ class JobManager_Server(object):
         else:
             log.info("started (host:%s authkey:%s port:%s jobs:%s)", self.hostname, self.authkey.decode(), self.port,
                      jobqsize)
-            print("{} started (host:{} authkey:{} port:{} jobs:{})".format(self.__class__.__name__, 
-                                                                           self.hostname, 
-                                                                           self.authkey.decode(), 
-                                                                           self.port,
-                                                                           jobqsize))
+            # print("{} started (host:{} authkey:{} port:{} jobs:{})".format(self.__class__.__name__,
+            #                                                                self.hostname,
+            #                                                                self.authkey.decode(),
+            #                                                                self.port,
+            #                                                                jobqsize))
         if no_sys_exit_on_signal:
             log.info("no_sys_exit_on_signal was set to True. It's the users responsability to call the 'shutdown' method.")
         else:
@@ -1923,11 +1923,11 @@ class JobManager_Local(object):
 
         if self.p_client is not None:
             self.p_client.terminate()
-            print("join client ...")
+            # print("join client ...")
             self.p_client.join()
-            print("client has joined")
+            # print("client has joined")
 
-        print("shutdown server")
+        # print("shutdown server")
         self.server.shutdown()
 
     @staticmethod 
