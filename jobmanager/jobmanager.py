@@ -1529,6 +1529,7 @@ class JobManager_Server(object):
             raise ConnectionError("test conntect to JobManager_Manager failed")
             
         log.info("JobManager_Manager started on %s:%s (%s)", self.hostname, self.port, authkey)
+        print("JobManager started on {}:{} ({})".format(self.hostname, self.port, authkey))
         
     def _stop_manager(self):
         if self.manager == None:
