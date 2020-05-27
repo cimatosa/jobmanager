@@ -130,6 +130,9 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
 
                     _t = time()
                     r_y = copy.copy(r.y)
+                    if scale_function:
+                        r_y = scale_function(r_y)
+
                     if integrator == 'zvode':
                         # complex integration -> yields complex values
                         x[i] = x_to_res(r.t, r_y)
@@ -149,7 +152,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                         del r
                         r = ode(f__)
                         r.set_integrator(integrator, **kwargs)
-                        r.set_initial_value(y=scale_function(copy.copy(r_y)), t=t[i])
+                        r.set_initial_value(y=r_y, t=t[i])
 
                     i += 1
 
