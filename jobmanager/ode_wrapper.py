@@ -52,7 +52,8 @@ def timed_f(f, time_as_list):
     return new_f
     
 
-def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res=None, scale_function=None, **kwargs):
+def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res=None,
+                   scale_function=None, scale_condition=None, **kwargs):
     f_partial_complex = lambda t, x: f(t, x, *args)
     if integrator == 'zvode':
         # define complex derivative
@@ -130,8 +131,11 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
 
                     _t = time()
                     r_y = copy.copy(r.y)
-                    if scale_function:
-                        r_y = scale_function(r_y)
+                    is_scaled = False
+                    if scale_condition:
+                        if scale_condition(r_y):
+                            r_y = scale_function(r_y)
+                            is_scaled = True
 
                     if integrator == 'zvode':
                         # complex integration -> yields complex values
@@ -148,7 +152,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                     t[i] = r.t
                     c.value = i
 
-                    if scale_function:
+                    if is_scaled:
                         del r
                         r = ode(f__)
                         r.set_integrator(integrator, **kwargs)
@@ -190,6 +194,11 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
 
                     _t = time()
                     r_y = copy.copy(r.y)
+                    is_scaled = False
+                    if scale_condition:
+                        if scale_condition(r_y):
+                            r_y = scale_function(r_y)
+                            is_scaled = True
                     if integrator == 'zvode':
                         # complex integration -> yields complex values
                         for a in range(res_list_len):
@@ -206,7 +215,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                     t[i] = r.t
                     c.value = i
 
-                    if scale_function:
+                    if is_scaled:
                         del r
                         r = ode(f__)
                         r.set_integrator(integrator, **kwargs)
