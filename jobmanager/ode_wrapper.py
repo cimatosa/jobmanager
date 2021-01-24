@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-from time import time
+from time import perf_counter
 import logging
 import traceback
 import copy
@@ -42,12 +42,13 @@ def wrap_complex_intgeration(f_complex):
     
     return f_real
 
-def timed_f(f, time_as_list):
+def timed_cnt_f(f, time_as_list):
     def new_f(t, x):
-        t0 = time()
+        t0 = perf_counter()
         res = f(t, x)
-        t1 = time()
+        t1 = perf_counter()
         time_as_list[0] += t1-t0
+        time_as_list[1] += 1
         return res
     return new_f
     
@@ -68,9 +69,9 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
         raise RuntimeError("unknown integrator '{}'".format(integrator))
     
     
-    time_as_list = [0.]
+    time_as_list = [0., 0]
     
-    f__ = timed_f(f_, time_as_list)
+    f__ = timed_cnt_f(f_, time_as_list)
     
     r = ode(f__)
     
@@ -120,16 +121,16 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
             warnings.filterwarnings('error')
             try:
                 while i < N:
-                    _t = time()
+                    _t = perf_counter()
                     r.integrate(t[i])
-                    t_int += (time()-_t)
+                    t_int += (perf_counter()-_t)
 
                     if not r.successful():
                         msg = "INTEGRATION WARNING: NOT successful!"
                         log.warning(msg)
                         raise Warning(msg)
 
-                    _t = time()
+                    _t = perf_counter()
                     r_y = copy.copy(r.y)
                     is_scaled = False
                     if scale_condition:
@@ -143,7 +144,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                     else:
                         # real integration -> mapping from R^2 to C needed
                         x[i] = x_to_res(r.t, real_to_complex(r_y))
-                    t_conv += (time()-_t)            
+                    t_conv += (perf_counter()-_t)
                     
                     if abs(t[i]-r.t) > 1e-13:
                         msg = "INTEGRATION WARNING: time mismatch (diff at step {}: {:.3e})".format(i, abs(t[i]-r.t))
@@ -183,16 +184,16 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
             warnings.filterwarnings('error')
             try:
                 while r.successful() and i < N:
-                    _t = time()
+                    _t = perf_counter()
                     r.integrate(t[i])
-                    t_int += (time()-_t)
+                    t_int += (perf_counter()-_t)
 
                     if not r.successful():
                         msg = "INTEGRATION WARNING: NOT successful!"
                         log.warning(msg)
                         raise Warning(msg)
 
-                    _t = time()
+                    _t = perf_counter()
                     r_y = copy.copy(r.y)
                     is_scaled = False
                     if scale_condition:
@@ -207,7 +208,7 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                         # real integration -> mapping from R^2 to C needed
                         for a in range(res_list_len):
                             x[a][i] = x_to_res[a](r.t, real_to_complex(r_y))
-                    t_conv += (time()-_t)
+                    t_conv += (perf_counter()-_t)
                     if abs(t[i]-r.t) > 1e-13:
                         msg = "INTEGRATION WARNING: time mismatch (diff at step {}: {:.3e})".format(i, abs(t[i]-r.t))
                         log.warning(msg)
@@ -230,9 +231,10 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                         
     
     log.info("integration summary\n"+
-             "integration     time {:.2g}s ({:.2%})\n".format(t_int, t_int / (t_int + t_conv))+
-             "    f_dot eval       {:.2g}s ({:.2%})\n".format(time_as_list[0], time_as_list[0] / (t_int + t_conv))+
-             "data conversion time {:.2g}s ({:.2%})\n".format(t_conv, t_conv / (t_int + t_conv)))
+             "integration     time {:.2g}ms ({:.2%})\n".format(t_int*1000, t_int / (t_int + t_conv))+
+             "    f_dot eval       {:.2g}ms ({:.2%})\n".format(time_as_list[0]*1000, time_as_list[0] / (t_int + t_conv))+
+             "    f_dot eval cnt   {} -> average time per eval {:.2g}ms\n".format(time_as_list[1], time_as_list[0]*1000 / time_as_list[1]) +
+             "data conversion time {:.2g}ms ({:.2%})\n".format(t_conv*1000, t_conv / (t_int + t_conv)))
     return t, x, None
         
 def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=None, x_to_res=None, **kwargs):
@@ -277,13 +279,13 @@ def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=Non
         warnings.filterwarnings('error')
         try:        
             while r.successful() and i < N:
-                _t = time()
+                _t = perf_counter()
                 r.integrate(t[i])
-                t_int += (time()-_t)
+                t_int += (perf_counter()-_t)
                 
-                _t = time()
+                _t = perf_counter()
                 x[i] = x_to_res(r.t, r.y)
-                t_conv += (time()-_t)
+                t_conv += (perf_counter()-_t)
                 if abs(t[i]-r.t) > 1e-13:
                     msg = "INTEGRATION WARNING: time mismatch (diff at step {}: {:.3e})".format(i, abs(t[i]-r.t))
                     log.warning(msg)
