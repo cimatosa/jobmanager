@@ -108,27 +108,28 @@ def get_user_num_process():
 
 def set_mkl_threads(n):
     if n == 0:
-        print("MKL threads not set!")
+        #print("MKL threads not set!")
+        pass
     else:
         noMKL = noOB = False
         try:
             mkl_rt = ctypes.CDLL('libmkl_rt.so')
             mkl_rt.MKL_Set_Num_Threads(n)
-            print("MKL threads set to", mkl_rt.mkl_get_max_threads())
+#            print("MKL threads set to", mkl_rt.mkl_get_max_threads())
         except OSError:
             noMKL=True
 
         try:
             openblas = ctypes.CDLL('libopenblas.so')
             openblas.openblas_set_num_threads(n)
-            print("openblas threads set to", openblas.openblas_get_num_threads())
+#            print("openblas threads set to", openblas.openblas_get_num_threads())
         except OSError:
             noOB=True
 
         if noMKL and noOB:
             warnings.warn("num_threads could not be set, MKL / openblas not found")
 
-    print()
+#   print()
 
 
 
