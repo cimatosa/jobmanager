@@ -231,10 +231,10 @@ def integrate_cplx(c, t0, t1, N, f, args, x0, integrator, res_dim=None, x_to_res
                         
     
     log.info("integration summary\n"+
-             "integration     time {:.2g}ms ({:.2%})\n".format(t_int*1000, t_int / (t_int + t_conv))+
-             "    f_dot eval       {:.2g}ms ({:.2%})\n".format(time_as_list[0]*1000, time_as_list[0] / (t_int + t_conv))+
-             "    f_dot eval cnt   {} -> average time per eval {:.2g}ms\n".format(time_as_list[1], time_as_list[0]*1000 / time_as_list[1]) +
-             "data conversion time {:.2g}ms ({:.2%})\n".format(t_conv*1000, t_conv / (t_int + t_conv)))
+             "integration     time {:.3g}ms ({:.2%})\n".format(t_int*1000, t_int / (t_int + t_conv))+
+             "    f_dot eval       {:.3g}ms ({:.2%})\n".format(time_as_list[0]*1000, time_as_list[0] / (t_int + t_conv))+
+             "    f_dot eval cnt   {} -> average time per eval {:.3g}ms\n".format(time_as_list[1], time_as_list[0]*1000 / time_as_list[1]) +
+             "data conversion time {:.3g}ms ({:.2%})\n".format(t_conv*1000, t_conv / (t_int + t_conv)))
     return t, x, None
         
 def integrate_real(c, t0, t1, N, f, args, x0, integrator, verbose=0, res_dim=None, x_to_res=None, **kwargs):
