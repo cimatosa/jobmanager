@@ -2079,8 +2079,11 @@ class Signal_handler_for_Jobmanager_client(object):
     def _show_server_info(self):
         self.client_object.server
         self.client_object.authkey
-        print("connected to {} using authkey {}".format(self.client_object.server,
-                                                        self.client_object.authkey))   
+        print("connected to {}:{} using authkey {}".format(
+            self.client_object.server,
+            self.client_object.port,
+            self.client_object.authkey)
+        )
 
 
 class Signal_to_SIG_IGN(object):
