@@ -45,6 +45,12 @@ import random
 import time
 import traceback
 import warnings
+
+import threadpoolctl
+v_maj, v_min, v_rest = threadpoolctl.__version__.split('.', maxsplit=3)
+if (int(v_maj) < 3) or ((int(v_maj) == 3) and (int(v_min) < 1)):
+    raise ImportError("we require at least threadpoolctl 3.1.0")
+
 import binfootprint as bf
 import pathlib
 import progression as progress
@@ -55,9 +61,6 @@ import threading
 import ctypes
 from shutil import rmtree
 from .signalDelay import sig_delay
-
-
-
 
 log = logging.getLogger(__name__)
 
@@ -107,6 +110,8 @@ def get_user_num_process():
     return int(out)-2
 
 def set_mkl_threads(n):
+    raise DeprecationWarning("use threadpoolclt.threadtool_limit context manager instead")
+
     if n == 0:
         #print("MKL threads not set!")
         pass
@@ -115,23 +120,23 @@ def set_mkl_threads(n):
         try:
             mkl_rt = ctypes.CDLL('libmkl_rt.so')
             mkl_rt.MKL_Set_Num_Threads(n)
-#            print("MKL threads set to", mkl_rt.mkl_get_max_threads())
-        except OSError:
+            print("MKL threads set to", mkl_rt.mkl_get_max_threads())
+        except OSError as e:
+            print(e)
             noMKL=True
 
         try:
             openblas = ctypes.CDLL('libopenblas.so')
+            openblas = ctypes.CDLL('/home/cima/.local/lib/python3.9/site-packages/scipy.libs/libopenblasp-r0-9f9f5dbc.3.18.so')
             openblas.openblas_set_num_threads(n)
-#            print("openblas threads set to", openblas.openblas_get_num_threads())
-        except OSError:
+            print("openblas threads set to", openblas.openblas_get_num_threads())
+        except OSError as e:
+            print(e)
             noOB=True
 
         if noMKL and noOB:
             warnings.warn("num_threads could not be set, MKL / openblas not found")
-
-#   print()
-
-
+    print()
 
 
 class ServerQueueManager(BaseManager):
@@ -475,170 +480,166 @@ class JobManager_Client(object):
             _func = func
 
         log.info("set mkl threads to {}".format(nthreads))
-        set_mkl_threads(nthreads)
+        with threadpoolctl.threadpool_limits(limits=nthreads, user_api='blas'):
+            # supposed to catch SystemExit, which will shut the client down quietly
+            try:
 
-            
+                # the main loop, exit loop when:
+                #    a) job_q is empty
+                #    b) SystemExit is caught
+                #    c) any queue operation (get, put) fails for what ever reason
+                #    d) njobs becomes zero
+                while njobs != 0:
+                    njobs -= 1
 
-               
-        # supposed to catch SystemExit, which will shut the client down quietly 
-        try:
-            
-            # the main loop, exit loop when: 
-            #    a) job_q is empty
-            #    b) SystemExit is caught
-            #    c) any queue operation (get, put) fails for what ever reason
-            #    d) njobs becomes zero
-            while njobs != 0:
-                njobs -= 1
-
-                # try to get an item from the job_q
-                tg_0 = time.time()                
-                try:
-                    log.debug("wait until local result q is almost empty")
-                    while local_result_q.qsize() > nproc:
-                         time.sleep(0.5)
-                    log.debug("done waiting, call job_q_get")
-
-                    with sig_delay([signal.SIGTERM]):
-                        arg = job_q_get()
-                    log.debug("process {}".format(arg))
-
-                # regular case, just stop working when empty job_q was found
-                except queue.Empty:
-                    log.info("finds empty job queue, processed %s jobs", cnt)
-                    break
-                except ContainerClosedError:
-                    log.info("job queue was closed, processed %s jobs", cnt)
-                    break
-
-                # handle SystemExit in outer try ... except
-                except SystemExit as e:
-                    arg = None
-                    log.warning('getting arg from job_q failed due to SystemExit')
-                    raise e
-                # job_q.get failed -> server down?             
-                except Exception as e:
-                    arg = None
-                    log.error("Error when calling 'job_q_get'") 
-                    handle_unexpected_queue_error(e)
-                    break
-                tg_1 = time.perf_counter()
-                time_queue += (tg_1-tg_0)                
-                
-                # try to process the retrieved argument
-                try:
-                    tf_0 = time.perf_counter()
-                    log.debug("START crunching _func")
-                    res = _func(arg, const_arg, c, m)
-                    log.debug("DONE crunching _func")
-                    tf_1 = time.perf_counter()
-                    time_calc_this = (tf_1-tf_0)
-                    time_calc += time_calc_this
-                # handle SystemExit in outer try ... except
-                except SystemExit as e:
-                    raise e
-                # something went wrong while doing the actual calculation
-                # - write traceback to file
-                # - try to inform the server of the failure
-                except:
-                    err, val, trb = sys.exc_info()
-                    log.error("caught exception '%s' when crunching 'func'\n%s", err.__name__, traceback.print_exc())
-                
-                    # write traceback to file
-                    hostname = socket.gethostname()
-                    fname = 'traceback_err_{}_{}.trb'.format(err.__name__, getDateForFileName(includePID=True))
-                    
-                    log.info("write exception to file %s", fname)
-                    with open(fname, 'w') as f:
-                        traceback.print_exception(etype=err, value=val, tb=trb, file=f)
-
-                    log.debug("put arg to local fail_q")
+                    # try to get an item from the job_q
+                    tg_0 = time.time()
                     try:
+                        log.debug("wait until local result q is almost empty")
+                        while local_result_q.qsize() > nproc:
+                             time.sleep(0.5)
+                        log.debug("done waiting, call job_q_get")
+
                         with sig_delay([signal.SIGTERM]):
-                            local_fail_q.put((arg, err.__name__, hostname))
-                    # handle SystemExit in outer try ... except                        
-                    except SystemExit as e:
-                        log.warning('putting arg to local fail_q failed due to SystemExit')
-                        raise e
-                    # fail_q.put failed -> server down?             
-                    except Exception as e:
-                        log.error('putting arg to local fail_q failed')
-                        handle_unexpected_queue_error(e)
+                            arg = job_q_get()
+                        log.debug("process {}".format(arg))
+
+                    # regular case, just stop working when empty job_q was found
+                    except queue.Empty:
+                        log.info("finds empty job queue, processed %s jobs", cnt)
                         break
-                    else:
-                        log.debug('putting arg to local fail_q was successful')
+                    except ContainerClosedError:
+                        log.info("job queue was closed, processed %s jobs", cnt)
+                        break
 
-                    raise
-                            
-                # processing the retrieved arguments succeeded
-                # - try to send the result back to the server                        
-                else:
-                    try:
-                        tp_0 = time.perf_counter()
-                        with sig_delay([signal.SIGTERM]):
-                            bin_data = pickle.dumps({'arg': arg,
-                                                     'res': res,
-                                                     'time': time_calc_this})
-                            local_result_q.put(bin_data)
-                        log.debug('put result to local result_q, done!')
-                        tp_1 = time.perf_counter()
-                        time_queue += (tp_1-tp_0)
-                        
                     # handle SystemExit in outer try ... except
                     except SystemExit as e:
-                        log.warning('putting result to local result_q failed due to SystemExit')
+                        arg = None
+                        log.warning('getting arg from job_q failed due to SystemExit')
                         raise e
-                    
+                    # job_q.get failed -> server down?
                     except Exception as e:
-                        log.error('putting result to local result_q failed due to %s', type(e))
-                        emergency_dump(arg, res, emergency_dump_path, host, port, authkey)
+                        arg = None
+                        log.error("Error when calling 'job_q_get'")
                         handle_unexpected_queue_error(e)
                         break
-                    
-                    del res
-                    
-                cnt += 1
-                reset_pbc()
-                log.debug("continue with next arg")
+                    tg_1 = time.perf_counter()
+                    time_queue += (tg_1-tg_0)
+
+                    # try to process the retrieved argument
+                    try:
+                        tf_0 = time.perf_counter()
+                        log.debug("START crunching _func")
+                        res = _func(arg, const_arg, c, m)
+                        log.debug("DONE crunching _func")
+                        tf_1 = time.perf_counter()
+                        time_calc_this = (tf_1-tf_0)
+                        time_calc += time_calc_this
+                    # handle SystemExit in outer try ... except
+                    except SystemExit as e:
+                        raise e
+                    # something went wrong while doing the actual calculation
+                    # - write traceback to file
+                    # - try to inform the server of the failure
+                    except:
+                        err, val, trb = sys.exc_info()
+                        log.error("caught exception '%s' when crunching 'func'\n%s", err.__name__, traceback.print_exc())
+
+                        # write traceback to file
+                        hostname = socket.gethostname()
+                        fname = 'traceback_err_{}_{}.trb'.format(err.__name__, getDateForFileName(includePID=True))
+
+                        log.info("write exception to file %s", fname)
+                        with open(fname, 'w') as f:
+                            traceback.print_exception(etype=err, value=val, tb=trb, file=f)
+
+                        log.debug("put arg to local fail_q")
+                        try:
+                            with sig_delay([signal.SIGTERM]):
+                                local_fail_q.put((arg, err.__name__, hostname))
+                        # handle SystemExit in outer try ... except
+                        except SystemExit as e:
+                            log.warning('putting arg to local fail_q failed due to SystemExit')
+                            raise e
+                        # fail_q.put failed -> server down?
+                        except Exception as e:
+                            log.error('putting arg to local fail_q failed')
+                            handle_unexpected_queue_error(e)
+                            break
+                        else:
+                            log.debug('putting arg to local fail_q was successful')
+
+                        raise
+
+                    # processing the retrieved arguments succeeded
+                    # - try to send the result back to the server
+                    else:
+                        try:
+                            tp_0 = time.perf_counter()
+                            with sig_delay([signal.SIGTERM]):
+                                bin_data = pickle.dumps({'arg': arg,
+                                                         'res': res,
+                                                         'time': time_calc_this})
+                                local_result_q.put(bin_data)
+                            log.debug('put result to local result_q, done!')
+                            tp_1 = time.perf_counter()
+                            time_queue += (tp_1-tp_0)
+
+                        # handle SystemExit in outer try ... except
+                        except SystemExit as e:
+                            log.warning('putting result to local result_q failed due to SystemExit')
+                            raise e
+
+                        except Exception as e:
+                            log.error('putting result to local result_q failed due to %s', type(e))
+                            emergency_dump(arg, res, emergency_dump_path, host, port, authkey)
+                            handle_unexpected_queue_error(e)
+                            break
+
+                        del res
+
+                    cnt += 1
+                    reset_pbc()
+                    log.debug("continue with next arg")
 
 
-        # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
-        # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
-        # default signal handlers
-        except SystemExit:
-            if arg is None:
-                log.warning("SystemExit, quit processing, no argument to reinsert")
-            else:
-                log.warning("SystemExit, quit processing, reinsert current argument, please wait")
-                log.debug("put arg back to local job_q")
-                try:
-                    with sig_delay([signal.SIGTERM]):
-                        local_job_q.put(arg)
-                # handle SystemExit in outer try ... except                        
-                except SystemExit as e:
-                    log.error("puting arg back to local job_q failed due to SystemExit")
-                    raise e
-                # fail_q.put failed -> server down?             
-                except Exception as e:
-                    log.error("puting arg back to local job_q failed due to %s", type(e))
-                    handle_unexpected_queue_error(e)
+            # considered as normal exit caused by some user interaction, SIGINT, SIGTERM
+            # note SIGINT, SIGTERM -> SystemExit is achieved by overwriting the
+            # default signal handlers
+            except SystemExit:
+                if arg is None:
+                    log.warning("SystemExit, quit processing, no argument to reinsert")
                 else:
-                    log.debug("putting arg back to local job_q was successful")
-        finally:
-            try:
-                sta = progress.humanize_time(time_calc / cnt)
-            except:
-                sta = 'invalid'
+                    log.warning("SystemExit, quit processing, reinsert current argument, please wait")
+                    log.debug("put arg back to local job_q")
+                    try:
+                        with sig_delay([signal.SIGTERM]):
+                            local_job_q.put(arg)
+                    # handle SystemExit in outer try ... except
+                    except SystemExit as e:
+                        log.error("puting arg back to local job_q failed due to SystemExit")
+                        raise e
+                    # fail_q.put failed -> server down?
+                    except Exception as e:
+                        log.error("puting arg back to local job_q failed due to %s", type(e))
+                        handle_unexpected_queue_error(e)
+                    else:
+                        log.debug("putting arg back to local job_q was successful")
+            finally:
+                try:
+                    sta = progress.humanize_time(time_calc / cnt)
+                except:
+                    sta = 'invalid'
 
-            stat = "pure calculation time: {} single task average: {}".format(progress.humanize_time(time_calc), sta)
-            try:
-                stat += "\ncalculation:{:.2%} communication:{:.2%}".format(time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue))
-            except ZeroDivisionError:
-                pass
+                stat = "pure calculation time: {} single task average: {}".format(progress.humanize_time(time_calc), sta)
+                try:
+                    stat += "\ncalculation:{:.2%} communication:{:.2%}".format(time_calc/(time_calc+time_queue), time_queue/(time_calc+time_queue))
+                except ZeroDivisionError:
+                    pass
 
-            log.info(stat)
-            # print("client {}:{}\n".format(i, stat))
-            log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
+                log.info(stat)
+                # print("client {}:{}\n".format(i, stat))
+                log.debug("JobManager_Client.__worker_func at end (PID %s)", os.getpid())
 
     def start(self):
         """
