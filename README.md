@@ -22,7 +22,7 @@ The documentation is available at http://cimatosa.github.io/jobmanager/
 #### Python3.4
   * some tests result in `segmentation fault (core dumped)`, nonetheless they pass
 
-Therefore it is highly encouraged to use Python3.5 (and probably higher).
+Therefore, it is highly encouraged to use Python3.5 (and probably higher).
 
 ### Developer's note (out of date)
 After cloning into jobmanager, create a virtual environment

@@ -7,11 +7,7 @@ import copy
 
 log = logging.getLogger(__name__)
 
-try:
-    from scipy.integrate import ode
-except ImportError as e:
-    warnings.warn("Submodule 'ode_wrapper' will not work. Reason: {}.".format(e))
-
+from scipy.integrate import ode
 
 
 class Dummy_c(object):

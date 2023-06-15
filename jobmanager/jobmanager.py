@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """jobmanager module
 
 Richard Hartmann 2014-2018
@@ -29,9 +27,7 @@ The class JobManager_Client
   
 """
 import copy
-#import ctypes
 from datetime import datetime
-#import inspect
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager, RemoteError
 import subprocess
