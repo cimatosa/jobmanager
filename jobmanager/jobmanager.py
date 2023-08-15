@@ -43,10 +43,6 @@ import traceback
 import warnings
 
 import threadpoolctl
-v_maj, v_min, v_rest = threadpoolctl.__version__.split('.', maxsplit=3)
-if (int(v_maj) < 3) or ((int(v_maj) == 3) and (int(v_min) < 1)):
-    raise ImportError("we require at least threadpoolctl 3.1.0")
-
 import binfootprint as bf
 import pathlib
 import progression as progress

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "jobmanager"
-version = "0.4.2"
+version = "0.4.3"
 description = "a facility for distributed computing"
 authors = ["Richard Hartmann", "Paul Müller"]
 license = "MIT"
@@ -21,11 +21,12 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = "^3.9"
 numpy = "^1.24.1"
 scipy = "^1.8.1"
-progression = "^0.1.4"
+progression = "^0.2.0"
 binfootprint = "^1.2.0"
+threadpoolctl = "3.1.0"
 
 
 [tool.poetry.dev-dependencies]
