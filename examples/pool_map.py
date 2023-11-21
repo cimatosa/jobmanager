@@ -14,13 +14,16 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 import jobmanager
 
+
 def func(x, y, z):
     """Example function with only one argument"""
-    time.sleep(x/10)
+    time.sleep(x / 10)
     return np.sum([x, y, z])
+
 
 def wrapper(data):
     return func(*data)
+
 
 # Create list of parameters
 a = list()

@@ -17,32 +17,34 @@ SIG_MAP = {}
 # read the signal names from the signal module and
 # provide the emapping from the numeric value to the names
 for s in signal.__dict__:
-    if s.startswith("SIG") and s[3] != '_':
+    if s.startswith("SIG") and s[3] != "_":
         SIG_MAP[getattr(signal, s)] = s
 
+
 class SigHandler(object):
-    """ a handler class which
-            - stores the receives signals
-            - and allows to re-emit them via os.kill
+    """a handler class which
+    - stores the receives signals
+    - and allows to re-emit them via os.kill
     """
+
     def __init__(self):
         self.sigs_caught = []
 
-    def __call__(self, sig, frame):             # a callable suitable to signal.signal
+    def __call__(self, sig, frame):  # a callable suitable to signal.signal
         """
-            the actual handler function
+        the actual handler function
 
-            which will be called when a signal is received
+        which will be called when a signal is received
 
-            all it does is appending the signal the the sigs_caught list
+        all it does is appending the signal the the sigs_caught list
         """
         log.info("caught sig '{}'".format(SIG_MAP[sig]))
         log.debug("frame: {}".format(traceback.format_stack(frame)))
         self.sigs_caught.append(sig)
 
-    def emit(self):                             # emit the signals
+    def emit(self):  # emit the signals
         """
-            reemits all the saved signals in the same order as they were caught
+        reemits all the saved signals in the same order as they were caught
         """
         l = len(self.sigs_caught)
         if l > 0:
@@ -51,6 +53,7 @@ class SigHandler(object):
                 log.info("emit signal '{}'".format(SIG_MAP[s]))
                 os.kill(os.getpid(), s)
 
+
 class sig_delay(object):
     """
     a decorator / context manager object to prevent a function / context to be interrupted
@@ -58,6 +61,7 @@ class sig_delay(object):
 
     init takes a list of signals which will be delayed
     """
+
     def __init__(self, sigs):
         self.sigs = sigs
         self.sigh = None
@@ -70,7 +74,11 @@ class sig_delay(object):
         """
         self.sigh = SigHandler()
         self.old_handlers = []
-        log.debug("setup alternative signal handles for {}".format([SIG_MAP[s] for s in self.sigs]))
+        log.debug(
+            "setup alternative signal handles for {}".format(
+                [SIG_MAP[s] for s in self.sigs]
+            )
+        )
         for s in self.sigs:
             self.old_handlers.append(signal.getsignal(s))
             signal.signal(s, self.sigh)
@@ -89,6 +97,7 @@ class sig_delay(object):
         """
         enables the decorator style
         """
+
         def _protected_func(*args, **kwargs):
             with self:
                 log.debug("call function ...")
