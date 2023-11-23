@@ -59,6 +59,7 @@ log = logging.getLogger(__name__)
 # This is a list of all python objects that will be imported upon
 # initialization during module import (see __init__.py)
 __all__ = [
+    "log",
     "JobManager_Client",
     "JobManager_Local",
     "JobManager_Server",
@@ -268,7 +269,16 @@ class JobManager_Client(object):
 
         timeout [int] - second until client stops automaticaly, if negative, do not start at all
 
-        DO NOT SIGTERM CLIENT TOO ERLY, MAKE SURE THAT ALL SIGNAL HANDLERS ARE UP (see log at debug level)
+        use_exclusive_cpu_per_process - bind a worker to a specific (logical) CPU
+        cpu_start_index - offset for the CPU ID to use for the workers, may be a string starting with 'x'
+                          to calculate dynamically as multiple of the number of processes to use,
+                          e.g. if we have 16 log. cores, and we have set '-np 0.5' which means we start 8
+                          workers. If we then set '-e x1' we have 8 as offset, i.e., the workers will use the
+                          cores 8 - 15 (useful if you start various instances of clients in parallel)
+                          To obtain a useful CPU ID, the calculated value as allways taken modulo the number
+                          of cores.
+
+        DO NOT SIGTERM CLIENT TOO EARLY, MAKE SURE THAT ALL SIGNAL HANDLERS ARE UP (see log at debug level)
         """
 
         global log
@@ -354,7 +364,12 @@ class JobManager_Client(object):
         self.status_output_for_srun = status_output_for_srun
         self.emtpy_lines_at_end = emtpy_lines_at_end
         self.use_exclusive_cpu_per_process = use_exclusive_cpu_per_process
-        self.cpu_start_index = cpu_start_index
+        if isinstance(cpu_start_index, str) and cpu_start_index.startswith('x'):
+            self.cpu_start_index = self.nproc * int(cpu_start_index[1:])
+        else:
+            self.cpu_start_index = int(cpu_start_index)
+
+
 
     def connect(self):
         if self.manager_objects is None:
@@ -938,8 +953,9 @@ class JobManager_Client(object):
                 log.debug(f"started new worker with pid{p.pid}")
 
                 if self.use_exclusive_cpu_per_process:
-                    os.sched_setaffinity(p.pid, [i+self.cpu_start_index])
-                    log.debug(f"restrict pid {p.pid} to CPU #{i+self.cpu_start_index}")
+                    cpu_idx = (i+self.cpu_start_index) % mp.cpu_count()
+                    os.sched_setaffinity(p.pid, [cpu_idx])
+                    log.debug(f"restrict pid {p.pid} to CPU #{cpu_idx}")
 
                 time.sleep(0.1)
 
@@ -2453,7 +2469,7 @@ def call_connect(connect, dest, reconnect_wait=2, reconnect_tries=3):
                 handler_unexpected_error(e)
 
         else:  # no exception
-            log.debug("connection to %s successfully established".format(dest))
+            log.debug("connection to {} successfully established".format(dest))
             return True
 
 
@@ -2670,7 +2686,7 @@ class proxy_operation_decorator(object):
                 type(e),
             )
         else:
-            log.debug("operation '{}' successfully executed")
+            log.debug("operation '{}' successfully executed".format(self.operation))
             return res
 
         t0 = time.perf_counter()

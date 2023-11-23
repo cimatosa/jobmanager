@@ -4,6 +4,11 @@ jobmanager
 
 Easy distributed computing based on the python class SyncManager for remote communication and python module multiprocessing for local parallelism.
 
+:Note:
+Although the documentation is not complete, the project is currently being
+used successfully (which is the only reason why we have not reached a first 
+major release with a leading '1' as version number)
+
 ### Documentation (out of date)
 The documentation is available at http://cimatosa.github.io/jobmanager/ 
 
